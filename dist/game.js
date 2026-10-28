@@ -1,45 +1,130 @@
-import { DATA, createOutletInventory, getOutletProduct, outletAvailableStock, outletRetailPrice } from "./data.js";
+import { DATA, createOutletInventory, getOutletProduct, getOutletSpecialty, outletAvailableStock, outletRetailPrice } from "./data.js";
 import { ACQUISITION_TYPES, ENDINGS, WEEKLY_OPTIONS, isWeeklyDecisionDay, selectEnding, weeklyOptionCost } from "./campaign.js";
 import {
   createLedger, fixedOperatingCost, getFoodCost, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   ledgerIncome, ledgerNet, freshState, loadState, marketCardChoice, money, saveState, staffCost,
-  todayEvent, todayMarketCard, todayStory
+  todayEvent, todayMarketCard, todayStory, getUnlockedDishes
 } from "./state.js";
 import { createScene } from "./scene.js";
 import { createUI } from "./ui.js";
+import { getMonthlyInsurance, getNextStallTier, getOutletCapacity, getOutletSafetyLevel, getOutletTier, getTierReadiness, hasCurrentCoverage, isInsuranceBillingDay, INSURANCE_RATES, OUTLET_SAFETY_EQUIPMENT } from "./safety.js";
 import {
-  closeDepreciation, closeMonthlyStatements, closeWeeklyWorksheet,
+  closeDepreciation, closeMonthlyStatements, closeWeeklyWorksheet, closeInsuranceRefundAdjustments, collectInsuranceRefundReceivables,
   recordAssetPurchase, recordExpense, recordInventoryPurchase, recordLoanDraw,
-  recordLoanRepayment, recordOperatingClose, recordRefund, recordSale
+  recordLoanRepayment, recordOperatingClose, recordRefund, recordSale,
+  recordInsuranceClaimAccrual, collectInsuranceClaims
 } from "./accounting.js";
 
 const capAt = (value, max) => Math.min(max, value);
 
-export function createGameEngine(state) {
+function createInsuranceCoverageSnapshot(state) {
+  const periodStartDay = Math.floor((Number(state.day) - 1) / 30) * 30 + 1;
+  return {
+    periodStartDay,
+    periodEndDay: periodStartDay + 29,
+    outlets: (Array.isArray(state.outlets) ? state.outlets : []).map((outlet) => {
+      const insurance = getMonthlyInsurance(state, outlet);
+      const employees = insurance.employees;
+      return { outletId: outlet.id, employees,
+        perEmployee: employees ? {
+          accident: insurance.accident / employees,
+          labor: insurance.labor / employees,
+          health: insurance.health / employees
+        } : { accident: 0, labor: 0, health: 0 },
+        covered: { accident: insurance.accident > 0, product: insurance.product > 0, public: insurance.public > 0 } };
+    })
+  };
+}
+
+export function createGameEngine(state, { random = Math.random } = {}) {
   const guests = () => getTonightGuests(state);
   const event = () => todayEvent(state);
   const response = (ok, message, changed = ok) => ({ ok, changed, message });
+
+  function randomUnit() {
+    const value = Number(random());
+    return Number.isFinite(value) ? Math.max(0, Math.min(0.999999999, value)) : 0.5;
+  }
+
+  function rollSafetyIncident() {
+    state.safetyIncident = null;
+    state.recalledDishIds = [];
+    const main = (state.outlets || []).find((outlet) => outlet.id === "main");
+    const fire = getOutletSafetyLevel(state, main, "fire");
+    const ventilation = getOutletSafetyLevel(state, main, "ventilation");
+    const coldStorage = getOutletSafetyLevel(state, main, "coldStorage");
+    const risk = Math.max(0.035, 0.14 - fire * 0.025 - ventilation * 0.012 - coldStorage * 0.022);
+    if (randomUnit() >= risk) return null;
+    const incidents = DATA.safetyIncidents;
+    const totalWeight = incidents.reduce((sum, item) => sum + item.weight, 0);
+    let cursor = randomUnit() * totalWeight;
+    const selected = incidents.find((item) => (cursor -= item.weight) < 0) || incidents[incidents.length - 1];
+    const unlocked = getUnlockedDishes(state).map(({ dish }) => dish);
+    const affectedDish = selected.dishRecall && unlocked.length
+      ? unlocked[Math.floor(randomUnit() * unlocked.length)] : null;
+    state.safetyIncident = { ...selected, status: "pending", day: state.day, outletId: "main",
+      dishId: affectedDish?.id || null, affectedDishName: affectedDish?.name || null };
+    return state.safetyIncident;
+  }
+
+  function unlockRecipe(recipe, source, day = state.day) {
+    if (!recipe || state.unlockedRecipes.includes(recipe.id)) return false;
+    state.unlockedRecipes.push(recipe.id);
+    state.recipeLog ||= [];
+    state.recipeLog.push({ day, recipeId: recipe.id, source, acquisitionCost: 0 });
+    state.recipeLog = state.recipeLog.slice(-100);
+    return true;
+  }
+
+  function recordGuestRecipeFeedback(guest) {
+    if (!guest?.secretRecipeId) return null;
+    state.recipeGoodVisits ||= {};
+    const guestId = guest.id || guest.name;
+    const visits = Number(state.recipeGoodVisits[guestId]) || 0;
+    state.recipeGoodVisits[guestId] = visits + 1;
+    if (visits + 1 < 2 || randomUnit() >= 0.38) return null;
+    const recipe = DATA.dishes.find((dish) => dish.id === guest.secretRecipeId);
+    return unlockRecipe(recipe, guest.name + "・" + guest.hometown + "家鄉食譜秘笈", state.day) ? recipe : null;
+  }
+
+  function resetDailyFeaturedDish() {
+    const menu = getUnlockedDishes(state);
+    state.selectedDish = menu.length ? menu[(state.day - 1) % menu.length].index : 0;
+  }
 
   function openDoors() {
     if (state.phase !== "prep") return response(false, "現在不是開門準備時段。");
     if (todayMarketCard(state) && !marketCardChoice(state)) return response(false, "先處理今晚的市集公告卡，再掛燈迎客。", false);
     if (state.managerEvent) return response(false, "先處理店長送來的重大營運事件，再開始今晚營業。", false);
+    const mainOutlet = (state.outlets || []).find((outlet) => outlet.id === "main");
+    const mainReadiness = getTierReadiness(state, mainOutlet, getOutletTier(mainOutlet).id);
+    if (!mainReadiness.ready) return response(false, "主店攤型安全條件不足，請先補齊：「" + mainReadiness.missing.join("、") + "」。", false);
     state.phase = "service";
     state.customerIndex = 0;
     state.revenue = 0;
     state.results = [];
     state.reportChoice = null;
     state.ledger = createLedger(state);
+    if (isInsuranceBillingDay(state.day)) state.insuranceSnapshot = createInsuranceCoverageSnapshot(state);
     simulateOutletOperations();
     const fixed = fixedOperatingCost(state.ledger);
     state.coins -= fixed;
     state.coins += state.ledger.subsidies || 0;
     recordOperatingClose(state, state.ledger);
+    const refundRecovery = collectInsuranceRefundReceivables(state, state.day);
+    if (refundRecovery) state.coins += refundRecovery;
+    const claimRecovery = collectInsuranceClaims(state, state.day);
+    if (claimRecovery) {
+      state.coins += claimRecovery;
+      state.ledger.insuranceClaimReceipts += claimRecovery;
+    }
     if (state.loanPrincipal > 0) state.loanNights = (Number(state.loanNights) || 0) + 1;
     if (state.ledger.fees) state.fame = Math.max(0, state.fame - 2);
     else if (event().id === "inspection") state.fame = capAt(state.fame + 1, 100);
     if (marketCardChoice(state) === "promote" || marketCardChoice(state) === "deep-clean") state.fame = capAt(state.fame + 1, 100);
-    return response(true, "租金、人事、能源與活動費用 " + money(fixed) + " 已扣。街口有人往你的燈牌走來。");
+    const incident = rollSafetyIncident();
+    const insuranceTotal = state.ledger.insuranceAccident + state.ledger.insuranceLabor + state.ledger.insuranceHealth + state.ledger.insuranceProduct + state.ledger.insurancePublic;
+    return response(true, "租金、人事、能源與活動費用 " + money(fixed) + " 已扣" + (insuranceTotal ? "，含本期保險 " + money(insuranceTotal) : "") + (refundRecovery ? "；已收回保險退費款 " + money(refundRecovery) : "") + (claimRecovery ? "；收到前次保險理賠 " + money(claimRecovery) : "") + (incident ? "。現場有一件安全事件，請先點場景中的事件訊息處理。" : "。街口有人往你的燈牌走來。"));
   }
 
   function chooseMarketCard(choiceId) {
@@ -81,9 +166,10 @@ export function createGameEngine(state) {
 
   function serveDish(id) {
     if (state.phase !== "service") return response(false, "目前沒有營業中的訂單。", false);
+    if (state.safetyIncident?.status === "pending") return response(false, "先處理場景中待辦的安全事件，再繼續接單。", false);
     const dish = DATA.dishes.find((item) => item.id === id);
     const guest = guests()[state.customerIndex];
-    if (!dish || !guest || guest.difficult) return response(false, "這位客人目前不能點這道料理。", false);
+    if (!dish || !state.unlockedRecipes.includes(dish.id) || state.recalledDishIds.includes(dish.id) || !guest || guest.difficult) return response(false, state.recalledDishIds.includes(dish?.id) ? "這道料理因今晚食安事件已暫時下架。" : "這位客人目前不能點這道料理。", false);
     const ingredient = dish.ingredient;
     if (Number(state.stock[ingredient]) <= 0) return response(false, "這份備料已用完；打烊後先補貨再販售。", false);
 
@@ -114,11 +200,56 @@ export function createGameEngine(state) {
       state.cozy = capAt(state.cozy + 2, 100);
       if (score >= 90) state.regulars = capAt(state.regulars + 1, 24);
     }
-    state.results.push({ name: guest.name, icon: guest.icon, score, reaction: good ? (score >= 90 ? "剛剛好" : "老闆忙中代班") : "也不錯", mood: guest.mood, good, dish: dish.name });
+    const recipeDiscovery = good ? recordGuestRecipeFeedback(guest) : null;
+    state.results.push({ name: guest.name, icon: guest.icon, score, reaction: good ? (score >= 90 ? "剛剛好" : "老闆忙中代班") : "也不錯", mood: guest.mood, good, dish: dish.name,
+      ...(recipeDiscovery ? { recipeDiscovery: recipeDiscovery.id } : {}) });
     state.customerIndex += 1;
     if (state.customerIndex >= guests().length) state.phase = "report";
     const eventText = eventBonus ? "燈節 Bonus +" + money(eventBonus) + "。 " : "";
-    return response(true, eventText + (good ? guest.name + "吃得滿足，留下了一句謝謝。" : guest.name + "收下餐點，安靜地笑了笑。"));
+    return response(true, eventText + (good ? guest.name + "吃得滿足，留下了一句謝謝。" : guest.name + "收下餐點，安靜地笑了笑。") +
+      (recipeDiscovery ? "熟客「" + guest.name + "」分享了" + guest.hometown + "家鄉食譜秘笈：「" + recipeDiscovery.name + "」已免費解鎖，售價 NT$ " + recipeDiscovery.price + "。" : ""));
+  }
+
+  function resolveSafetyIncident(choice) {
+    const incident = state.safetyIncident;
+    if (state.phase !== "service" || !incident || incident.status !== "pending") return response(false, "目前沒有待處理的營運安全事件。", false);
+    const hasCoverage = hasCurrentCoverage(state, incident.outletId, incident.policy);
+    if (choice !== "claim" && choice !== "self") return response(false, "請選擇依保單申請理賠，或由店家自行負擔處置。", false);
+    if (choice === "claim" && !hasCoverage) return response(false, "本期沒有這類有效保單；請選擇店家自行處置。", false);
+    const expense = Math.max(0, Math.round(incident.expense + (choice === "self" && hasCoverage ? 18 : 0)));
+    const claimAmount = choice === "claim" ? Math.min(expense, Math.max(0, Math.round(incident.claim))) : 0;
+    state.coins -= expense;
+    state.ledger.safetyCosts = (Number(state.ledger.safetyCosts) || 0) + expense;
+    recordExpense(state, incident.expenseAccount, incident.title + "｜照護、清消與顧客補償", expense);
+    if (claimAmount > 0) {
+      const claim = { id: "claim-" + state.day + "-" + incident.id, incidentId: incident.id,
+        description: incident.title, policy: incident.policy, amount: claimAmount,
+        incidentDay: state.day, payoutDay: state.day + 2, status: "receivable" };
+      state.insuranceClaims ||= [];
+      state.insuranceClaims.push(claim);
+      state.insuranceClaims = state.insuranceClaims.slice(-100);
+      recordInsuranceClaimAccrual(state, claim, state.day);
+      state.ledger.insuranceClaimRevenue += claimAmount;
+    }
+    const reputationLoss = choice === "claim" ? Math.max(1, incident.fame - 2) : incident.fame;
+    state.fame = Math.max(0, state.fame - reputationLoss);
+    state.regulars = Math.max(0, state.regulars - incident.regulars);
+    if (incident.dishRecall && incident.dishId) state.recalledDishIds = [incident.dishId];
+    incident.status = "resolved";
+    incident.choice = choice;
+    incident.expensePosted = expense;
+    incident.claimAmount = claimAmount;
+    if (incident.shutdown) {
+      state.outbreakRecoveryUntilDay = state.day + 2;
+      state.phase = "report";
+      state.customerIndex = guests().length;
+      state.results.push({ name: "食品安全停業處置", icon: incident.icon, score: 0, reaction: "停止出餐・封存與清消", mood: incident.description, good: false });
+    }
+    const resultText = claimAmount
+      ? "照護與清消支出 " + money(expense) + " 已入帳；保險理賠 " + money(claimAmount) + " 先列應收款，預計第 " + (state.day + 2) + " 夜收款。口碑下降 " + reputationLoss + "。"
+      : "店家自行負擔處置 " + money(expense) + "，已依安全事件科目入帳；口碑下降 " + reputationLoss + "。";
+    return response(true, incident.title + "已處理。" + resultText + (incident.dishRecall ? " 受影響的「" + (incident.affectedDishName || "當夜餐點") + "」暫時下架。" : "") +
+      (incident.shutdown ? "今晚停止出餐，接下來兩夜客流略降。" : ""));
   }
 
   function resolveComplaint(choice) {
@@ -241,6 +372,8 @@ export function createGameEngine(state) {
     const outlet = findOutlet(outletId);
     if (!outlet) return response(false, "找不到這間分店。", false);
     if (!outlet.active) {
+      const readiness = getTierReadiness(state, outlet, getOutletTier(outlet).id);
+      if (!readiness.ready) return response(false, "這間店的攤型安全條件不足，請先補齊：「" + readiness.missing.join("、") + "」。", false);
       const available = outletAvailableStock(outlet);
       if (!available) return response(false, "先補進至少一份營運備料，才能開啟分店。", false);
       outlet.active = true;
@@ -256,8 +389,10 @@ export function createGameEngine(state) {
     if (state.phase !== "prep") return response(false, "店長人事只能在開門前調整。", false);
     const outlet = findOutlet(outletId);
     if (!outlet || !outlet.manager) return response(false, "這間分店目前沒有受聘店長。", false);
+    if (getOutletTier(outlet).id === "dapaidang") return response(false, "大排檔規模需要店長維持現場管理與安全點檢，不能解除店長職務。", false);
+    const refund = recordEmployeeDeparture(outlet, outlet.name + "店長");
     outlet.manager = false;
-    return response(true, outlet.name + "已改由你親自照看；往後每夜店長薪資停止，但接待量回到每夜一筆。");
+    return response(true, outlet.name + "已改由你親自照看；往後每夜店長薪資停止，但接待量回到每夜一筆。" + (refund ? "本期未到期職災保費 " + money(refund) + " 將於期末底稿轉列應收。" : ""));
   }
 
   function upgradeOutletEquipment(outletId) {
@@ -277,6 +412,96 @@ export function createGameEngine(state) {
     return response(true, outlet.name + "設備升至 Lv." + (level + 1) + "；自動營運的單筆收入提高。");
   }
 
+  function upgradeOutletSafety(outletId, equipmentId) {
+    if (state.phase !== "prep") return response(false, "分店安全設備只能在開門前施工。", false);
+    const outlet = findOutlet(outletId);
+    const item = OUTLET_SAFETY_EQUIPMENT.find((equipment) => equipment.id === equipmentId);
+    if (!outlet || !item) return response(false, "找不到這間分店或安全設備。", false);
+    if (equipmentId === "coldStorage" && getOutletProduct(outlet.type).group !== "food") {
+      return response(false, "這間非餐飲體驗店不需要食品冷鏈設備。", false);
+    }
+    const level = getOutletSafetyLevel(state, outlet, equipmentId);
+    const cost = item.costs[level];
+    if (typeof cost !== "number") return response(false, item.name + "已達最高級。", false);
+    if (state.coins < cost) return response(false, "現金不足，無法添購分店安全設備。", false);
+    outlet.safety ||= { fire: 0, ventilation: 0, coldStorage: 0 };
+    outlet.safety[equipmentId] = level + 1;
+    state.coins -= cost;
+    recordAssetPurchase(state, { id: outlet.id + "-safety-" + equipmentId + "-" + (level + 1) + "-day-" + state.day,
+      name: outlet.name + "｜" + item.name + " Lv." + (level + 1), cost,
+      usefulLifeDays: DATA.accounting.equipmentUsefulLifeDays,
+      residualValue: Math.round(cost * DATA.accounting.equipmentResidualRate) });
+    return response(true, outlet.name + "已完成「" + item.name + "」Lv." + (level + 1) + "；已列為設備資產並開始折舊。");
+  }
+
+  function upgradeStallTier(outletId) {
+    if (state.phase !== "prep") return response(false, "攤型施工只能在開門前進行。", false);
+    const outlet = (state.outlets || []).find((item) => item.id === outletId);
+    if (!outlet) return response(false, "找不到這間店面。", false);
+    const nextTier = getNextStallTier(outlet);
+    if (!nextTier) return response(false, "這間店已達最高攤型：大排檔。", false);
+    const readiness = getTierReadiness(state, outlet, nextTier.id);
+    if (!readiness.ready) return response(false, "升級條件尚未達成：「" + readiness.missing.join("、") + "」。", false);
+    if (state.coins < nextTier.buildCost) return response(false, "現金不足，無法支付攤型改建費 " + money(nextTier.buildCost) + "。", false);
+    outlet.tier = nextTier.id;
+    state.coins -= nextTier.buildCost;
+    recordAssetPurchase(state, { id: outlet.id + "-stall-tier-" + nextTier.id + "-day-" + state.day,
+      name: outlet.name + "｜" + nextTier.name + "改建", cost: nextTier.buildCost,
+      usefulLifeDays: DATA.accounting.improvementUsefulLifeDays,
+      residualValue: Math.round(nextTier.buildCost * DATA.accounting.improvementResidualRate) });
+    const unlocked = outlet.id === "main" ? DATA.dishes.find((dish) => dish.unlockTier === nextTier.id && dish.unlockOutlet === "main") : null;
+    if (unlocked) unlockRecipe(unlocked, outlet.name + "升級至" + nextTier.name, state.day);
+    const specialty = getOutletSpecialty(outlet);
+    return response(true, outlet.name + "已升級為「" + nextTier.name + "」；接待容量增加，攤型能源費每夜 +" + money(nextTier.dailyUtilities) + "。新招牌「" + specialty.name + "」售價 NT$ " + outletRetailPrice(outlet) + "。" + (unlocked ? "免費解鎖新菜色「" + unlocked.name + "」！" : "已開放該業態的升級商品。") + "保險於每期第 1 夜結帳。");
+  }
+
+  function toggleAccidentCoverage(outletId) {
+    if (state.phase !== "prep") return response(false, "職災加保只能在開門前調整。", false);
+    const outlet = (state.outlets || []).find((item) => item.id === outletId);
+    if (!outlet) return response(false, "找不到這間店面。", false);
+    if (getOutletTier(outlet).id === "dapaidang") return response(false, "大排檔由雇主統一編列職災、勞保與健保費，不能關閉。", false);
+    const employees = outlet.id === "main" ? DATA.staff.length + state.hiredCrew : (outlet.manager ? 1 : 0);
+    if (!outlet.accidentCoverage && employees <= 0) return response(false, "目前沒有由店家聘用的人員可加保。", false);
+    outlet.accidentCoverage = !outlet.accidentCoverage;
+    if (!outlet.accidentCoverage) return response(true, outlet.name + "已取消雇主加保職災；員工仍需自行安排基本保障。下期不再列入雇主保費。");
+    return response(true, outlet.name + "已啟用雇主職災加保；估計每期 " + money(employees * INSURANCE_RATES.accidentPerEmployee) + "，於每期第 1 夜入帳。");
+  }
+
+  function recordEmployeeDeparture(outlet, employeeName) {
+    const cycleStart = Math.floor((Number(state.day) - 1) / 30) * 30 + 1;
+    const snapshot = state.insuranceSnapshot;
+    if (!snapshot || Number(snapshot.periodStartDay) !== cycleStart || Number(state.day) <= cycleStart) return 0;
+    const outletPolicy = (snapshot.outlets || []).find((item) => item.outletId === outlet.id);
+    if (!outletPolicy || outletPolicy.employees <= 0) return 0;
+    const remainingDays = Math.max(0, Number(snapshot.periodEndDay) - Number(state.day));
+    if (!remainingDays) return 0;
+    const ratio = remainingDays / 30;
+    const breakdown = Object.fromEntries(["accident", "labor", "health"].map((key) => [key,
+      Math.max(0, Math.round((Number(outletPolicy.perEmployee?.[key]) || 0) * ratio))]));
+    const amount = Object.values(breakdown).reduce((sum, value) => sum + value, 0);
+    if (!amount) return 0;
+    const sequence = (state.orphanPolicies || []).length + 1;
+    state.orphanPolicies ||= [];
+    state.orphanPolicies.push({ id: "orphan-policy-" + state.day + "-" + sequence,
+      outletId: outlet.id, employeeName: String(employeeName || "離職夥伴"), departureDay: state.day,
+      periodStartDay: cycleStart, periodEndDay: snapshot.periodEndDay, remainingDays,
+      refundBreakdown: breakdown, refundAmount: amount, status: "pending-adjustment" });
+    return amount;
+  }
+
+  function releaseCrewMember() {
+    if (!(["prep", "decision"].includes(state.phase))) return response(false, "人員異動只能在營業前或每週決策時處理。", false);
+    if (Number(state.hiredCrew) <= 0) return response(false, "目前沒有額外聘用的全職夥伴可辦理離職。", false);
+    const main = (state.outlets || []).find((outlet) => outlet.id === "main");
+    const refund = main ? recordEmployeeDeparture(main, "夜嵐全職夥伴") : 0;
+    state.hiredCrew = Math.max(0, Number(state.hiredCrew) - 1);
+    const cycleStart = Math.floor((Number(state.day) - 1) / 30) * 30 + 1;
+    const periodEndDay = cycleStart + 29;
+    return response(true, "已完成一位全職夥伴離職交接；每夜薪資減少 NT$ 90。" + (refund
+      ? "估計未到期雇主保費 NT$ " + refund + " 將於第 " + periodEndDay + " 夜期末工作底稿調整為應收款，次期首夜收款。"
+      : "本期沒有可回收的雇主保費，或保險仍由員工自行投保。"));
+  }
+
   function hireOutletManager(outletId) {
     if (state.phase !== "decision") return response(false, "店長招聘安排在每週經營決策時處理。", false);
     if (state.managerEvent) return response(false, "先決定如何處理店長回報的重大事件。", false);
@@ -293,7 +518,7 @@ export function createGameEngine(state) {
     recordExpense(state, "5110", "招募與訓練｜" + outlet.name + "店長", cost);
     state.decisions.push({ day: state.day, id: "manager", name: "聘請店長｜" + outlet.name, cost, outletId: outlet.id });
     state.phase = "prep";
-    state.selectedDish = (state.day - 1) % DATA.dishes.length;
+    resetDailyFeaturedDish();
     return response(true, outlet.name + "店長到任：往後每夜薪資 " + money(DATA.economy.managerWage) + "，可自動排班、補足出餐並處理日常營運；重大事件仍由你拍板。");
   }
 
@@ -338,7 +563,7 @@ export function createGameEngine(state) {
       let food = 0;
       let units = 0;
       if (outlet.active) {
-        const capacity = outlet.manager ? (outlet.efficiencyPenalty > 0 ? 1 : 2) : 1;
+        const capacity = getOutletCapacity(outlet);
         const product = getOutletProduct(outlet.type);
         for (let index = 0; index < capacity; index++) {
           let supply;
@@ -354,7 +579,7 @@ export function createGameEngine(state) {
           } else {
             if (outletAvailableStock(outlet) <= 0) break;
             supply = product.stockId;
-            supplyName = product.productName;
+          supplyName = getOutletSpecialty(outlet).name;
             unitCost = product.cost;
           }
           const cost = Math.max(0, Number(outlet.stockCost[supply]) || unitCost);
@@ -384,10 +609,10 @@ export function createGameEngine(state) {
       outlet.efficiencyPenalty = 0;
       outlet.lastResult = {
         day: state.day, units, sales,
-        food, utilities: wasActive ? DATA.economy.outletUtilities : 0,
+        food, utilities: wasActive ? DATA.economy.outletUtilities + getOutletTier(outlet).dailyUtilities : 0,
         managerPayroll: outlet.manager ? DATA.economy.managerWage : 0,
         rent: 38,
-        net: sales - food - (wasActive ? DATA.economy.outletUtilities : 0) - (outlet.manager ? DATA.economy.managerWage : 0) - 38
+        net: sales - food - (wasActive ? DATA.economy.outletUtilities + getOutletTier(outlet).dailyUtilities : 0) - (outlet.manager ? DATA.economy.managerWage : 0) - 38
       };
     });
   }
@@ -395,7 +620,7 @@ export function createGameEngine(state) {
   function selectDish(index) {
     if (state.phase !== "prep") return response(false, "開門後不能更換招牌菜。", false);
     const selected = Number(index);
-    if (!Number.isInteger(selected) || selected < 0 || selected >= DATA.dishes.length) return response(false, "找不到這道招牌菜。", false);
+    if (!Number.isInteger(selected) || selected < 0 || selected >= DATA.dishes.length || !state.unlockedRecipes.includes(DATA.dishes[selected].id)) return response(false, "這道菜尚未解鎖或不存在。", false);
     state.selectedDish = selected;
     return response(true, DATA.dishes[selected].name + "設為今晚招牌。");
   }
@@ -440,6 +665,7 @@ export function createGameEngine(state) {
       const inventory = createOutletInventory();
       state.outlets.push({ id: "acquired-" + state.acquisitions,
         name: ACQUISITION_TYPES[targetType].name + "・分店 " + state.acquisitions, type: targetType,
+        tier: "mobile", accidentCoverage: false, safety: { fire: 0, ventilation: 0, coldStorage: 0 },
         active: false, manager: false, equipmentLevel: 0, stock: inventory.stock, stockCost: inventory.stockCost, nextNightBonus: 0,
         efficiencyPenalty: 0, reputation: 50, autoPaused: false, lastResult: null });
       state.fame = capAt(state.fame + 5, 100);
@@ -452,7 +678,7 @@ export function createGameEngine(state) {
     const decisionName = targetName ? option.name + "・" + targetName : option.name;
     state.decisions.push({ day: state.day, id, name: decisionName, cost, ...(targetName ? { targetType } : {}) });
     state.phase = "prep";
-    state.selectedDish = (state.day - 1) % DATA.dishes.length;
+    resetDailyFeaturedDish();
     if (!allianceBefore && hasBrandAlliance(state)) return response(true, "夜市品牌聯盟成立：每夜多一桌聯盟來客，聯合採購享進價 9 折。");
     return response(true, id === "hold" ? "保留現金，照目前規模進入新的一週。" : decisionName + "已完成，往後每夜固定成本與客流效果同步更新。");
   }
@@ -469,21 +695,32 @@ export function createGameEngine(state) {
       choice: state.reportChoice === "paperboat" ? "把紙船放回港灣" : "替熟客留了一張窗邊桌",
       marketCard: marketCard ? marketCard.name : null,
       marketChoice: selectedMarketChoice ? selectedMarketChoice.name : null,
+      safetyIncident: state.safetyIncident ? {
+        title: state.safetyIncident.title, choice: state.safetyIncident.choice || null,
+        expense: Number(state.safetyIncident.expensePosted) || 0, claim: Number(state.safetyIncident.claimAmount) || 0
+      } : null,
+      recipesUnlocked: (Array.isArray(state.recipeLog) ? state.recipeLog : [])
+        .filter((entry) => Number(entry.day) === Number(state.day)).map((entry) => entry.recipeId),
       net, guests: state.results.map((result) => result.name) });
     state.journal = state.journal.slice(0, 30);
     state.campaignNet = (Number(state.campaignNet) || 0) + net;
     closeDepreciation(state, finishedDay);
+    const insuranceAdjustment = finishedDay % 30 === 0 ? closeInsuranceRefundAdjustments(state, finishedDay) : null;
     const monthlyClose = finishedDay % 30 === 0 ? closeMonthlyStatements(state, finishedDay) : null;
     if (monthlyClose) {
+      monthlyClose.insuranceRefundAdjustments = insuranceAdjustment;
       monthlyClose.outcomeId = selectEnding({ ...state, campaignNet: monthlyClose.totals.profit });
       monthlyClose.outcome = ENDINGS[monthlyClose.outcomeId];
     }
-    const weeklyClose = finishedDay % 7 === 0 ? closeWeeklyWorksheet(state, finishedDay) : null;
+    const weeklyClose = finishedDay % 7 === 0 || finishedDay % 30 === 0
+      ? closeWeeklyWorksheet(state, finishedDay, { periodEnd: finishedDay % 30 === 0, insuranceAdjustment }) : null;
     state.customerIndex = 0;
     state.revenue = 0;
     state.results = [];
     state.reportChoice = null;
     state.ledger = null;
+    state.safetyIncident = null;
+    state.recalledDishIds = [];
     state.shiftPurchases = 0;
     state.marketChoiceDay = 0;
     state.marketCardChoice = null;
@@ -501,7 +738,7 @@ export function createGameEngine(state) {
       };
       state.managerEvent = { ...incidents[type], id: "manager-event-" + state.day, type, outletId: outlet.id };
     }
-    state.selectedDish = (state.day - 1) % DATA.dishes.length;
+    resetDailyFeaturedDish();
     if (monthlyClose) return response(true, "第 " + monthlyClose.period + " 期已結帳，財務報表與本期故事走向「" + monthlyClose.outcome.title + "」已歸檔。夜市持續營業，第 " + state.day + " 夜開始。" + (weeklyClose?.balanced ? " 本週試算平衡。" : ""));
     if (weeklyClose) return response(true, "第 " + weeklyClose.week + " 週工作底稿已歸檔，試算" + (weeklyClose.balanced ? "平衡" : "待核對") + "；新的一週開始前，請選擇經營方向。");
     return response(true, weeklyDecision
@@ -516,8 +753,9 @@ export function createGameEngine(state) {
     return response(true, "新的夜市世界已開張。先備料、排班，再掛燈迎客。");
   }
 
-  return { openDoors, chooseMarketCard, borrowWorkingCapital, repayWorkingCapital, serveDish, resolveComplaint, buyStock, upgradeEquipment, buyUpgrade, toggleStaff, selectDish, chooseStory, chooseWeeklyDecision, nextNight, restartCampaign,
-    buyOutletStock, toggleOutlet, upgradeOutletEquipment, hireOutletManager, dismissOutletManager, resolveManagerEvent,
+  return { openDoors, chooseMarketCard, borrowWorkingCapital, repayWorkingCapital, serveDish, resolveComplaint, resolveSafetyIncident, buyStock, upgradeEquipment, buyUpgrade, toggleStaff, selectDish, chooseStory, chooseWeeklyDecision, nextNight, restartCampaign,
+    buyOutletStock, toggleOutlet, upgradeOutletEquipment, upgradeOutletSafety, upgradeStallTier, toggleAccidentCoverage, hireOutletManager, dismissOutletManager, resolveManagerEvent,
+    releaseCrewMember,
     getEvent: event, getGuests: guests, getStaffCost: () => staffCost(state), getIncome: () => state.ledger ? ledgerIncome(state.ledger) : 0 };
 }
 
@@ -575,6 +813,8 @@ function boot() {
   const worldEventDialogContent = document.getElementById("worldEventDialogContent");
   const storyChoiceDialog = document.getElementById("storyChoiceDialog");
   const storyChoiceContent = document.getElementById("storyChoiceContent");
+  const gameGuideDialog = document.getElementById("gameGuideDialog");
+  let gameGuideReturnFocus = null;
   let worldEventReturnFocus = null;
   let storyChoiceReturnFocus = null;
   let worldEventPosition = "";
@@ -826,6 +1066,15 @@ function boot() {
     storyChoiceReturnFocus = null;
     if (target && target.focus) requestAnimationFrame(() => target.focus());
   });
+  gameGuideDialog.addEventListener("click", (event) => {
+    if (event.target === gameGuideDialog) gameGuideDialog.close();
+  });
+  gameGuideDialog.addEventListener("close", () => {
+    const fallback = document.querySelector(".game-guide-trigger");
+    const target = gameGuideReturnFocus && gameGuideReturnFocus.isConnected ? gameGuideReturnFocus : fallback;
+    gameGuideReturnFocus = null;
+    if (target && target.focus) requestAnimationFrame(() => target.focus());
+  });
   document.addEventListener("scene-motion-change", syncMotionControl);
   function syncToastPosition() {
     const frame = document.querySelector(".world-frame");
@@ -856,6 +1105,7 @@ function boot() {
   }
   function openOrder(index) {
     if (state.phase !== "service") return;
+    if (state.safetyIncident?.status === "pending") { openWorldEvent(); return; }
     const guests = engine.getGuests();
     if (index !== state.customerIndex) { toast("先完成櫃台前這一桌，再招呼後面的客人。"); return; }
     const guest = guests[index];
@@ -926,6 +1176,13 @@ function boot() {
     const button = event.target.closest("[data-action]");
     if (!button) return;
     const action = button.dataset.action;
+    if (action === "open-game-guide" && !gameGuideDialog.open) {
+      gameGuideReturnFocus = button;
+      gameGuideDialog.showModal();
+      gameGuideDialog.querySelector('[data-action="close-game-guide"]').focus();
+      playTone("open");
+    }
+    if (action === "close-game-guide" && gameGuideDialog.open) gameGuideDialog.close();
     if (action === "toggle-camera-tools") {
       const expanded = button.getAttribute("aria-expanded") !== "true";
       cameraToolsTouched = true;
@@ -958,6 +1215,7 @@ function boot() {
     }
     if (action === "main-action") {
       if (state.phase === "prep") openDoors();
+      else if (state.phase === "service" && state.safetyIncident?.status === "pending") openWorldEvent();
       else if (state.phase === "service") openOrder(state.customerIndex);
       else if (state.phase === "report" && state.reportChoice) advanceNight();
       else if (state.phase === "report") openStoryChoice();
@@ -975,10 +1233,19 @@ function boot() {
     if (action === "buy-outlet-stock") showResult(engine.buyOutletStock(button.dataset.outletId, button.dataset.stockId));
     if (action === "toggle-outlet") showResult(engine.toggleOutlet(button.dataset.outletId));
     if (action === "upgrade-outlet-equipment") showResult(engine.upgradeOutletEquipment(button.dataset.outletId));
+    if (action === "upgrade-outlet-safety") showResult(engine.upgradeOutletSafety(button.dataset.outletId, button.dataset.equipmentId));
+    if (action === "upgrade-stall-tier") showResult(engine.upgradeStallTier(button.dataset.outletId));
+    if (action === "toggle-accident-coverage") showResult(engine.toggleAccidentCoverage(button.dataset.outletId));
+    if (action === "release-crew-member") showResult(engine.releaseCrewMember());
     if (action === "hire-outlet-manager") showResult(engine.hireOutletManager(button.dataset.outletId));
     if (action === "dismiss-outlet-manager") showResult(engine.dismissOutletManager(button.dataset.outletId));
     if (action === "resolve-manager-event") {
       const result = engine.resolveManagerEvent(button.dataset.choice);
+      if (result.ok && worldEventDialog.open) worldEventDialog.close();
+      showResult(result);
+    }
+    if (action === "resolve-safety-incident") {
+      const result = engine.resolveSafetyIncident(button.dataset.choice);
       if (result.ok && worldEventDialog.open) worldEventDialog.close();
       showResult(result);
     }

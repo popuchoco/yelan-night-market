@@ -1,13 +1,18 @@
 // avoid-ai-design-ignore-file: I2, SD4d - food, character, and event marks are in-world content; middle dots separate compact order and ledger facts.
-import { DATA, getOutletProduct, outletAvailableStock, outletRetailPrice } from "./data.js";
+import { DATA, getOutletProduct, getOutletSpecialty, outletAvailableStock, outletRetailPrice } from "./data.js";
 import { ACQUISITION_GROUPS, ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, acquisitionGroupCounts, campaignCycleDay, weeklyOptionCost } from "./campaign.js";
 import { CHART_OF_ACCOUNTS, formatBalance } from "./accounting.js";
+import {
+  STALL_TIERS, OUTLET_SAFETY_EQUIPMENT, getMonthlyInsurance, getNextInsuranceBillingDay,
+  getOutletEmployeeCount, getOutletSafetyLevel, getOutletTier, getNextStallTier, getTierReadiness,
+  hasCurrentCoverage, isInsuranceBillingDay
+} from "./safety.js";
 import {
   createLedger as createLedgerForState, fixedOperatingCost as ledgerFixedOperatingCost, forecast, getFoodCost as getFoodCostForState,
   hasBrandAlliance,
   getPurchasePrice as getPurchasePriceForState, getTonightGuests as getTonightGuestsForState,
   ledgerIncome, ledgerNet, marketCardChoice, money, staffCost as staffCostForState,
-  todayEvent as selectEvent, todayMarketCard, todayStory as selectStory
+  todayEvent as selectEvent, todayMarketCard, todayStory as selectStory, getUnlockedDishes
 } from "./state.js";
 
 // UI nodes are built with DOM APIs so player names, journal entries, and game data
@@ -20,6 +25,7 @@ export function createUI(runtime) {
   let reportStatement = "income";
   let selectedReportPeriod = null;
   let selectedWeek = null;
+  let selectedMonthEnd = null;
   let selectedJournalDay = null;
   let selectedOutletId = null;
 
@@ -56,6 +62,15 @@ export function createUI(runtime) {
   function createLedger() { return createLedgerForState(state); }
 
   function getWorldEventInfo() {
+    if (state.phase === "service" && state.safetyIncident?.status === "pending") {
+      const incident = state.safetyIncident;
+      const policyName = incident.policy === "accident" ? "職災保險" : (incident.policy === "public" ? "公共意外責任險" : "食品業者產品責任險");
+      const covered = hasCurrentCoverage(state, incident.outletId, incident.policy);
+      return { kind: "safety-incident", icon: incident.icon, label: incident.category === "workplace" ? "職安事件・待處理" : "營運安全事件・待處理",
+        title: incident.title, description: incident.description + (incident.affectedDishName ? " 受影響品項：「" + incident.affectedDishName + "」。" : "") +
+          (covered ? " 本期已投保" + policyName + "，可選擇提出理賠。" : " 本期未有對應的" + policyName + "保障，可由店家自行負擔。"),
+        tone: "negative", pending: true, anchorOutletId: incident.outletId, incident, covered, policyName };
+    }
     if (state.phase === "service") {
       const guest = getTonightGuests()[state.customerIndex];
       if (guest && guest.difficult) {
@@ -110,6 +125,31 @@ export function createUI(runtime) {
 
   function renderWorldEventContent() {
     const info = getWorldEventInfo();
+    if (info.kind === "safety-incident" && state.safetyIncident?.status === "pending") {
+      const incident = state.safetyIncident;
+      const panel = el("section", "world-event-options negative");
+      const status = el("div", "incident-policy-status");
+      append(status,
+        el("span", "incident-status-icon", incident.icon),
+        el("div", "incident-status-copy",
+          info.covered ? "本期保單有效・" + info.policyName : "本期未投保・" + info.policyName),
+        el("span", "incident-status-pill", info.covered ? "可申請理賠" : "自費處置"));
+      panel.append(status);
+      panel.append(el("p", "incident-guidance",
+        incident.category === "outbreak"
+          ? "先停止出餐、封存可疑批次並安排清消與顧客照護。處理完成後可查看今晚結算。"
+          : (incident.dishRecall ? "先安置顧客、下架受影響品項，再完成照護與清消。" : "先暫停受影響工作區，確認人員與顧客安全，再安排照護。")));
+      const choices = el("div", "manager-event-choices");
+      if (info.covered) {
+        choices.append(button("依保單處理並申請理賠　+" + money(incident.claim) + " 應收",
+          "resolve-safety-incident", { choice: "claim" }, false, "primary-button"));
+      }
+      choices.append(button((info.covered ? "店家自行負擔　−" : "完成自費處置　−") + money(incident.expense + (info.covered ? 18 : 0)),
+        "resolve-safety-incident", { choice: "self" }, false, "secondary-button"));
+      panel.append(choices);
+      panel.append(helper("處置費立即列入相應安全／補償科目；理賠先借記應收保險理賠款，預計兩夜後收款。理賠不會取消事件造成的口碑影響。", "helper-copy"));
+      return panel;
+    }
     if (state.managerEvent) {
       const incident = el("section", "world-event-options");
       incident.append(el("span", "manager-event-kicker", "總部決策・選擇處理方式"));
@@ -464,6 +504,9 @@ export function createUI(runtime) {
         ...(outlook.ledger.managerPayroll ? [{ label: "分店店長薪資", value: "−" + money(outlook.ledger.managerPayroll) }] : []),
         { label: "水電瓦斯", value: "−" + money(outlook.ledger.water + outlook.ledger.electricity + outlook.ledger.gas) },
         ...(outlook.ledger.outletUtilities ? [{ label: "分店營運能源", value: "−" + money(outlook.ledger.outletUtilities) }] : []),
+        ...(outlook.ledger.stallUtilities ? [{ label: "攤型能源費", value: "−" + money(outlook.ledger.stallUtilities) }] : []),
+        ...insuranceLedgerRows(outlook.ledger),
+        ...(outlook.ledger.insuranceRecovery ? [{ label: "保險退費應收款回收", value: "+" + money(outlook.ledger.insuranceRecovery), tone: "income" }] : []),
         ...(outlook.ledger.fees ? [{ label: "活動改善費", value: "−" + money(outlook.ledger.fees) }] : []),
         ...(outlook.ledger.marketing ? [{ label: "觀光行銷", value: "−" + money(outlook.ledger.marketing) }] : []),
         ...(outlook.ledger.preparation ? [{ label: "衛生快清", value: "−" + money(outlook.ledger.preparation) }] : []),
@@ -473,7 +516,7 @@ export function createUI(runtime) {
         { label: "預估食材耗用", value: "−" + money(outlook.food), tone: "outflow" },
         { label: "預估小費 / 活動 Bonus", value: "+" + money(outlook.tips + outlook.bonus), tone: "income" }
       ], { label: "預估營業淨額", value: moneyNet(outlook.net), negative: outlook.net < 0 }));
-      parts.push(helper("租金、人事與能源在開門時扣款；分店依備料預估自動營收。採購先扣現金，實際耗用按加權平均成本入帳。"));
+      parts.push(helper("租金、人事與能源在開門時扣款；保險於每期第 1 夜（第 1、31、61 夜⋯）結帳。分店依備料預估自動營收，實際耗用按加權平均成本入帳。"));
       parts.push(subhead("開門前快速檢查", "一切準備好了嗎？"));
 
       const list = el("div", "guest-list");
@@ -506,8 +549,13 @@ export function createUI(runtime) {
         { label: "餐點營收", value: "+" + money(state.ledger.sales), tone: "income" },
         { label: "小費 / 活動", value: "+" + money(state.ledger.tips + state.ledger.bonus), tone: "income" },
         ...(state.ledger.subsidies ? [{ label: "公告卡補助", value: "+" + money(state.ledger.subsidies), tone: "income" }] : []),
+        ...insuranceLedgerRows(state.ledger),
+        ...(state.ledger.insuranceRecovery ? [{ label: "保險退費應收款回收", value: "+" + money(state.ledger.insuranceRecovery), tone: "income" }] : []),
         { label: "食材耗用", value: "−" + money(state.ledger.food), tone: "outflow" },
-        { label: "固定支出已扣", value: "−" + money(fixedOperatingCost(state.ledger)) }
+        ...(state.ledger.safetyCosts ? [{ label: "安全事件處置", value: "−" + money(state.ledger.safetyCosts), tone: "outflow" }] : []),
+        ...(state.ledger.insuranceClaimRevenue ? [{ label: "保險理賠（應收）", value: "+" + money(state.ledger.insuranceClaimRevenue), tone: "income" }] : []),
+        ...(state.ledger.insuranceClaimReceipts ? [{ label: "前期理賠收款", value: "+" + money(state.ledger.insuranceClaimReceipts), tone: "income" }] : []),
+        { label: "固定與安全支出已扣", value: "−" + money(fixedOperatingCost(state.ledger)) }
       ]));
       parts.push(subhead("正在排隊的客人", "點場景裡發光的人接單"));
       const queue = el("div", "guest-list");
@@ -551,6 +599,87 @@ export function createUI(runtime) {
     return fragment(parts);
   }
 
+  function insuranceLedgerRows(ledger) {
+    const rows = [
+      ["職災保險", ledger.insuranceAccident],
+      ["雇主勞保", ledger.insuranceLabor],
+      ["雇主健保", ledger.insuranceHealth],
+      ["產品責任險", ledger.insuranceProduct],
+      ["公共意外險", ledger.insurancePublic]
+    ].filter(([, amount]) => Number(amount) > 0);
+    if (!rows.length) return [];
+    return [{ label: isInsuranceBillingDay(state.day) ? "本期保險費（首夜）" : "保險費", value: "−" + money(rows.reduce((sum, [, amount]) => sum + amount, 0)) }];
+  }
+
+  function insuranceDueLabel() {
+    const dueDay = getNextInsuranceBillingDay(state.day);
+    return dueDay === state.day ? "今晚開門時入帳" : "第 " + dueDay + " 夜開門時入帳";
+  }
+
+  function renderTierPlanning() {
+    const section = el("section", "tier-planning");
+    section.append(subhead("攤型發展規劃", "流動攤販 → 固定攤販 → 大排檔", true));
+    section.append(helper("逐級改建，不可跳級。安全設備、經營規模與人手都達標後才可施工；改建列為資產並按日折舊。", "helper-copy manager-intro"));
+    const outlets = (Array.isArray(state.outlets) ? state.outlets : []);
+    outlets.forEach((outlet) => {
+      const current = getOutletTier(outlet);
+      const next = getNextStallTier(outlet);
+      const card = el("article", "tier-plan-card");
+      const head = el("div", "tier-plan-head");
+      append(head, el("div", "tier-plan-title", outlet.name), el("span", "tier-plan-badge", current.name));
+      card.append(head);
+      const track = el("ol", "tier-track", null, { "aria-label": outlet.name + "攤型進度" });
+      STALL_TIERS.forEach((tier) => {
+        const stage = el("li", tier.id === current.id ? "current" : (STALL_TIERS.findIndex((item) => item.id === tier.id) < STALL_TIERS.findIndex((item) => item.id === current.id) ? "complete" : ""));
+        stage.append(el("span", "tier-track-dot", ""), el("span", "tier-track-label", tier.name));
+        track.append(stage);
+      });
+      card.append(track);
+      card.append(el("p", "tier-plan-meta", "每日接待容量 " + (outlet.id === "main" ? "主店客流加成 +" + current.guestBonus + " 桌" : "最多 " + (outlet.manager ? 2 : 1) + " 筆基本生意" + (current.guestBonus ? "，攤型加成 +" + current.guestBonus : "")) + "・攤型能源費 " + money(current.dailyUtilities) + "/夜"));
+      if (!next) {
+        card.append(el("p", "tier-plan-finished", "已達最高營業型態；維持設備保養並留意每期保險結帳。"));
+      } else {
+        const readiness = getTierReadiness(state, outlet, next.id);
+        const preview = getMonthlyInsurance(state, { ...outlet, tier: next.id });
+        const currentInsurance = getMonthlyInsurance(state, outlet);
+        const requirements = el("ul", "tier-requirements", null, { "aria-label": "升級條件" });
+        readiness.requirements.forEach((requirement) => {
+          requirements.append(el("li", requirement.ready ? "ready" : "missing", (requirement.ready ? "✓ " : "○ ") + requirement.label));
+        });
+        card.append(el("p", "tier-plan-next", "下一階段：" + next.name + "・改建資本支出 " + money(next.buildCost) + "・能源 +" + money(next.dailyUtilities) + "/夜"));
+        card.append(requirements);
+        card.append(el("p", "tier-plan-meta", "目前每期保費 " + money(currentInsurance.total) + " → 升級後預估 " + money(preview.total) + "（" + insuranceDueLabel() + "）"));
+        card.append(button(readiness.ready ? "改建為「" + next.name + "」" : "先補齊升級條件", "upgrade-stall-tier", { outletId: outlet.id },
+          state.phase !== "prep" || !readiness.ready || state.coins < next.buildCost, "manager-action tier-upgrade-action"));
+      }
+      section.append(card);
+    });
+    return section;
+  }
+
+  function renderBranchSafety() {
+    const branches = (state.outlets || []).filter((outlet) => outlet.id !== "main");
+    if (!branches.length) return null;
+    const section = el("section", "branch-safety-section");
+    section.append(subhead("分店安全設備", "購置後列設備資產", true));
+    branches.forEach((outlet) => {
+      const isFood = getOutletProduct(outlet.type).group === "food";
+      const card = el("article", "branch-safety-card");
+      card.append(el("h4", "", outlet.name + "・" + getOutletTier(outlet).name));
+      const grid = el("div", "branch-safety-grid");
+      OUTLET_SAFETY_EQUIPMENT.filter((item) => item.id !== "coldStorage" || isFood).forEach((item) => {
+        const level = getOutletSafetyLevel(state, outlet, item.id);
+        const cost = item.costs[level];
+        const action = button(cost === undefined ? "已達最高級" : "添購 " + money(cost), "upgrade-outlet-safety",
+          { outletId: outlet.id, equipmentId: item.id }, state.phase !== "prep" || cost === undefined || state.coins < cost, "manager-action");
+        grid.append(managerItem(item.icon, item.name + " ｜ Lv." + level, item.note, null, action));
+      });
+      card.append(grid);
+      section.append(card);
+    });
+    return section;
+  }
+
   function renderStock() {
     const parts = [
       subhead("備料櫃・即時庫存", "補貨只在開門前", true),
@@ -572,7 +701,10 @@ export function createUI(runtime) {
     });
     parts.push(grid, subhead("今晚菜單", "選一道招牌拿額外小費"));
     const menu = el("div", "manager-grid");
-    dishes.forEach(function(dish, index) {
+    const available = getUnlockedDishes(state);
+    available.forEach(function(entry) {
+      const dish = entry.dish;
+      const index = entry.index;
       const meta = el("span", "manager-meta");
       append(meta, document.createTextNode("售價 "));
       append(meta, el("b", "", money(dish.price)), document.createTextNode(" ｜ 庫存 " + (state.stock[dish.ingredient] || 0)));
@@ -583,6 +715,28 @@ export function createUI(runtime) {
       menu.append(itemNode);
     });
     parts.push(menu);
+    const locked = dishes.filter((dish) => !state.unlockedRecipes.includes(dish.id));
+    if (locked.length) {
+      const details = el("details", "locked-recipes");
+      const summary = el("summary", "", "尚未解鎖的家鄉菜與升級食譜（" + locked.length + "）");
+      details.append(summary);
+      locked.forEach(function(dish) {
+        const condition = dish.secretFor ? "熟客回訪並滿意時，可能分享免費秘笈" :
+          (dish.unlockTier === "fixed" ? "主店升級為固定攤販時免費解鎖" : "主店升級為大排檔時免費解鎖");
+        details.append(el("p", "locked-recipe-row", dish.icon + " " + dish.name + "｜" + condition));
+      });
+      parts.push(details);
+    }
+    const discoveries = Array.isArray(state.recipeLog) ? state.recipeLog.slice(-3).reverse() : [];
+    if (discoveries.length) {
+      const note = el("div", "recipe-discovery-log");
+      note.append(el("b", "", "最近解鎖"));
+      discoveries.forEach(function(entry) {
+        const dish = dishes.find((item) => item.id === entry.recipeId);
+        if (dish) note.append(el("span", "", "第 " + entry.day + " 夜・" + dish.name + "（NT$ 0）"));
+      });
+      parts.push(note);
+    }
     return fragment(parts);
   }
 
@@ -604,7 +758,10 @@ export function createUI(runtime) {
       itemNode.querySelector(".manager-copy").append(meta);
       grid.append(itemNode);
     });
-    parts.push(grid, subhead("夜市改造", "打造熟客的理由"));
+    parts.push(grid, renderTierPlanning());
+    const branchSafety = renderBranchSafety();
+    if (branchSafety) parts.push(branchSafety);
+    parts.push(subhead("夜市改造", "打造熟客的理由"));
     const additions = el("div", "manager-grid");
     upgrades.forEach(function(item) {
       const owned = !!state.upgrades[item.id];
@@ -662,6 +819,46 @@ export function createUI(runtime) {
       { label: "阿滿・廚房主廚", value: state.staff.cook ? money(cook.wage) : "老闆代班" },
       { label: "小青・外場服務", value: state.staff.server ? money(server.wage) : "老闆代班" }
     ], { label: "今晚排班薪資", value: money(staffCost()), negative: false }));
+    if (Number(state.hiredCrew) > 0) {
+      const releaseCard = el("section", "staff-release-card");
+      append(releaseCard, el("b", "", "全職夥伴異動"),
+        helper("可在營業前或每週決策時辦理一位額外全職夥伴離職。若本期已繳雇主保費，未到期部分先掛應收、期末工作底稿調整，次期首夜收款。", "manager-note"),
+        button("辦理一位夥伴離職", "release-crew-member", {}, state.phase === "service" || state.phase === "report", "danger-button"));
+      parts.push(releaseCard);
+    }
+    parts.push(subhead("員工與營業保險", "每期首夜入帳", true));
+    parts.push(helper("保費屬本專案的簡化遊戲參數；每 30 夜為一期，在第 1、31、61 夜等首夜開門時一次扣款並依保險科目入帳。", "helper-copy accounting-note"));
+    (state.outlets || []).forEach((outlet) => {
+      const tier = getOutletTier(outlet);
+      const insurance = getMonthlyInsurance(state, outlet);
+      const card = el("article", "insurance-card");
+      const head = el("div", "insurance-card-head");
+      append(head, el("h4", "", outlet.name), el("span", "tier-plan-badge", tier.name));
+      card.append(head);
+      const employees = getOutletEmployeeCount(state, outlet);
+      card.append(el("p", "insurance-summary", employees + " 位聘用人員・" + (insurance.mandatoryEmployerCoverage
+        ? "雇主負擔職災、勞保與健保" : "基本保險由員工自行安排")));
+      card.append(ledger([
+        { label: "職業災害保險", value: money(insurance.accident) },
+        { label: "雇主勞保", value: money(insurance.labor) },
+        { label: "雇主健保", value: money(insurance.health) },
+        { label: "食品業者產品責任險", value: money(insurance.product) },
+        { label: "公共意外責任險", value: money(insurance.public) }
+      ], { label: "每期預估保費・" + insuranceDueLabel(), value: money(insurance.total), negative: false }));
+      (state.orphanPolicies || []).filter((policy) => policy.outletId === outlet.id && policy.status !== "collected").forEach((policy) => {
+        const status = policy.status === "pending-adjustment" ? "期末工作底稿待調整應收" : "應收款待次期首夜收回";
+        card.append(el("p", "insurance-orphan", "孤兒保單・" + policy.employeeName + "｜未到期保費 " + money(policy.refundAmount) + "｜" + status));
+      });
+      if (tier.id !== "dapaidang") {
+        const accidentNote = outlet.accidentCoverage ? "雇主已加保職災" : "目前員工自行安排基本保險";
+        card.append(el("p", "insurance-summary", accidentNote + "；固定攤販餐飲業另含產品責任險。"));
+        card.append(button(outlet.accidentCoverage ? "取消雇主職災加保" : "為正職加保職災",
+          "toggle-accident-coverage", { outletId: outlet.id }, state.phase !== "prep" || (!outlet.accidentCoverage && employees <= 0), "manager-action"));
+      } else {
+        card.append(el("p", "insurance-summary", "大排檔需加保公共意外責任險；雇主職災、勞保與健保為強制配置。"));
+      }
+      parts.push(card);
+    });
     return fragment(parts);
   }
 
@@ -740,6 +937,15 @@ export function createUI(runtime) {
       const story = el("article", "story-card journal-entry");
       append(story, el("h3", "", narrative.title), el("p", "", narrative.event + "・" + narrative.choice + "・當夜營運淨額 " + moneyNet(narrative.net)));
       if (narrative.marketCard) story.append(el("p", "", "公告卡：" + narrative.marketCard + (narrative.marketChoice ? "・" + narrative.marketChoice : "")));
+      if (narrative.safetyIncident) {
+        const incident = narrative.safetyIncident;
+        story.append(el("p", "", "安全事件：" + incident.title + "・處置 " + money(incident.expense) +
+          (incident.claim ? "・理賠應收 " + money(incident.claim) : "・店家自行負擔")));
+      }
+      if (narrative.recipesUnlocked?.length) {
+        const names = narrative.recipesUnlocked.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean);
+        if (names.length) story.append(el("p", "", "熟客秘笈／升級菜色免費解鎖：" + names.join("、")));
+      }
       if (narrative.guests?.length) story.append(el("p", "", "來客：" + narrative.guests.join("、")));
       parts.push(story);
     }
@@ -750,20 +956,21 @@ export function createUI(runtime) {
     const reports = state.accounting?.weeklyReports || [];
     if (!reports.length) return fragment(subhead("每週工作底稿", "第七夜打烊後產生", true),
       storyCard("第一份週底稿尚未結帳。", "完成第 7 夜後，系統會整理試算表、借貸發生額與期末餘額。"));
-    const report = reports.find((item) => item.week === Number(selectedWeek)) || reports[reports.length - 1];
+    const report = reports.find((item) => item.id === selectedWeek) || reports[reports.length - 1];
     const select = filterSelect("工作週", "week-report", reports.slice().reverse().map((item) => ({
-      value: item.week, label: "第 " + item.week + " 週・第 " + item.startDay + "–" + item.endDay + " 夜"
-    })), report.week);
+      value: item.id, label: item.periodEnd ? "第 " + item.period + " 期末工作底稿・第 " + item.startDay + "–" + item.endDay + " 夜" : "第 " + item.week + " 週・第 " + item.startDay + "–" + item.endDay + " 夜"
+    })), report.id);
     const rows = report.rows.map((row) => [row.code + " " + row.name,
       formatBalance(row.opening), formatBalance(row.debit), formatBalance(row.credit),
       row.closingDebit ? formatBalance(row.closingDebit) : "—",
       row.closingCredit ? formatBalance(row.closingCredit) : "—"]);
     const parts = [
-      subhead("每週工作底稿", "第 " + report.week + " 週・第 " + report.startDay + "–" + report.endDay + " 夜", true),
+      subhead(report.periodEnd ? "期末調整工作底稿" : "每週工作底稿", report.periodEnd ? "第 " + report.period + " 期・第 " + report.endDay + " 夜" : "第 " + report.week + " 週・第 " + report.startDay + "–" + report.endDay + " 夜", true),
       select,
+      ...(report.periodEnd ? [storyCard("孤兒保單期末調整", "本期將 " + (report.insuranceAdjustment?.count || 0) + " 筆離職保單，未到期保費共 " + money(report.insuranceAdjustment?.amount || 0) + " 調整為應收保險退費款；次期首夜自動收回並沖銷應收。") ] : []),
       el("div", "statement-status " + (report.balanced ? "balanced" : "unbalanced"),
         report.balanced ? "借貸試算平衡" : "借貸差額待核對"),
-      accountingTable("第 " + report.week + " 週試算表", ["會計科目", "期初餘額", "借方發生", "貸方發生", "期末借方", "期末貸方"], rows),
+      accountingTable(report.periodEnd ? "第 " + report.period + " 期期末調整試算表" : "第 " + report.week + " 週試算表", ["會計科目", "期初餘額", "借方發生", "貸方發生", "期末借方", "期末貸方"], rows),
       ledger([
         { label: "期末試算借方合計", value: formatBalance(report.trialDebit) },
         { label: "期末試算貸方合計", value: formatBalance(report.trialCredit) }
@@ -808,6 +1015,8 @@ export function createUI(runtime) {
         ["資產", ""],
         ["現金及約當現金", formatBalance(f.assets.cash)],
         ["存貨－食材", formatBalance(f.assets.inventory)],
+        ["應收保險退費款", formatBalance(f.assets.insuranceReceivables || 0)],
+        ["應收保險理賠款", formatBalance(f.assets.insuranceClaimReceivables || 0)],
         ["設備及租賃改良－成本", formatBalance(f.assets.ppeCost)],
         ["減：累計折舊", formatBalance(-f.assets.ppeDep)],
         ["設備及租賃改良－帳面金額", formatBalance(f.assets.ppeNet)],
@@ -925,6 +1134,12 @@ export function createUI(runtime) {
       append(item, el("h3", "", "第 " + entry.day + " 夜 ｜ " + entry.event),
         el("p", "", entry.title + "　" + entry.choice + " ｜ 淨額 " + moneyNet(entry.net)));
       if (entry.marketCard) item.append(el("p", "", "公告卡：" + entry.marketCard + (entry.marketChoice ? "・" + entry.marketChoice : "")));
+      if (entry.safetyIncident) item.append(el("p", "", "安全事件：" + entry.safetyIncident.title + "・處置 " +
+        money(entry.safetyIncident.expense) + (entry.safetyIncident.claim ? "・理賠應收 " + money(entry.safetyIncident.claim) : "・店家自行負擔")));
+      if (entry.recipesUnlocked?.length) {
+        const names = entry.recipesUnlocked.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean);
+        if (names.length) item.append(el("p", "", "免費解鎖：" + names.join("、")));
+      }
       if (entry.guests?.length) item.append(el("p", "", entry.guests.join("、")));
       parts.push(item);
     });
@@ -934,6 +1149,7 @@ export function createUI(runtime) {
   const journalReports = {
     daily: { title: "前一日日記簿", description: "逐筆查看借貸分錄與當夜營運手記。", icon: "◷" },
     weekly: { title: "每週工作底稿", description: "檢視試算平衡、借貸發生額與期末餘額。", icon: "▤" },
+    monthEnd: { title: "期末調整底稿", description: "每 30 夜整理孤兒保單、應收退費與調整分錄。", icon: "⊞" },
     monthly: { title: "30 夜財務報表", description: "查閱綜合損益、權益變動、資產負債與現金流量。", icon: "▦" },
     chart: { title: "會計科目表", description: "查看遊戲內部 IFRS 導向科目與報表分類。", icon: "≡" },
     stories: { title: "港邊手記", description: "回顧每夜事件、選擇與經營故事。", icon: "▣" }
@@ -948,6 +1164,8 @@ export function createUI(runtime) {
     }
     if (view === "weekly") return accounting.weeklyReports?.length
       ? "已結帳 " + accounting.weeklyReports.length + " 週" : "每 7 夜產生一次";
+    if (view === "monthEnd") return accounting.monthEndWorksheets?.length
+      ? "已結帳 " + accounting.monthEndWorksheets.length + " 期" : "每期第 30 夜產生";
     if (view === "monthly") return accounting.monthlyReports?.length
       ? "已結帳 " + accounting.monthlyReports.length + " 期" : "完成第 30 夜後產生";
     if (view === "chart") return CHART_OF_ACCOUNTS.length + " 個內部科目";
@@ -985,11 +1203,39 @@ export function createUI(runtime) {
     const view = {
       daily: renderDailyJournal,
       weekly: renderWeeklyWorksheet,
+      monthEnd: renderMonthEndWorksheet,
       monthly: renderMonthlyStatements,
       chart: renderChartOfAccounts,
       stories: renderStoryJournal
     }[journalView] || renderDailyJournal;
     return view();
+  }
+
+  function renderMonthEndWorksheet() {
+    const reports = state.accounting?.monthEndWorksheets || [];
+    if (!reports.length) return fragment(subhead("期末調整工作底稿", "每 30 夜結帳", true),
+      storyCard("尚未到第一期期末。", "第 30 夜會整理離職員工的孤兒保單，將未到期雇主保費調整為應收款，並與期末試算一併歸檔。"));
+    const report = reports.find((item) => item.id === selectedMonthEnd) || reports[reports.length - 1];
+    const select = filterSelect("期末底稿", "month-end-report", reports.slice().reverse().map((item) => ({
+      value: item.id, label: "第 " + item.period + " 期・第 " + item.endDay + " 夜"
+    })), report.id);
+    const rows = report.rows.map((row) => [row.code + " " + row.name,
+      formatBalance(row.opening), formatBalance(row.debit), formatBalance(row.credit),
+      row.closingDebit ? formatBalance(row.closingDebit) : "—", row.closingCredit ? formatBalance(row.closingCredit) : "—"]);
+    const adjustment = report.insuranceAdjustment || { count: 0, amount: 0 };
+    return fragment(
+      subhead("期末調整工作底稿", "第 " + report.period + " 期・第 " + report.startDay + "–" + report.endDay + " 夜", true),
+      select,
+      storyCard("孤兒保單・應收款調整", "本期整理 " + adjustment.count + " 筆離職保單，未到期保費 " + money(adjustment.amount) + "；借記「應收保險退費款」、貸記相關保險費用，次期首夜收到退款時沖銷應收。"),
+      el("div", "statement-status " + (report.balanced ? "balanced" : "unbalanced"), report.balanced ? "借貸試算平衡" : "借貸差額待核對"),
+      accountingTable("第 " + report.period + " 期末調整試算底稿", ["會計科目", "期初餘額", "借方發生", "貸方發生", "期末借方", "期末貸方"], rows),
+      ledger([
+        { label: "本期孤兒保單數", value: String(adjustment.count) + " 筆" },
+        { label: "本期認列應收保險退費", value: formatBalance(adjustment.amount) },
+        { label: "期末試算借方合計", value: formatBalance(report.trialDebit) },
+        { label: "期末試算貸方合計", value: formatBalance(report.trialCredit) }
+      ])
+    );
   }
 
   function renderOutletManagement() {
@@ -1014,7 +1260,8 @@ export function createUI(runtime) {
         ? "店長自動營運・每夜薪資 " + money(DATA.economy.managerWage)
         : "你親自照看・每夜最多一筆生意";
       append(heading, title, el("span", "outlet-kind", product.typeLabel));
-      const summary = el("p", "outlet-summary", staffLine + "・主打 " + product.productName + " " +
+      const specialty = getOutletSpecialty(outlet);
+      const summary = el("p", "outlet-summary", getOutletTier(outlet).name + "・" + staffLine + "・主打 " + specialty.name + " " +
         money(outletRetailPrice(outlet)) + "/" + product.unit + "・設備 Lv." + outlet.equipmentLevel + "・口碑 " + outlet.reputation);
       card.append(heading, summary);
       if (outlet.lastResult) {
@@ -1025,7 +1272,7 @@ export function createUI(runtime) {
       }
       const supplies = el("div", "outlet-stock-list");
       const choices = product.legacyMixed ? ingredients :
-        [{ id: product.stockId, name: product.productName, icon: product.icon, cost: product.cost, unit: product.unit }];
+        [{ id: product.stockId, name: specialty.name, icon: product.icon, cost: product.cost, unit: product.unit }];
       choices.forEach(function(item) {
         const cost = getPurchasePrice(item);
         const row = el("div", "outlet-stock-row");
@@ -1110,15 +1357,19 @@ export function createUI(runtime) {
     }
     const parts = [subhead("替客人挑一道餐點", "推薦會多留小費")];
     const grid = el("div", "dish-choice-grid");
-    dishes.forEach(function(dish) {
+    const menu = getUnlockedDishes(state);
+    menu.forEach(function(entry) {
+      const dish = entry.dish;
       const recommended = dish.need.indexOf(guest.need) !== -1;
-      const available = Number(state.stock[dish.ingredient]) > 0;
+      const recalled = state.recalledDishIds.includes(dish.id);
+      const available = Number(state.stock[dish.ingredient]) > 0 && !recalled;
       const choice = button("", "serve-dish", { id: dish.id }, !available,
-        "dish-choice" + (recommended ? " recommended" : ""));
+        "dish-choice" + (recommended ? " recommended" : "") + (recalled ? " recalled" : ""));
       const copy = el("span", "dish-choice-copy");
       append(copy,
         el("span", "dish-choice-name", dish.name + (recommended ? " ｜ 投其所好" : "")),
-        el("span", "dish-choice-note", dish.line + " ｜ 庫存 " + (state.stock[dish.ingredient] || 0) + " ｜ 食材 " + money(getFoodCost(dish))));
+        el("span", "dish-choice-note", recalled ? "今晚食安事件下架・暫停供應" :
+          dish.line + " ｜ 庫存 " + (state.stock[dish.ingredient] || 0) + " ｜ 食材 " + money(getFoodCost(dish))));
       append(choice, el("span", "dish-choice-icon", dish.icon), copy,
         el("span", "dish-choice-price", money(dish.price)));
       grid.append(choice);
@@ -1165,7 +1416,7 @@ export function createUI(runtime) {
 
   function setTabAndRender(tab) { setTab(tab); renderUI(); }
   function setJournalView(view) {
-    if (["daily", "weekly", "monthly", "chart", "stories"].includes(view)) journalView = view;
+    if (["daily", "weekly", "monthEnd", "monthly", "chart", "stories"].includes(view)) journalView = view;
   }
   function setStatementView(view) {
     if (["income", "equity", "position", "cashflow"].includes(view)) reportStatement = view;
@@ -1173,7 +1424,8 @@ export function createUI(runtime) {
   function setJournalFilter(filter, value) {
     if (filter === "diary-day") selectedJournalDay = Number(value) || null;
     if (filter === "report-period") selectedReportPeriod = Number(value) || null;
-    if (filter === "week-report") selectedWeek = Number(value) || null;
+    if (filter === "week-report") selectedWeek = value || null;
+    if (filter === "month-end-report") selectedMonthEnd = value || null;
   }
   return {
     renderUI: renderUI,

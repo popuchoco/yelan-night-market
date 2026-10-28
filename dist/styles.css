@@ -393,6 +393,62 @@ body { font-size: var(--type-body); }
 .statement-picker-button { min-height: 48px; padding: var(--space-2) var(--space-3); border: 1px solid #8fa58a55; border-radius: 9px; color: #dce0d1; background: #24312f; font: inherit; font-size: var(--type-body); font-weight: 750; line-height: 1.4; cursor: pointer; }
 .statement-picker-button:hover { border-color: #d1b876; }
 .statement-picker-button.active, .statement-picker-button[aria-pressed="true"] { border-color: #d5bd79; color: #f2e6bf; background: #9c875033; }
+
+/* The in-world operations keep their existing harbor palette; tier and insurance
+   controls use compact ledger-like surfaces so the safety rules stay scannable. */
+.tier-planning, .branch-safety-section { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
+.tier-plan-card, .branch-safety-card, .insurance-card, .staff-release-card { display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid #c6ad6938; border-radius: 12px; background: linear-gradient(145deg,#263532,#1d2b2a); }
+.tier-plan-head, .insurance-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.tier-plan-title, .insurance-card-head h4, .branch-safety-card h4 { margin: 0; color: #f0e4c6; font-size: var(--type-body); font-weight: 800; }
+.tier-plan-badge { flex: 0 0 auto; padding: 5px 9px; border: 1px solid #d7bd7955; border-radius: 999px; color: #ecd8a3; background: #d7bd7910; font-size: var(--type-caption); font-weight: 800; }
+.tier-track { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-1); padding: 0; margin: 0; list-style: none; }
+.tier-track li { position: relative; display: grid; justify-items: center; gap: 5px; color: #aab9ac; text-align: center; font-size: var(--type-caption); }
+.tier-track li:not(:last-child)::after { position: absolute; top: 8px; left: calc(50% + 10px); width: calc(100% - 20px); border-top: 1px solid #95a99055; content: ""; }
+.tier-track-dot { z-index: 1; width: 16px; height: 16px; border: 2px solid #91a08f; border-radius: 50%; background: #1d2b2a; }
+.tier-track li.complete .tier-track-dot, .tier-track li.current .tier-track-dot { border-color: #e9cf8a; background: #b89854; box-shadow: 0 0 0 3px #d8b86719; }
+.tier-track li.current { color: #f0d99e; font-weight: 800; }
+.tier-track-label { line-height: 1.35; }
+.tier-plan-meta, .tier-plan-next, .tier-plan-finished, .insurance-summary { margin: 0; color: #c2cec0; font-size: var(--type-caption); line-height: 1.55; }
+.tier-plan-next { color: #f0daa2; font-weight: 800; }
+.tier-requirements { display: grid; gap: 4px; padding: 0; margin: 0; list-style: none; color: #f1c5a8; font-size: var(--type-caption); line-height: 1.45; }
+.tier-requirements .ready { color: #bdd6b8; }
+.tier-upgrade-action { width: 100%; }
+.branch-safety-section > .helper-copy { margin: 0; }
+.branch-safety-card h4 { margin-bottom: var(--space-1); }
+.branch-safety-grid { display: grid; gap: var(--space-2); }
+.branch-safety-grid .manager-item { align-items: flex-start; }
+.insurance-card .ledger-card { margin: 0; }
+.insurance-orphan { margin: 0; padding: var(--space-2); border-left: 3px solid var(--gold); border-radius: 5px; color: #f0d99e; background: #d5bd790c; font-size: var(--type-caption); line-height: 1.5; }
+.staff-release-card { border-color: #c97e6244; background: #9e563d0c; }
+.staff-release-card > b { color: #efcfb8; }
+.staff-release-card .manager-note { margin: 0; line-height: 1.5; }
+.game-footer { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); min-height: 56px; padding: var(--space-2) 4px 0; color: #aab7aa; font-size: var(--type-caption); }
+.game-guide-trigger { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-3); border: 1px solid #d6bd7955; border-radius: 9px; color: #f0dcaa; background: #d6bd7912; font: inherit; font-size: var(--type-body); font-weight: 800; cursor: pointer; }
+.game-guide-trigger:hover { border-color: #edc77c; background: #d6bd7922; }
+.game-guide-dialog { box-sizing: border-box; width: min(820px,calc(100vw - 32px)); max-width: none; max-height: min(88dvh,820px); margin: auto; padding: 0; overflow: hidden; border: 1px solid #ddc67c66; border-radius: 18px; color: var(--cream); background: linear-gradient(155deg,#243533,#172424); box-shadow: 0 28px 90px #000b; }
+.game-guide-dialog:not([open]) { display: none; }
+.game-guide-dialog[open] { display: grid; grid-template-rows: auto minmax(0,1fr); }
+.game-guide-dialog::backdrop { background: #071111dd; backdrop-filter: blur(6px); }
+.game-guide-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: clamp(16px,3vw,28px); border-bottom: 1px solid #ffffff18; background: #1c2a29; }
+.game-guide-header .modal-title { margin: 5px 0 0; color: #f3ecd7; font-size: clamp(22px,4vw,30px); }
+.game-guide-header .modal-desc { max-width: 620px; margin: 7px 0 0; color: #c4d0c3; font-size: var(--type-body); line-height: 1.55; }
+.game-guide-content { min-height: 0; overflow: auto; padding: var(--space-4) clamp(16px,3vw,28px) 24px; overscroll-behavior: contain; scrollbar-color: #758a77 #1c2826; }
+.game-guide-content:focus-visible { outline: 2px solid var(--gold); outline-offset: -4px; }
+.guide-section { display: grid; gap: var(--space-2); padding: var(--space-4) 0; border-bottom: 1px solid #ffffff15; }
+.guide-section:last-child { border-bottom: 0; }
+.guide-index { color: #d2b775; font-size: var(--type-caption); font-weight: 850; letter-spacing: .12em; }
+.guide-section h3 { margin: 0; color: #f1e6c8; font-size: var(--type-lead); }
+.guide-section p, .guide-section li { margin: 0; color: #d0d9cd; font-size: var(--type-body); line-height: 1.7; }
+.guide-section ul { display: grid; gap: var(--space-2); padding-left: 22px; margin: 0; }
+.guide-tier-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid #d6bd7932; border-radius: 9px; color: #f3dfab; background: #d5bd790c; font-size: var(--type-caption); font-weight: 850; }
+.guide-callout { padding: var(--space-3); border-left: 3px solid #d8bf7d; border-radius: 6px; background: #d5bd790d; }
+@media (max-width: 800px) {
+  .game-footer { justify-content: center; flex-wrap: wrap; padding-bottom: env(safe-area-inset-bottom,0px); }
+  .game-guide-dialog { width: min(100% - 20px,760px); max-height: 90dvh; border-radius: 14px; }
+  .game-guide-header { padding: var(--space-3); }
+  .game-guide-content { padding: var(--space-3) var(--space-3) 20px; }
+  .tier-plan-meta, .tier-plan-next, .insurance-summary { font-size: 13px; }
+}
 .accounting-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; color: #cfdbca; font-size: var(--type-caption); font-weight: 750; }
 .accounting-filter select { min-height: 44px; max-width: 100%; padding: 0 var(--space-3); border: 1px solid #93a88b55; border-radius: 8px; color: #f0ead9; background: #202d2b; font: inherit; }
 .accounting-table-shell { max-width: 100%; overflow: auto; margin: var(--space-2) 0 var(--space-3); border: 1px solid #96a38b35; border-radius: 10px; background: #182321cc; scrollbar-color: #758a77 #1c2826; }
@@ -606,6 +662,17 @@ body { font-size: var(--type-body); }
 .world-event-impact-copy { display: grid; gap: 5px; }
 .world-event-impact-copy b { color: #f0e5c9; font-size: var(--type-body); }
 .world-event-impact-copy p { margin: 0; color: #bbc7b8; font-size: var(--type-caption); line-height: 1.6; }
+.incident-policy-status { display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e0a07a42; border-radius: 10px; background: #131f1e88; }
+.incident-status-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: #f0d69b; background: #cfad6520; font-size: 21px; }
+.incident-status-copy { color: #eadfc8; font-size: var(--type-caption); font-weight: 780; line-height: 1.45; }
+.incident-status-pill { padding: 5px 8px; border: 1px solid #d7c38155; border-radius: 99px; color: #ecd99f; background: #dbc47b12; font-size: var(--type-caption); font-weight: 800; white-space: nowrap; }
+.incident-guidance { margin: 0; color: #d2d9cd; font-size: var(--type-body); line-height: 1.65; }
+.world-event-options .manager-event-choices button { min-height: 56px; }
+.locked-recipes { margin-top: var(--space-2); padding: 10px 12px; border: 1px solid #ffffff18; border-radius: 10px; color: #b8c4b8; background: #ffffff05; }
+.locked-recipes summary { min-height: 44px; display: flex; align-items: center; color: #e2d3a6; font-size: var(--type-caption); font-weight: 800; cursor: pointer; }
+.locked-recipe-row { margin: 5px 0 0; color: #9fac9e; font-size: var(--type-caption); line-height: 1.5; }
+.recipe-discovery-log { display: grid; gap: 5px; margin-top: var(--space-2); padding: 10px 12px; border-left: 3px solid #d9c17d; border-radius: 6px; color: #b7c5b7; background: #dbc47b0c; font-size: var(--type-caption); }
+.recipe-discovery-log b { color: #f0d89a; }
 @media (max-width: 640px) {
   .world-event-trigger { width: min(216px, 58%); min-height: 54px; gap: 8px; padding: 7px 9px; }
   .outlet-event-trigger { width: min(190px, 48%); min-height: 50px; padding: 6px 8px; gap: 7px; }
@@ -620,6 +687,8 @@ body { font-size: var(--type-body); }
   .story-choice-option { grid-template-columns: 36px minmax(0,1fr); min-height: 64px; }
   .story-choice-effect { grid-column: 2; text-align: left; }
   .world-event-options .manager-event-choices { grid-template-columns: 1fr; }
+  .incident-policy-status { grid-template-columns: 40px minmax(0,1fr); }
+  .incident-status-pill { grid-column: 2; justify-self: start; }
 }
 @media (prefers-reduced-motion: reduce) {
   .world-event-trigger, .world-event-trigger[data-pending="true"] .world-event-mark { animation: none !important; transition: none !important; }

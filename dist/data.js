@@ -56,12 +56,12 @@ export const DATA = Object.freeze({
   // `food` and `leisure` remain as legacy save formats; new acquisitions use
   // the four specific formats below.
   outletProducts: {
-    fish: { group: "food", selectable: true, storeName: "港口炸物", typeLabel: "現炸海味", productName: "現炸海味拼盤", icon: "🍤", stockId: "fish", unit: "份", cost: 76, price: 190, pricePerLevel: 12, note: "漁獲進貨成本較高，主打現炸海味拼盤，每份 NT$ 190。" },
-    fruit: { group: "food", selectable: true, storeName: "山海果物", typeLabel: "果物冰飲", productName: "海風水果冰", icon: "🍧", stockId: "fruit", unit: "杯", cost: 42, price: 135, pricePerLevel: 8, note: "季節水果與冰飲，主打海風水果冰，每杯 NT$ 135。" },
-    sweet: { group: "food", selectable: true, storeName: "花生糖舖", typeLabel: "手作甜食", productName: "手作花生糖盒", icon: "🥜", stockId: "sweet", unit: "盒", cost: 28, price: 98, pricePerLevel: 6, note: "低耗損伴手禮，主打手作花生糖盒，每盒 NT$ 98。" },
-    toy: { group: "leisure", selectable: true, storeName: "彈珠小屋", typeLabel: "遊戲體驗", productName: "招牌彈珠一局", icon: "🎯", stockId: "toy", unit: "局", cost: 25, price: 90, pricePerLevel: 8, note: "親子與熟客體驗攤，主打招牌彈珠一局，每局 NT$ 90。" },
-    food: { group: "food", selectable: false, storeName: "熟食同業", typeLabel: "熟食餐飲", productName: "港邊熱食", icon: "🍲", stockId: null, unit: "份", cost: 0, price: 150, pricePerLevel: 12, legacyMixed: true, note: "舊版存檔的綜合熟食分店。" },
-    leisure: { group: "leisure", selectable: false, storeName: "遊戲同業", typeLabel: "遊戲體驗", productName: "體驗代幣", icon: "🎟", stockId: "leisure", unit: "張", cost: 32, price: 120, pricePerLevel: 10, note: "舊版存檔的遊戲體驗分店。" }
+    fish: { group: "food", selectable: true, storeName: "港口炸物", typeLabel: "現炸海味", productName: "現炸海味拼盤", icon: "🍤", stockId: "fish", unit: "份", cost: 76, price: 190, pricePerLevel: 12, tierOffers: [{ name: "現炸海味拼盤", bonus: 0 }, { name: "港灣雙拼套餐", bonus: 34 }, { name: "船長海味盛宴", bonus: 72 }], note: "漁獲進貨成本較高，固定攤販解鎖雙拼套餐，大排檔推出船長盛宴。" },
+    fruit: { group: "food", selectable: true, storeName: "山海果物", typeLabel: "果物冰飲", productName: "海風水果冰", icon: "🍧", stockId: "fruit", unit: "杯", cost: 42, price: 135, pricePerLevel: 8, tierOffers: [{ name: "海風水果冰", bonus: 0 }, { name: "山海雙果雪花冰", bonus: 24 }, { name: "港灣鮮果冰宴", bonus: 52 }], note: "季節水果與冰飲，升級可解鎖雙果冰與鮮果冰宴。" },
+    sweet: { group: "food", selectable: true, storeName: "花生糖舖", typeLabel: "手作甜食", productName: "手作花生糖盒", icon: "🥜", stockId: "sweet", unit: "盒", cost: 28, price: 98, pricePerLevel: 6, tierOffers: [{ name: "手作花生糖盒", bonus: 0 }, { name: "古早味花生糖禮盒", bonus: 22 }, { name: "巷口茶香甜點盤", bonus: 48 }], note: "低耗損伴手禮，升級可解鎖古早味禮盒與茶香甜點盤。" },
+    toy: { group: "leisure", selectable: true, storeName: "彈珠小屋", typeLabel: "遊戲體驗", productName: "招牌彈珠一局", icon: "🎯", stockId: "toy", unit: "局", cost: 25, price: 90, pricePerLevel: 8, tierOffers: [{ name: "招牌彈珠一局", bonus: 0 }, { name: "親子闖關雙人券", bonus: 20 }, { name: "港灣夜遊集章套票", bonus: 45 }], note: "親子與熟客體驗攤，升級可解鎖雙人闖關與夜遊套票。" },
+    food: { group: "food", selectable: false, storeName: "熟食同業", typeLabel: "熟食餐飲", productName: "港邊熱食", icon: "🍲", stockId: null, unit: "份", cost: 0, price: 150, pricePerLevel: 12, tierOffers: [{ name: "港邊熱食", bonus: 0 }, { name: "港邊雙人套餐", bonus: 28 }, { name: "漁港家常盛宴", bonus: 58 }], legacyMixed: true, note: "舊版存檔的綜合熟食分店。" },
+    leisure: { group: "leisure", selectable: false, storeName: "遊戲同業", typeLabel: "遊戲體驗", productName: "體驗代幣", icon: "🎟", stockId: "leisure", unit: "張", cost: 32, price: 120, pricePerLevel: 10, tierOffers: [{ name: "體驗代幣", bonus: 0 }, { name: "雙人體驗券", bonus: 24 }, { name: "夜市闖關通行證", bonus: 50 }], note: "舊版存檔的遊戲體驗分店。" }
   },
   camera: {
     defaultYaw: 0,
@@ -116,7 +116,21 @@ export const DATA = Object.freeze({
   dishes: [
     { id: "pepper-soup", name: "白胡椒雞湯", icon: "♨", price: 120, cost: 42, ingredient: "chicken", need: ["warm", "comfort"], line: "雞腿・白胡椒・暖心慢燉" },
     { id: "tide-platter", name: "潮汐海味盤", icon: "◉", price: 190, cost: 78, ingredient: "seafood", need: ["sea", "share"], line: "當日漁獲・米粉・一起分享" },
-    { id: "osmanthus-pear", name: "桂花烏龍燉梨", icon: "❋", price: 85, cost: 25, ingredient: "tea", need: ["tea", "comfort"], line: "桂花・烏龍茶・清甜水梨" }
+    { id: "osmanthus-pear", name: "桂花烏龍燉梨", icon: "❋", price: 85, cost: 25, ingredient: "tea", need: ["tea", "comfort"], line: "桂花・烏龍茶・清甜水梨" },
+    { id: "harbor-oyster-cake", name: "港灣蚵仔酥餅", icon: "🦪", price: 218, cost: 78, ingredient: "seafood", need: ["sea", "share"], line: "酥香蚵仔・港邊九層塔・固定攤販招牌", unlockTier: "fixed", unlockOutlet: "main" },
+    { id: "pepper-seafood-pot", name: "船長白胡椒海味鍋", icon: "🍲", price: 268, cost: 78, ingredient: "seafood", need: ["warm", "comfort", "sea"], line: "當日海味・白胡椒・大排檔慢熬", unlockTier: "dapaidang", unlockOutlet: "main" },
+    { id: "ferry-chicken-rice", name: "末班船胡椒雞飯", icon: "🍚", price: 176, cost: 42, ingredient: "chicken", need: ["warm", "comfort"], line: "阿琴的基隆家鄉秘笈・熱湯淋飯", secretFor: "aqin" },
+    { id: "lantern-osmanthus-cake", name: "燈籠桂花茶粿", icon: "🏮", price: 148, cost: 25, ingredient: "tea", need: ["tea", "comfort"], line: "藍姨的馬祖家鄉秘笈・桂花茶香", secretFor: "lan" },
+    { id: "captain-fish-broth", name: "澎湖船家鮮魚湯", icon: "🐟", price: 236, cost: 78, ingredient: "seafood", need: ["sea", "warm"], line: "阿慕叔的澎湖家鄉秘笈・鮮魚慢煨", secretFor: "amu" }
+  ],
+  safetyIncidents: [
+    { id: "knife-cut", category: "workplace", icon: "🩹", title: "切菜備料意外", description: "尖峰前備料時，夥伴不慎被刀具劃傷。先讓傷者離開工作區並完成清潔與就醫，再決定是否依職災保障申請理賠。", expenseAccount: "5520", expense: 72, claim: 58, policy: "accident", weight: 22, fame: 0, regulars: 0, dishRecall: false },
+    { id: "hot-pot-burn", category: "workplace", icon: "♨️", title: "熱鍋燙傷處置", description: "忙碌中有人碰到熱鍋邊緣，現場需要降溫、醫療處置並暫停該工作區。", expenseAccount: "5520", expense: 96, claim: 74, policy: "accident", weight: 18, fame: 0, regulars: 0, dishRecall: false },
+    { id: "delivery-fall", category: "workplace", icon: "🧯", title: "送餐途中跌傷", description: "送餐夥伴在濕滑地面跌倒，已停止奔走並進行傷勢評估與就醫安排。", expenseAccount: "5520", expense: 104, claim: 82, policy: "accident", weight: 16, fame: 1, regulars: 0, dishRecall: false },
+    { id: "customer-collision", category: "public", icon: "🧍", title: "顧客動線碰撞", description: "取餐動線發生碰撞，顧客需要協助與醫療照護；請先安置顧客並保留紀錄，再依公共意外保障申請理賠。", expenseAccount: "5530", expense: 138, claim: 112, policy: "public", weight: 13, fame: 2, regulars: 0, dishRecall: false },
+    { id: "food-hair", category: "food", icon: "🧼", title: "餐點異物・髮絲", description: "顧客在餐點中發現髮絲。先下架該批次並提供替代餐點、清潔工作區；依保單條件可申請產品責任理賠。", expenseAccount: "5540", expense: 124, claim: 96, policy: "product", weight: 13, fame: 4, regulars: 1, dishRecall: true },
+    { id: "food-insect", category: "food", icon: "🪲", title: "餐點異物・小蟲", description: "餐點檢查發現異物，必須立即停售受影響批次、清消並補償顧客。", expenseAccount: "5540", expense: 168, claim: 132, policy: "product", weight: 10, fame: 6, regulars: 1, dishRecall: true },
+    { id: "norovirus", category: "outbreak", icon: "🧪", title: "食品安全重大事件", description: "多位顧客回報腸胃不適，疑似諾羅病毒群聚。立即停止出餐、封存與清消、協助就醫並依程序通報；營業暫停一夜。", expenseAccount: "5540", expense: 420, claim: 320, policy: "product", weight: 4, fame: 14, regulars: 3, dishRecall: true, shutdown: true }
   ],
   ingredients: [
     { id: "chicken", name: "雞腿與白胡椒", icon: "🍗", cost: 42, recipe: "白胡椒雞湯" },
@@ -126,7 +140,9 @@ export const DATA = Object.freeze({
   equipment: [
     { id: "grill", name: "銅火爐", icon: "🔥", note: "火候穩定，每級每桌小費 +NT$ 5。", costs: [320, 520, 760] },
     { id: "hood", name: "靜音排煙罩", icon: "🌫️", note: "每級電費 −NT$ 6、瓦斯 −NT$ 3。", costs: [300, 480, 700] },
-    { id: "awning", name: "防風帆布棚", icon: "⛺", note: "雨夜能源加成每級減少 NT$ 15。", costs: [280, 460, 680] }
+    { id: "awning", name: "防風帆布棚", icon: "⛺", note: "雨夜能源加成每級減少 NT$ 15。", costs: [280, 460, 680] },
+    { id: "fire", name: "瓦斯遮斷與滅火設備", icon: "♨", note: "安全設備：固定攤販需 Lv.1，大排檔需 Lv.2。", costs: [220, 360] },
+    { id: "cooler", name: "食材冷藏設備", icon: "❄", note: "餐飲店食品冷鏈的安全條件；固定攤販需 Lv.1，大排檔需 Lv.2。", costs: [280, 460] }
   ],
   staff: [
     { id: "cook", name: "阿滿", role: "廚房主廚", icon: "👩🏻‍🍳", wage: 110, penalty: 12 },
@@ -138,10 +154,10 @@ export const DATA = Object.freeze({
     { id: "old-radio", name: "港邊老收音機", icon: "📻", note: "夜市口碑 +6。", cost: 760 }
   ],
   guests: [
-    { name: "阿琴", role: "末班車站務員", icon: "🚉", need: "warm", needLabel: "想喝一碗有胡椒香的熱湯", line: "最後一班車今天晚了二十分鐘。能不能給我一碗有胡椒香的？", mood: "雨衣還滴著水，她把班表小心摺好，放在桌角。", outfit: "#d07d5f" },
+    { id: "aqin", name: "阿琴", hometown: "基隆", secretRecipeId: "ferry-chicken-rice", role: "末班車站務員", icon: "🚉", need: "warm", needLabel: "想喝一碗有胡椒香的熱湯", line: "最後一班車今天晚了二十分鐘。能不能給我一碗有胡椒香的？", mood: "雨衣還滴著水，她把班表小心摺好，放在桌角。", outfit: "#d07d5f" },
     { name: "小北與星星", role: "等渡船的兄妹", icon: "🧒🏻", need: "share", needLabel: "想要兩個人一起分享", line: "我們的船再一下就到。可以點一份兩個人一起吃的嗎？", mood: "兩個人把一張小小的船票，推到你手邊當作書籤。", outfit: "#77988f" },
-    { name: "藍姨", role: "巷口燈籠師傅", icon: "🏮", need: "tea", needLabel: "收工後想來點清甜茶香", line: "收工後喉嚨乾乾的。今晚有沒有不太甜、帶茶香的東西？", mood: "她替門口那盞燈調亮了一點，說這樣晚歸的人比較找得到路。", outfit: "#bb9b64" },
-    { name: "阿慕叔", role: "清晨出海的舵手", icon: "⚓", need: "sea", needLabel: "想吃今天港口的海味", line: "白天沒捕到什麼魚，倒是晚霞很好看。給我你最喜歡的海味吧。", mood: "他把最後一片夕陽描述得像一座沒人去過的小島。", outfit: "#6b8792" },
+    { id: "lan", name: "藍姨", hometown: "馬祖", secretRecipeId: "lantern-osmanthus-cake", role: "巷口燈籠師傅", icon: "🏮", need: "tea", needLabel: "收工後想來點清甜茶香", line: "收工後喉嚨乾乾的。今晚有沒有不太甜、帶茶香的東西？", mood: "她替門口那盞燈調亮了一點，說這樣晚歸的人比較找得到路。", outfit: "#bb9b64" },
+    { id: "amu", name: "阿慕叔", hometown: "澎湖", secretRecipeId: "captain-fish-broth", role: "清晨出海的舵手", icon: "⚓", need: "sea", needLabel: "想吃今天港口的海味", line: "白天沒捕到什麼魚，倒是晚霞很好看。給我你最喜歡的海味吧。", mood: "他把最後一片夕陽描述得像一座沒人去過的小島。", outfit: "#6b8792" },
     { name: "小葉", role: "港邊夜讀者", icon: "📖", need: "comfort", needLabel: "想坐一會，吃熟悉的味道", line: "我不趕時間，想找一個味道熟悉、能配上幾頁書的晚餐。", mood: "借出去的那本小說終於回來了，書籤還留在同一頁。", outfit: "#907a9d" },
     { name: "阿哲", role: "修船廠夜班師傅", icon: "🛠️", need: "warm", needLabel: "收工後想喝點熱的", line: "今天把引擎修好了，手還是冷的。來一碗能暖手的吧。", mood: "他說明天要帶女兒來看漁船出港。", outfit: "#758a67" },
     { name: "小米", role: "港邊花店學徒", icon: "🌼", need: "tea", needLabel: "想找一點花香與茶香", line: "花市散場了，今晚想喝一杯帶香氣的東西。", mood: "她在桌上放了一朵沒賣完的小白花。", outfit: "#c5879b" },
@@ -176,6 +192,17 @@ export function getOutletProduct(type) {
   return DATA.outletProducts[type] || DATA.outletProducts.food;
 }
 
+export function getOutletSpecialty(outlet) {
+  const product = getOutletProduct(outlet?.type);
+  const tierIndex = ({ mobile: 0, fixed: 1, dapaidang: 2 })[outlet?.tier] || 0;
+  const offer = product.tierOffers?.[tierIndex];
+  return {
+    name: offer?.name || product.productName,
+    priceBonus: Math.max(0, Number(offer?.bonus) || 0),
+    tierIndex
+  };
+}
+
 export function createOutletInventory(sourceStock, sourceCost) {
   const stockIds = Array.from(new Set([
     ...DATA.ingredients.map((item) => item.id),
@@ -204,5 +231,7 @@ export function outletAvailableStock(outlet) {
 export function outletRetailPrice(outlet) {
   const product = getOutletProduct(outlet?.type);
   const basePrice = product.legacyMixed ? DATA.economy.outletMealPrice : product.price;
-  return Math.max(0, Number(basePrice) || 0) + Math.max(0, Number(outlet?.equipmentLevel) || 0) * (Number(product.pricePerLevel) || 0);
+  const specialty = getOutletSpecialty(outlet);
+  return Math.max(0, Number(basePrice) || 0) + specialty.priceBonus +
+    Math.max(0, Number(outlet?.equipmentLevel) || 0) * (Number(product.pricePerLevel) || 0);
 }

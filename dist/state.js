@@ -1,6 +1,7 @@
 import { DATA, createOutletInventory, getOutletProduct, outletAvailableStock, outletRetailPrice } from "./data.js";
 import { ACQUISITION_TYPES, CAMPAIGN_DAYS, acquisitionGroupCounts, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
 import { createAccountingState, ensureAccounting } from "./accounting.js";
+import { getMonthlyInsurance, getOutletCapacity, getOutletTier, getTierDailyUtilities, getTierReadiness, isInsuranceBillingDay, monthlyInsuranceTotals } from "./safety.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
@@ -24,14 +25,23 @@ export function freshState() {
     stock: { chicken: 4, seafood: 4, tea: 5 },
     stockCost: { chicken: 42, seafood: 78, tea: 25 },
     shiftPurchases: 0,
-    equipment: { grill: 0, hood: 0, awning: 0 },
+    unlockedRecipes: DATA.dishes.filter((dish) => !dish.unlockTier && !dish.secretFor).map((dish) => dish.id),
+    recipeGoodVisits: {},
+    recipeLog: [],
+    safetyIncident: null,
+    recalledDishIds: [],
+    insuranceClaims: [],
+    outbreakRecoveryUntilDay: 0,
+    equipment: { grill: 0, hood: 0, awning: 0, fire: 0, cooler: 0 },
     expansions: 0,
     hiredCrew: 0,
     acquisitions: 0,
     acquisitionTypes: [],
-    outlets: [{ id: "main", name: "夜嵐攤號", type: "main", active: true, manager: false,
+    outlets: [{ id: "main", name: "夜嵐攤號", type: "main", tier: "mobile", accidentCoverage: false, active: true, manager: false,
       equipmentLevel: 0, stock: {}, stockCost: {}, nextNightBonus: 0, efficiencyPenalty: 0,
       reputation: 50, autoPaused: false, lastResult: null }],
+    insuranceSnapshot: null,
+    orphanPolicies: [],
     managerEvent: null,
     loanUsed: false,
     loanPrincipal: 0,
@@ -55,6 +65,20 @@ export function normalizeState(data) {
     if (hasOwn(data, key)) fresh[key] = data[key];
   });
   fresh.staff = Object.assign({ cook: true, server: true }, fresh.staff || {});
+  const validRecipeIds = new Set(DATA.dishes.map((dish) => dish.id));
+  fresh.unlockedRecipes = Array.from(new Set([
+    ...DATA.dishes.filter((dish) => !dish.unlockTier && !dish.secretFor).map((dish) => dish.id),
+    ...(Array.isArray(data.unlockedRecipes) ? data.unlockedRecipes : [])
+  ].filter((id) => validRecipeIds.has(id))));
+  fresh.recipeGoodVisits = data.recipeGoodVisits && typeof data.recipeGoodVisits === "object" && !Array.isArray(data.recipeGoodVisits)
+    ? Object.fromEntries(Object.entries(data.recipeGoodVisits).map(([id, visits]) => [String(id), Math.max(0, Math.floor(Number(visits) || 0))])) : {};
+  fresh.recipeLog = Array.isArray(data.recipeLog) ? data.recipeLog.filter((entry) => entry && validRecipeIds.has(entry.recipeId)).slice(-100) : [];
+  const incidentIds = new Set(DATA.safetyIncidents.map((incident) => incident.id));
+  fresh.safetyIncident = data.safetyIncident && incidentIds.has(data.safetyIncident.id) && ["pending", "resolved"].includes(data.safetyIncident.status)
+    ? { ...data.safetyIncident, day: Math.max(1, Math.floor(Number(data.safetyIncident.day) || Number(data.day) || 1)) } : null;
+  fresh.recalledDishIds = Array.isArray(data.recalledDishIds) ? data.recalledDishIds.filter((id) => validRecipeIds.has(id)) : [];
+  fresh.insuranceClaims = Array.isArray(data.insuranceClaims) ? data.insuranceClaims.filter((claim) => claim && typeof claim === "object" && Number(claim.amount) > 0 && ["receivable", "collected"].includes(claim.status)).slice(-100) : [];
+  fresh.outbreakRecoveryUntilDay = Math.max(0, Math.floor(Number(data.outbreakRecoveryUntilDay) || 0));
   fresh.stock = Object.assign(fresh.stock, data.stock || {});
   fresh.stockCost = Object.assign(fresh.stockCost, data.stockCost || {});
   fresh.equipment = Object.assign(fresh.equipment, data.equipment || {});
@@ -72,13 +96,15 @@ export function normalizeState(data) {
   const sourceOutlets = Array.isArray(data.outlets) ? data.outlets : [];
   const storedMain = sourceOutlets.find((outlet) => outlet && outlet.id === "main");
   const mainOutlet = {
-    id: "main", name: "夜嵐攤號", type: "main", active: true, manager: false,
+    id: "main", name: "夜嵐攤號", type: "main", tier: "mobile", accidentCoverage: false, active: true, manager: false,
     equipmentLevel: 0, stock: {}, stockCost: {}, nextNightBonus: 0, efficiencyPenalty: 0,
     reputation: 50, autoPaused: false, lastResult: null,
     ...(storedMain && typeof storedMain === "object" ? storedMain : {})
   };
   mainOutlet.id = "main";
   mainOutlet.name = "夜嵐攤號";
+  if (!["mobile", "fixed", "dapaidang"].includes(mainOutlet.tier)) mainOutlet.tier = "mobile";
+  mainOutlet.accidentCoverage = !!mainOutlet.accidentCoverage;
   const storedBranches = sourceOutlets.filter((outlet) => outlet && outlet.id !== "main").slice(0, fresh.acquisitions);
   const outletNames = Object.fromEntries(Object.entries(ACQUISITION_TYPES).map(([type, details]) => [type, details.name]));
   fresh.outlets = [mainOutlet, ...storedBranches.map((outlet, index) => {
@@ -87,7 +113,10 @@ export function normalizeState(data) {
     return {
       id: String(outlet.id || "acquired-" + (index + 1)),
       name: String(outlet.name || outletNames[type] + "・分店 " + (index + 1)),
-      type, active: !!outlet.active, manager: !!outlet.manager,
+      type, tier: ["mobile", "fixed", "dapaidang"].includes(outlet.tier) ? outlet.tier : "mobile",
+      accidentCoverage: !!outlet.accidentCoverage,
+      safety: Object.assign({ fire: 0, ventilation: 0, coldStorage: 0 }, outlet.safety || {}),
+      active: !!outlet.active, manager: !!outlet.manager,
       equipmentLevel: Math.max(0, Math.min(DATA.economy.outletEquipmentCosts.length, Number(outlet.equipmentLevel) || 0)),
       stock: inventory.stock, stockCost: inventory.stockCost,
       nextNightBonus: Math.max(0, Math.round(Number(outlet.nextNightBonus) || 0)),
@@ -102,10 +131,13 @@ export function normalizeState(data) {
     const type = fresh.acquisitionTypes[index] || "food";
     const inventory = createOutletInventory();
     fresh.outlets.push({ id: "acquired-" + (index + 1), name: outletNames[type] + "・分店 " + (index + 1), type,
+      tier: "mobile", accidentCoverage: false, safety: { fire: 0, ventilation: 0, coldStorage: 0 },
       active: false, manager: false, equipmentLevel: 0, stock: inventory.stock, stockCost: inventory.stockCost, nextNightBonus: 0, efficiencyPenalty: 0,
       reputation: 50, autoPaused: false, lastResult: null });
   }
   fresh.managerEvent = data.managerEvent && typeof data.managerEvent === "object" ? data.managerEvent : null;
+  fresh.insuranceSnapshot = data.insuranceSnapshot && typeof data.insuranceSnapshot === "object" ? data.insuranceSnapshot : null;
+  fresh.orphanPolicies = Array.isArray(data.orphanPolicies) ? data.orphanPolicies.filter((policy) => policy && typeof policy === "object") : [];
   fresh.loanPrincipal = Math.max(0, Math.round(Number(fresh.loanPrincipal) || 0));
   fresh.loanUsed = !!fresh.loanUsed || fresh.loanPrincipal > 0;
   fresh.loanTakenDay = Math.max(0, Math.floor(Number(fresh.loanTakenDay) || 0));
@@ -121,6 +153,9 @@ export function normalizeState(data) {
   if (!Array.isArray(fresh.journal)) fresh.journal = [];
   if (!Number.isFinite(Number(fresh.campaignNet))) fresh.campaignNet = 0;
   fresh.day = Math.max(1, Math.floor(Number(fresh.day) || 1));
+  if (!fresh.unlockedRecipes.includes(DATA.dishes[fresh.selectedDish]?.id)) {
+    fresh.selectedDish = Math.max(0, DATA.dishes.findIndex((dish) => fresh.unlockedRecipes.includes(dish.id)));
+  }
   // Saves from the old finite 30-night build keep their progress and simply
   // continue into night 31 instead of stopping on a terminal ending screen.
   if (fresh.phase === "ending") {
@@ -139,6 +174,9 @@ export function normalizeState(data) {
   if (!Number.isFinite(Number(fresh.shiftPurchases))) fresh.shiftPurchases = 0;
   if (fresh.ledger && typeof fresh.ledger === "object") {
     const defaults = createLedger(fresh);
+    // Old in-progress saves never paid a period-start premium; adding a
+    // projected fee to that historical ledger would desynchronise cash/books.
+    ["insuranceAccident", "insuranceLabor", "insuranceHealth", "insuranceProduct", "insurancePublic"].forEach((key) => { defaults[key] = 0; });
     fresh.ledger = { ...defaults, ...fresh.ledger };
     Object.keys(defaults).forEach((key) => {
       if (!Number.isFinite(Number(fresh.ledger[key]))) fresh.ledger[key] = defaults[key];
@@ -240,8 +278,10 @@ export function hasBrandAlliance(state) {
 export function getTonightGuests(state) {
   const deck = DATA.guests;
   const offset = Math.max(0, (state.day - 3) % deck.length);
-  const seats = Math.min(8, (Number(state.expansions) || 0) + (Number(state.acquisitions) || 0));
-  const guests = Array.from({ length: 3 + seats }, (_, index) => deck[(offset + index) % deck.length]);
+  const mainTier = getOutletTier((state.outlets || []).find((outlet) => outlet.id === "main"));
+  const recoveryPenalty = Number(state.outbreakRecoveryUntilDay) >= Number(state.day) ? 1 : 0;
+  const seats = Math.min(8, (Number(state.expansions) || 0) + (Number(state.acquisitions) || 0) + mainTier.guestBonus);
+  const guests = Array.from({ length: Math.max(2, 3 + seats - recoveryPenalty) }, (_, index) => deck[(offset + index) % deck.length]);
   if (hasBrandAlliance(state)) guests.push({ ...deck[offset % deck.length], name: "品牌聯盟・港邊來客", role: "夜市品牌聯盟來客" });
   if (marketCardChoice(state) === "promote") {
     guests.push({ ...deck[offset % deck.length], name: "觀光客・小滿", role: "港區觀光旅人" });
@@ -261,7 +301,11 @@ export function staffCost(state) {
 export function inspectionFee(state) {
   if (todayEvent(state).id !== "inspection") return 0;
   if (marketCardChoice(state) === "deep-clean") return 0;
-  const ready = (Number(state.equipment.hood) || 0) > 0 || (Number(state.equipment.awning) || 0) > 0 || !!state.upgrades.lantern;
+  const main = (state.outlets || []).find((outlet) => outlet.id === "main");
+  const tier = getOutletTier(main);
+  const ready = tier.id === "mobile"
+    ? (Number(state.equipment.hood) || 0) > 0 || (Number(state.equipment.awning) || 0) > 0 || !!state.upgrades.lantern
+    : getTierReadiness(state, main, tier.id).ready;
   return ready ? 0 : 75;
 }
 
@@ -277,6 +321,12 @@ export function getFoodCost(state, dish) {
   return Math.round(Number.isFinite(value) ? value : dish.cost);
 }
 
+export function getUnlockedDishes(state) {
+  const unlocked = new Set(Array.isArray(state.unlockedRecipes) ? state.unlockedRecipes : DATA.dishes
+    .filter((dish) => !dish.unlockTier && !dish.secretFor).map((dish) => dish.id));
+  return DATA.dishes.map((dish, index) => ({ dish, index })).filter(({ dish }) => unlocked.has(dish.id));
+}
+
 export function createLedger(state) {
   const event = todayEvent(state);
   const card = todayMarketCard(state);
@@ -287,6 +337,9 @@ export function createLedger(state) {
   const rainGas = Math.max(0, DATA.economy.rainGas - awning * DATA.economy.awningGasSavings);
   const blackout = event.id === "blackout" ? DATA.economy.blackoutSurcharge : 0;
   const fee = inspectionFee(state);
+  const insurance = isInsuranceBillingDay(state.day)
+    ? monthlyInsuranceTotals(state)
+    : { accident: 0, labor: 0, health: 0, product: 0, public: 0 };
   return {
     sales: 0,
     tips: 0,
@@ -300,6 +353,7 @@ export function createLedger(state) {
     labor: staffCost(state),
     managerPayroll: (Array.isArray(state.outlets) ? state.outlets.filter((outlet) => outlet && outlet.manager).length : 0) * DATA.economy.managerWage,
     outletUtilities: (Array.isArray(state.outlets) ? state.outlets.filter((outlet) => outlet && outlet.id !== "main" && outlet.active).length : 0) * DATA.economy.outletUtilities,
+    stallUtilities: getTierDailyUtilities(state),
     water: Math.max(DATA.economy.minWater, DATA.economy.water),
     electricity: Math.max(DATA.economy.minElectricity, DATA.economy.electricity - hood * DATA.economy.hoodElectricitySavings) + (event.id === "rain" ? rainElectricity : 0) + blackout,
     gas: Math.max(DATA.economy.minGas, DATA.economy.gas - hood * DATA.economy.hoodGasSavings) + (event.id === "rain" ? rainGas : 0),
@@ -311,24 +365,36 @@ export function createLedger(state) {
       ? Math.round((Number(state.loanNights) + 1) * Number(state.loanPrincipal) * DATA.economy.loanWeeklyRate / 7) -
         Math.round(Number(state.loanNights) * Number(state.loanPrincipal) * DATA.economy.loanWeeklyRate / 7)
       : 0,
+    insuranceAccident: insurance.accident,
+    insuranceLabor: insurance.labor,
+    insuranceHealth: insurance.health,
+    insuranceProduct: insurance.product,
+    insurancePublic: insurance.public,
+    insuranceRecovery: (Array.isArray(state.orphanPolicies) ? state.orphanPolicies : []).filter((policy) => policy?.status === "receivable" && Number(policy.periodEndDay) < Number(state.day))
+      .reduce((sum, policy) => sum + Math.max(0, Math.round(Number(policy.refundAmount) || 0)), 0),
+    insuranceClaimRevenue: 0,
+    insuranceClaimReceipts: 0,
+    safetyCosts: 0,
     compensation: 0,
     refunds: 0
   };
 }
 
 export function ledgerIncome(ledger) {
-  return ledger.sales + ledger.tips + ledger.bonus + ledger.storyBonus + (ledger.subsidies || 0);
+  return ledger.sales + ledger.tips + ledger.bonus + ledger.storyBonus + (ledger.subsidies || 0) + (ledger.insuranceClaimRevenue || 0);
 }
 
 export function fixedOperatingCost(ledger) {
   return ledger.rent + (ledger.expansionRent || 0) + (ledger.acquisitionRent || 0) + ledger.labor +
     (ledger.managerPayroll || 0) + (ledger.outletUtilities || 0) +
+    (ledger.stallUtilities || 0) + (ledger.insuranceAccident || 0) + (ledger.insuranceLabor || 0) +
+    (ledger.insuranceHealth || 0) + (ledger.insuranceProduct || 0) + (ledger.insurancePublic || 0) +
     (ledger.water || 0) + ledger.electricity + ledger.gas + (ledger.fees || 0) +
     (ledger.marketing || 0) + (ledger.preparation || 0) + (ledger.interest || 0);
 }
 
 export function ledgerCosts(ledger) {
-  return ledger.food + fixedOperatingCost(ledger) + ledger.compensation + ledger.refunds;
+  return ledger.food + fixedOperatingCost(ledger) + ledger.compensation + ledger.refunds + (ledger.safetyCosts || 0);
 }
 
 export function ledgerNet(ledger) {
@@ -338,12 +404,14 @@ export function ledgerNet(ledger) {
 export function forecast(state) {
   const guests = getTonightGuests(state);
   const paying = guests.filter((guest) => !guest.difficult).length;
-  const averagePrice = Math.round(DATA.dishes.reduce((sum, dish) => sum + dish.price, 0) / DATA.dishes.length);
-  const averageFood = Math.round(DATA.dishes.reduce((sum, dish) => sum + getFoodCost(state, dish), 0) / DATA.dishes.length);
+  const availableDishes = getUnlockedDishes(state).map(({ dish }) => dish);
+  const menu = availableDishes.length ? availableDishes : DATA.dishes.slice(0, 1);
+  const averagePrice = Math.round(menu.reduce((sum, dish) => sum + dish.price, 0) / menu.length);
+  const averageFood = Math.round(menu.reduce((sum, dish) => sum + getFoodCost(state, dish), 0) / menu.length);
   const event = todayEvent(state);
   const baseTips = DATA.economy.baseTip - (state.staff.cook ? 0 : DATA.economy.cookServicePenalty) - (state.staff.server ? 0 : DATA.economy.serverServicePenalty);
   const upgradeTips = (Number(state.equipment.grill) || 0) * DATA.economy.grillTipPerLevel + (state.upgrades["window-seat"] ? DATA.economy.menuTipBonus : 0) + (Number(state.hiredCrew) || 0) * 10;
-  const featuredBonus = DATA.dishes[state.selectedDish] ? DATA.economy.featuredDishBonus : 0;
+  const featuredBonus = menu.some((dish) => dish.id === DATA.dishes[state.selectedDish]?.id) ? DATA.economy.featuredDishBonus : 0;
   const tips = paying * (baseTips + upgradeTips + featuredBonus + (event.id === "street-music" ? DATA.economy.streetMusicTip : 0));
   const bonus = event.id === "festival" ? paying * DATA.economy.festivalBonus : 0;
   const ledger = createLedger(state);
@@ -355,7 +423,7 @@ export function forecast(state) {
   let outletFood = 0;
   (Array.isArray(state.outlets) ? state.outlets : []).filter((outlet) => outlet.id !== "main" && outlet.active).forEach((outlet) => {
     const product = getOutletProduct(outlet.type);
-    const capacity = outlet.manager ? (outlet.efficiencyPenalty > 0 ? 1 : 2) : 1;
+    const capacity = getOutletCapacity(outlet);
     let remaining = capacity;
     if (!product.legacyMixed) {
       const units = Math.min(remaining, outletAvailableStock(outlet));

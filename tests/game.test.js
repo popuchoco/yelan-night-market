@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { DATA } from "../dist/data.js";
+import { DATA, getOutletSpecialty, outletRetailPrice } from "../dist/data.js";
 import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, selectEnding } from "../dist/campaign.js";
 import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accounting.js";
 import { createGameEngine } from "../dist/game.js";
 import { createUI } from "../dist/ui.js";
 import { applyCameraAction } from "../dist/scene.js";
+import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   loadState, normalizeState, saveState, todayEvent, todayMarketCard, ledgerIncome, ledgerNet
@@ -703,4 +704,246 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(css, /\.world-event-trigger\[data-pending="true"\]/);
   assert.match(css, /\.outlet-event-trigger:focus-visible/);
   assert.match(css, /\.outlet-event-trigger[^\n]*min-height: 52px/);
+});
+
+test("insurance premiums are charged only on the first night of each 30-night period", () => {
+  assert.equal(isInsuranceBillingDay(1), true);
+  assert.equal(isInsuranceBillingDay(30), false);
+  assert.equal(isInsuranceBillingDay(31), true);
+  assert.equal(isInsuranceBillingDay(61), true);
+  assert.equal(isInsuranceBillingDay(0), false);
+
+  const state = freshState();
+  const main = state.outlets[0];
+  main.tier = "dapaidang";
+  state.equipment.fire = 2;
+  state.equipment.hood = 2;
+  state.equipment.grill = 2;
+  state.equipment.cooler = 2;
+  state.expansions = 2;
+  state.hiredCrew = 1;
+  const firstNight = createLedger(state);
+  assert.equal(firstNight.insuranceAccident, 3 * INSURANCE_RATES.accidentPerEmployee);
+  assert.equal(firstNight.insuranceLabor, 3 * INSURANCE_RATES.laborPerEmployee);
+  assert.equal(firstNight.insuranceHealth, 3 * INSURANCE_RATES.healthPerEmployee);
+  assert.equal(firstNight.insuranceProduct, INSURANCE_RATES.productLiabilityPerFoodOutlet);
+  assert.equal(firstNight.insurancePublic, INSURANCE_RATES.publicLiabilityPerOutlet);
+
+  state.day = 2;
+  const ordinaryNight = createLedger(state);
+  assert.equal(ordinaryNight.insuranceAccident + ordinaryNight.insuranceLabor + ordinaryNight.insuranceHealth + ordinaryNight.insuranceProduct + ordinaryNight.insurancePublic, 0);
+  state.day = 31;
+  assert.equal(createLedger(state).insuranceAccident, firstNight.insuranceAccident);
+});
+
+test("stall tier progression is gated by safety equipment and capitalizes the improvements", () => {
+  const state = freshState();
+  state.coins = 5000;
+  const engine = createGameEngine(state);
+  const blocked = engine.upgradeStallTier("main");
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.message, /瓦斯遮斷/);
+
+  state.equipment.fire = 1;
+  state.equipment.hood = 1;
+  state.equipment.awning = 1;
+  state.equipment.cooler = 1;
+  assert.equal(engine.upgradeStallTier("main").ok, true);
+  assert.equal(state.outlets[0].tier, "fixed");
+  assert.equal(state.accounting.assets.at(-1).name, "夜嵐攤號｜固定攤販改建");
+
+  state.equipment.fire = 2;
+  state.equipment.hood = 2;
+  state.equipment.grill = 2;
+  state.equipment.cooler = 2;
+  state.expansions = 2;
+  state.hiredCrew = 1;
+  assert.equal(engine.upgradeStallTier("main").ok, true);
+  assert.equal(state.outlets[0].tier, "dapaidang");
+  assert.ok(state.accounting.assets.some((asset) => asset.name === "夜嵐攤號｜大排檔改建"));
+});
+
+test("employee departure records an orphan-policy receivable adjustment at period end and collects it next period", () => {
+  const state = freshState();
+  state.coins = 5000;
+  state.accounting.balances["1000"] = state.coins;
+  state.hiredCrew = 2;
+  const main = state.outlets[0];
+  main.tier = "dapaidang";
+  state.equipment.fire = 2;
+  state.equipment.hood = 2;
+  state.equipment.grill = 2;
+  state.equipment.cooler = 2;
+  state.expansions = 2;
+  const engine = createGameEngine(state);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(state.accounting.balances["5450"], 4 * INSURANCE_RATES.accidentPerEmployee);
+  assert.equal(state.accounting.balances["5460"], 4 * INSURANCE_RATES.laborPerEmployee);
+  assert.equal(state.accounting.balances["5461"], 4 * INSURANCE_RATES.healthPerEmployee);
+
+  state.day = 15;
+  state.phase = "prep";
+  const departure = engine.releaseCrewMember();
+  assert.equal(departure.ok, true);
+  assert.equal(state.hiredCrew, 1);
+  const policy = state.orphanPolicies[0];
+  assert.equal(policy.status, "pending-adjustment");
+  assert.equal(policy.remainingDays, 15);
+  assert.equal(policy.refundAmount, Math.round((INSURANCE_RATES.accidentPerEmployee + INSURANCE_RATES.laborPerEmployee + INSURANCE_RATES.healthPerEmployee) / 2));
+
+  state.day = 30;
+  state.phase = "report";
+  state.reportChoice = "paperboat";
+  state.ledger = createLedger(state);
+  assert.equal(engine.nextNight().ok, true);
+  assert.equal(policy.status, "receivable");
+  assert.equal(state.accounting.balances["1200"], policy.refundAmount);
+  assert.equal(state.accounting.monthlyReports[0].financialPosition.assets.insuranceReceivables, policy.refundAmount);
+  assert.equal(state.accounting.monthEndWorksheets[0].insuranceAdjustment.amount, policy.refundAmount);
+  assert.equal(state.accounting.monthEndWorksheets[0].balanced, true);
+
+  assert.equal(state.day, 31);
+  assert.equal(createLedger(state).insuranceRecovery, policy.refundAmount);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(policy.status, "collected");
+  assert.equal(state.accounting.balances["1200"], 0);
+  assert.equal(state.accounting.balances["1000"], state.coins);
+});
+
+test("insured workplace accidents pause service, book treatment and receivable, then collect two nights later", () => {
+  const state = freshState();
+  state.outlets[0].accidentCoverage = true;
+  const engine = createGameEngine(state, { random: () => 0 });
+  const card = todayMarketCard(state);
+  if (card) assert.equal(engine.chooseMarketCard(card.choices[0].id).ok, true);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(state.safetyIncident.id, "knife-cut");
+  assert.equal(state.safetyIncident.status, "pending");
+  assert.equal(engine.serveDish("pepper-soup").ok, false);
+
+  const cashAfterOpening = state.coins;
+  const handled = engine.resolveSafetyIncident("claim");
+  assert.equal(handled.ok, true);
+  assert.equal(state.coins, cashAfterOpening - state.safetyIncident.expense);
+  assert.equal(state.ledger.safetyCosts, DATA.safetyIncidents.find((item) => item.id === "knife-cut").expense);
+  assert.equal(state.ledger.insuranceClaimRevenue, 58);
+  assert.equal(state.accounting.balances["1210"], 58);
+  assert.equal(state.accounting.balances["4030"], -58);
+  assert.equal(state.accounting.balances["5520"], 72);
+  assert.equal(state.insuranceClaims[0].status, "receivable");
+
+  state.day = 3;
+  state.phase = "prep";
+  state.ledger = null;
+  const nextCard = todayMarketCard(state);
+  if (nextCard) engine.chooseMarketCard(nextCard.choices[0].id);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(state.insuranceClaims[0].status, "collected");
+  assert.equal(state.ledger.insuranceClaimReceipts, 58);
+  assert.equal(state.accounting.balances["1210"], 0);
+  assert.equal(state.accounting.balances["1000"], state.coins);
+});
+
+test("fixed food outlet contamination recalls the affected dish and records a product claim", () => {
+  const values = [0, 0.76, 0];
+  let cursor = 0;
+  const state = freshState();
+  state.outlets[0].tier = "fixed";
+  state.equipment.fire = 1;
+  state.equipment.hood = 1;
+  state.equipment.awning = 1;
+  state.equipment.cooler = 1;
+  const engine = createGameEngine(state, { random: () => values[cursor++] ?? 0 });
+  const card = todayMarketCard(state);
+  if (card) engine.chooseMarketCard(card.choices[0].id);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(state.safetyIncident.id, "food-hair");
+  assert.equal(state.insuranceSnapshot.outlets[0].covered.product, true);
+  assert.equal(engine.resolveSafetyIncident("claim").ok, true);
+  assert.equal(state.recalledDishIds.length, 1);
+  assert.equal(state.accounting.balances["5540"], 124);
+  assert.equal(state.accounting.balances["1210"], 96);
+  assert.equal(engine.serveDish(state.recalledDishIds[0]).ok, false);
+});
+
+test("suspected norovirus stops service, lowers reputation and regulars, and leaves a product claim receivable", () => {
+  const values = [0, 0.99, 0];
+  let cursor = 0;
+  const state = freshState();
+  state.outlets[0].tier = "fixed";
+  state.equipment.fire = 1;
+  state.equipment.hood = 1;
+  state.equipment.awning = 1;
+  state.equipment.cooler = 1;
+  const engine = createGameEngine(state, { random: () => values[cursor++] ?? 0 });
+  const card = todayMarketCard(state);
+  if (card) engine.chooseMarketCard(card.choices[0].id);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(state.safetyIncident.id, "norovirus");
+  assert.equal(engine.resolveSafetyIncident("claim").ok, true);
+  assert.equal(state.phase, "report");
+  assert.equal(state.fame, 26);
+  assert.equal(state.regulars, 5);
+  assert.equal(state.outbreakRecoveryUntilDay, 3);
+  assert.equal(state.accounting.balances["1210"], 320);
+  assert.equal(state.accounting.balances["5540"], 420);
+  state.day = 30;
+  state.reportChoice = "paperboat";
+  assert.equal(engine.nextNight().ok, true);
+  assert.equal(state.accounting.monthlyReports[0].financialPosition.assets.insuranceClaimReceivables, 320);
+  assert.equal(state.accounting.monthlyReports[0].financialPosition.balanced, true);
+});
+
+test("tier upgrades unlock free main-store dishes, while each acquired trade gets its own tier specialty", () => {
+  const state = freshState();
+  state.coins = 10000;
+  state.accounting.balances["1000"] = state.coins;
+  state.equipment.fire = 1;
+  state.equipment.hood = 1;
+  state.equipment.awning = 1;
+  state.equipment.cooler = 1;
+  const engine = createGameEngine(state);
+  assert.equal(engine.upgradeStallTier("main").ok, true);
+  assert.ok(state.unlockedRecipes.includes("harbor-oyster-cake"));
+  assert.equal(state.recipeLog.at(-1).acquisitionCost, 0);
+  assert.equal(engine.selectDish(DATA.dishes.findIndex((dish) => dish.id === "pepper-seafood-pot")).ok, false);
+
+  state.equipment.fire = 2;
+  state.equipment.hood = 2;
+  state.equipment.grill = 2;
+  state.equipment.cooler = 2;
+  state.expansions = 2;
+  state.hiredCrew = 1;
+  assert.equal(engine.upgradeStallTier("main").ok, true);
+  assert.ok(state.unlockedRecipes.includes("pepper-seafood-pot"));
+  assert.equal(state.recipeLog.at(-1).acquisitionCost, 0);
+
+  const mobileFish = { id: "acquired-1", type: "fish", tier: "mobile", equipmentLevel: 0 };
+  const fixedFish = { ...mobileFish, tier: "fixed" };
+  const largeFish = { ...mobileFish, tier: "dapaidang" };
+  assert.equal(getOutletSpecialty(mobileFish).name, "現炸海味拼盤");
+  assert.equal(getOutletSpecialty(fixedFish).name, "港灣雙拼套餐");
+  assert.equal(getOutletSpecialty(largeFish).name, "船長海味盛宴");
+  assert.ok(outletRetailPrice(largeFish) > outletRetailPrice(fixedFish));
+});
+
+test("satisfied returning regulars may share a free hometown recipe that can be sold at its menu price", () => {
+  const state = serviceState(3);
+  state.recipeGoodVisits.aqin = 1;
+  const engine = createGameEngine(state, { random: () => 0 });
+  const discovery = engine.serveDish("pepper-soup");
+  assert.equal(discovery.ok, true);
+  assert.ok(state.unlockedRecipes.includes("ferry-chicken-rice"));
+  assert.equal(state.recipeLog.at(-1).acquisitionCost, 0);
+  assert.match(discovery.message, /家鄉食譜秘笈/);
+  assert.equal(engine.serveDish("ferry-chicken-rice").ok, true);
+  assert.equal(state.ledger.sales, 120 + 176);
+});
+
+test("save migration initializes recipe, incident, and claim fields without trusting unknown recipe ids", () => {
+  const state = normalizeState({ day: 5, unlockedRecipes: ["pepper-soup", "injected-dish"], insuranceClaims: [{ amount: 40, status: "receivable" }] });
+  assert.deepEqual(state.unlockedRecipes, ["pepper-soup", "tide-platter", "osmanthus-pear"]);
+  assert.deepEqual(state.recalledDishIds, []);
+  assert.equal(state.safetyIncident, null);
+  assert.equal(state.insuranceClaims.length, 1);
 });

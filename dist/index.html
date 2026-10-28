@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111b1d">
-  <meta name="description" content="夜嵐夜市是一款台灣港邊主題的 2.5D 斜視角經營模擬遊戲。可接手炸物、果物冰飲、花生糖或彈珠體驗店，每種業態都有專屬商品、進貨成本與售價；達兩店營業規模後聘請店長自動營運，由玩家決策重大事件並檢視財務報表。">
+  <meta name="description" content="夜嵐夜市是一款台灣港邊主題的 2.5D 斜視角經營模擬遊戲。逐級發展流動攤販、固定攤販與大排檔，管理分店商品、人員、營業保險與離職保費回收，並檢視 IFRS 導向教育性期末帳務。">
   <title>夜嵐夜市 — 2.5D 港邊經營模擬</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -81,6 +81,10 @@
         <div class="panel-content" id="panelContent" role="tabpanel" aria-labelledby="tab-ops" tabindex="0" aria-live="polite"></div>
       </aside>
     </main>
+    <footer class="game-footer">
+      <span>想了解夜市的營運規則與帳務？</span>
+      <button class="game-guide-trigger" type="button" data-action="open-game-guide" aria-haspopup="dialog">遊戲說明 <span aria-hidden="true">↗</span></button>
+    </footer>
   </div>
   <div class="modal-backdrop" id="orderModal" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="orderTitle">
@@ -121,6 +125,55 @@
       <button class="close-button" type="button" data-action="close-report" aria-label="關閉帳務視窗">×</button>
     </header>
     <div class="report-dialog-content" id="reportDialogContent" tabindex="0" aria-label="報表內容"></div>
+  </dialog>
+  <dialog class="game-guide-dialog" id="gameGuideDialog" aria-modal="true" aria-labelledby="gameGuideTitle" aria-describedby="gameGuideDescription">
+    <header class="game-guide-header">
+      <div>
+        <div class="modal-kicker">FIELD GUIDE / NIGHT MARKET OPERATIONS</div>
+        <h2 class="modal-title" id="gameGuideTitle">夜市經營說明</h2>
+        <p class="modal-desc" id="gameGuideDescription">從一盞燈、一張攤車開始，逐步建立安全、穩定而能長期運轉的店面。</p>
+      </div>
+      <button class="close-button" type="button" data-action="close-game-guide" aria-label="關閉遊戲說明">×</button>
+    </header>
+    <div class="game-guide-content" tabindex="0" aria-label="遊戲機制說明內容">
+      <section class="guide-section">
+        <span class="guide-index">01｜成長</span>
+        <h3>攤型循序升級</h3>
+        <p>每個店面都從「流動攤販」起步，達成設備、人手與規模條件後，才能依序改建為「固定攤販」與「大排檔」。固定攤販提升接待量；大排檔可承接更大客流，但能源與人事保障成本也會增加。改建與設備支出會列為資產，並按設定耐用年限直線折舊。</p>
+        <div class="guide-tier-row"><span>流動攤販</span><b>→</b><span>固定攤販</span><b>→</b><span>大排檔</span></div>
+      </section>
+      <section class="guide-section">
+        <span class="guide-index">02｜保障</span>
+        <h3>員工與營業保險</h3>
+        <ul>
+          <li><b>流動攤販：</b>員工自行安排基本保險；雇主可選擇加保職業災害保險。</li>
+          <li><b>固定攤販：</b>沿用前項人員保障；餐飲店另列食品業者產品責任險。</li>
+          <li><b>大排檔：</b>雇主負擔員工職災、勞保與健保，並加列公共意外責任險；餐飲店持續列產品責任險。</li>
+        </ul>
+        <p class="guide-callout">保費每 30 夜為一期，在各期第 1 夜（第 1、31、61 夜⋯）開門時一次扣款，並依職災、勞保、健保、產品責任及公共意外保險科目入帳。休閒體驗類店面不適用食品產品責任險。</p>
+      </section>
+      <section class="guide-section">
+        <span class="guide-index">03｜營運</span>
+        <h3>每夜的選擇都會累積</h3>
+        <p>每日處理備料、排班、市集公告、顧客與突發事件；每七夜檢視工作底稿並作週決策。店面擴建、招聘、併購、貸款與品牌聯盟會改變後續收益及持續成本。夜市世界不會在第 30 夜停止，30 夜只是財務報表期間。</p>
+      </section>
+      <section class="guide-section">
+        <span class="guide-index">04｜食安與職安</span>
+        <h3>事故需要照護，也會留下帳務</h3>
+        <p>營業時可能遇到刀傷、熱鍋燙傷、送餐跌傷、顧客碰撞，或餐點異物與食品安全重大事件。先讓人員與顧客安全、停下受影響工作或停售批次，再選擇自費處置或依本期有效保單申請理賠。理賠先列「應收保險理賠款」，兩夜後模擬收款；沒有對應保單時只能由店家承擔。安全設備可降低事故機率，但無法歸零。</p>
+        <p class="guide-callout">疑似諾羅病毒群聚會立即停止出餐、封存與清消，並造成明顯口碑與熟客流失；接下來兩夜客流也會略降。異物事件會暫時下架受影響菜色。保險理賠是簡化遊戲規則，不代表實際承保範圍或理賠保證。</p>
+      </section>
+      <section class="guide-section">
+        <span class="guide-index">05｜招牌菜</span>
+        <h3>升級與熟客，帶來新的菜單</h3>
+        <p>主店升為固定攤販可免費解鎖「港灣蚵仔酥餅」，升為大排檔再解鎖「船長白胡椒海味鍋」。接手的分店依業態升級不同招牌商品，並反映在自動營運售價。阿琴、藍姨、阿慕叔等熟客若多次獲得合胃口的招待，可能分享家鄉食譜秘笈；新菜免費取得，可在菜單中販售，食材成本仍照常計算。</p>
+      </section>
+      <section class="guide-section">
+        <span class="guide-index">06｜帳務</span>
+        <h3>以帳本理解經營後果</h3>
+        <p>每夜可查日記簿、每週可查試算底稿，每 30 夜產生綜合損益表、權益變動表、財務狀況表及現金流量表。會計科目代碼是遊戲內部編號；保費、租金與其他金額為簡化玩法參數，報表是 IFRS 導向的教育性模擬，不是正式會計、保險費率或法規合規工具。</p>
+      </section>
+    </div>
   </dialog>
   <script src="./app.js" type="module"></script>
 </body>

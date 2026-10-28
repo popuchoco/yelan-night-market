@@ -4,6 +4,8 @@
 export const CHART_OF_ACCOUNTS = Object.freeze([
   { code: "1000", name: "現金及約當現金", type: "asset", normal: "debit", statement: "財務狀況" },
   { code: "1100", name: "存貨－食材", type: "asset", normal: "debit", statement: "財務狀況" },
+  { code: "1200", name: "應收保險退費款", type: "asset", normal: "debit", statement: "財務狀況" },
+  { code: "1210", name: "應收保險理賠款", type: "asset", normal: "debit", statement: "財務狀況" },
   { code: "1500", name: "設備及租賃改良－成本", type: "asset", normal: "debit", statement: "財務狀況" },
   { code: "1590", name: "累計折舊－設備及租賃改良", type: "contra-asset", normal: "credit", statement: "財務狀況" },
   { code: "1600", name: "攤位經營權－成本", type: "asset", normal: "debit", statement: "財務狀況" },
@@ -15,6 +17,7 @@ export const CHART_OF_ACCOUNTS = Object.freeze([
   { code: "4000", name: "餐飲銷貨收入", type: "income", normal: "credit", statement: "綜合損益" },
   { code: "4010", name: "服務費及小費收入", type: "income", normal: "credit", statement: "綜合損益" },
   { code: "4020", name: "補助及其他營業收入", type: "income", normal: "credit", statement: "綜合損益" },
+  { code: "4030", name: "保險理賠收入", type: "income", normal: "credit", statement: "綜合損益" },
   { code: "4090", name: "退款及銷貨折讓", type: "contra-income", normal: "debit", statement: "綜合損益" },
   { code: "5000", name: "銷貨成本－食材", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5100", name: "薪資及人事費", type: "expense", normal: "debit", statement: "綜合損益" },
@@ -22,8 +25,16 @@ export const CHART_OF_ACCOUNTS = Object.freeze([
   { code: "5200", name: "租金及攤位使用費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5300", name: "水電瓦斯費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5400", name: "清潔、稽查及維護費", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5450", name: "職業災害保險費", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5460", name: "雇主勞工保險費", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5461", name: "雇主健康保險費", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5470", name: "食品業者產品責任保險費", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5480", name: "公共意外責任保險費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5410", name: "行銷及宣傳費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5500", name: "客訴招待及營業雜支", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5520", name: "職業災害照護與補償費", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5530", name: "顧客意外照護與補償費", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5540", name: "食品安全處理與顧客補償費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5600", name: "折舊費用", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5610", name: "攤銷費用", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5700", name: "財務成本－借款利息", type: "expense", normal: "debit", statement: "綜合損益" },
@@ -83,6 +94,7 @@ export function createAccountingState({ day = 1, cash = 0, inventory = 0, debt =
     weekOpeningBalances: copyBalances(accounts),
     weeklyReports: [],
     monthlyReports: [],
+    monthEndWorksheets: [],
     entrySequence: 1
   };
 }
@@ -101,6 +113,10 @@ export function ensureAccounting(state) {
   accounting.journal = Array.isArray(accounting.journal) ? accounting.journal : [];
   accounting.weeklyReports = Array.isArray(accounting.weeklyReports) ? accounting.weeklyReports : [];
   accounting.monthlyReports = Array.isArray(accounting.monthlyReports) ? accounting.monthlyReports : [];
+  accounting.monthEndWorksheets = Array.isArray(accounting.monthEndWorksheets) ? accounting.monthEndWorksheets : [];
+  accounting.weeklyReports.forEach((report, index) => {
+    if (!report.id) report.id = report.periodEnd ? "period-" + (report.period || index + 1) : "week-" + (report.week || index + 1) + "-" + (report.endDay || index);
+  });
   accounting.periodStartDay = Math.max(1, Math.floor(Number(accounting.periodStartDay) || state.day || 1));
   accounting.weekStartDay = Math.max(1, Math.floor(Number(accounting.weekStartDay) || state.day || 1));
   accounting.periodOpeningBalances = copyBalances(accounting.periodOpeningBalances || accounting.balances);
@@ -164,8 +180,14 @@ export function recordOperatingClose(state, ledger) {
     ["5100", ledger.managerPayroll || 0],
     ["5300", (ledger.water || 0) + ledger.electricity + ledger.gas],
     ["5300", ledger.outletUtilities || 0],
+    ["5300", ledger.stallUtilities || 0],
     ["5400", (ledger.fees || 0) + (ledger.preparation || 0)],
     ["5410", ledger.marketing || 0],
+    ["5450", ledger.insuranceAccident || 0],
+    ["5460", ledger.insuranceLabor || 0],
+    ["5461", ledger.insuranceHealth || 0],
+    ["5470", ledger.insuranceProduct || 0],
+    ["5480", ledger.insurancePublic || 0],
     ["5700", ledger.interest || 0]
   ].filter(([, amount]) => amount > 0);
   const lines = expenseLines.map(([account, debit]) => ({ account, debit }));
@@ -173,6 +195,47 @@ export function recordOperatingClose(state, ledger) {
   const costs = expenseLines.reduce((sum, [, amount]) => sum + amount, 0);
   if (costs > 0) lines.push({ account: "1000", credit: costs });
   if (lines.length) postJournal(state, "開門支出與市集補助", lines, { category: "operating", amount: ledger.subsidies - costs });
+}
+
+export function recordInsuranceRefundAdjustment(state, policy, day) {
+  const amount = round(policy?.refundAmount);
+  if (!amount || policy.status !== "pending-adjustment") return 0;
+  const breakdown = policy.refundBreakdown || {};
+  const lines = [{ account: "1200", debit: amount }];
+  [["5450", breakdown.accident], ["5460", breakdown.labor], ["5461", breakdown.health]]
+    .forEach(([account, credit]) => { if (round(credit)) lines.push({ account, credit: round(credit) }); });
+  const credited = lines.slice(1).reduce((sum, line) => sum + line.credit, 0);
+  if (credited !== amount) throw new Error("Insurance refund adjustment does not match policy amount: " + policy.id);
+  postJournal(state, "期末調整｜" + policy.employeeName + "離職未到期保費應收", lines, null, day);
+  policy.status = "receivable";
+  policy.adjustmentDay = day;
+  return amount;
+}
+
+export function closeInsuranceRefundAdjustments(state, endDay) {
+  const policies = Array.isArray(state.orphanPolicies) ? state.orphanPolicies : [];
+  let amount = 0;
+  let count = 0;
+  policies.filter((policy) => policy && policy.status === "pending-adjustment" && Number(policy.periodEndDay) <= endDay)
+    .forEach((policy) => { amount += recordInsuranceRefundAdjustment(state, policy, endDay); count += 1; });
+  return { amount, count };
+}
+
+export function collectInsuranceRefundReceivables(state, day) {
+  const policies = Array.isArray(state.orphanPolicies) ? state.orphanPolicies : [];
+  let amount = 0;
+  policies.filter((policy) => policy && policy.status === "receivable" && Number(policy.periodEndDay) < day)
+    .forEach((policy) => {
+      const refund = round(policy.refundAmount);
+      if (!refund) return;
+      postJournal(state, "收款｜保險退費應收・" + policy.employeeName,
+        [{ account: "1000", debit: refund }, { account: "1200", credit: refund }],
+        { category: "operating", amount: refund }, day);
+      policy.status = "collected";
+      policy.collectionDay = day;
+      amount += refund;
+    });
+  return amount;
 }
 
 export function recordInventoryPurchase(state, itemName, amount) {
@@ -199,6 +262,30 @@ export function recordExpense(state, account, description, amount, cashFlowCateg
 export function recordRefund(state, amount) {
   const value = round(amount);
   if (value) postJournal(state, "客訴退款／銷貨折讓", [{ account: "4090", debit: value }, { account: "1000", credit: value }], { category: "operating", amount: -value });
+}
+
+export function recordInsuranceClaimAccrual(state, claim, day = state.day) {
+  const amount = round(claim?.amount);
+  if (!amount) return null;
+  return postJournal(state, "保險理賠核認｜" + String(claim.description || claim.id || "營運事故"),
+    [{ account: "1210", debit: amount }, { account: "4030", credit: amount }], null, day);
+}
+
+export function collectInsuranceClaims(state, day = state.day) {
+  const claims = Array.isArray(state.insuranceClaims) ? state.insuranceClaims : [];
+  let total = 0;
+  claims.filter((claim) => claim && claim.status === "receivable" && Number(claim.payoutDay) <= day)
+    .forEach((claim) => {
+      const amount = round(claim.amount);
+      if (!amount) return;
+      postJournal(state, "收款｜保險理賠款・" + String(claim.description || claim.id),
+        [{ account: "1000", debit: amount }, { account: "1210", credit: amount }],
+        { category: "operating", amount }, day);
+      claim.status = "collected";
+      claim.collectionDay = day;
+      total += amount;
+    });
+  return total;
 }
 
 export function recordAssetPurchase(state, { id, name, cost, usefulLifeDays = 360, residualValue = 0, category = "ppe" }) {
@@ -270,7 +357,7 @@ export function closeDepreciation(state, finishedDay) {
   return { ppe, intangible, total };
 }
 
-export function closeWeeklyWorksheet(state, endDay) {
+export function closeWeeklyWorksheet(state, endDay, { periodEnd = false, insuranceAdjustment = null } = {}) {
   const accounting = ensureAccounting(state);
   const startDay = accounting.weekStartDay;
   const entries = accounting.journal.filter((entry) => entry.day >= startDay && entry.day <= endDay && !entry.opening);
@@ -289,16 +376,24 @@ export function closeWeeklyWorksheet(state, endDay) {
   }).filter((row) => row.opening || row.debit || row.credit || row.closing);
   const trialDebit = rows.reduce((sum, row) => sum + row.closingDebit, 0);
   const trialCredit = rows.reduce((sum, row) => sum + row.closingCredit, 0);
-  const report = { week: Math.floor((endDay - 1) / 7) + 1, startDay, endDay, rows, trialDebit, trialCredit, balanced: trialDebit === trialCredit };
+  const week = Math.floor((endDay - 1) / 7) + 1;
+  const report = { id: periodEnd ? "period-" + Math.floor((endDay - 1) / 30 + 1) : "week-" + week + "-" + endDay,
+    week, periodEnd, period: periodEnd ? Math.floor((endDay - 1) / 30) + 1 : null,
+    insuranceAdjustment: insuranceAdjustment || null,
+    startDay, endDay, rows, trialDebit, trialCredit, balanced: trialDebit === trialCredit };
   accounting.weeklyReports.push(report);
   if (accounting.weeklyReports.length > 104) accounting.weeklyReports.splice(0, accounting.weeklyReports.length - 104);
+  if (periodEnd) {
+    accounting.monthEndWorksheets.push(report);
+    if (accounting.monthEndWorksheets.length > 36) accounting.monthEndWorksheets.splice(0, accounting.monthEndWorksheets.length - 36);
+  }
   accounting.weekStartDay = endDay + 1;
   accounting.weekOpeningBalances = copyBalances(accounting.balances);
   return report;
 }
 
 function profitAndLoss(accounting) {
-  const revenue = Object.fromEntries(["4000", "4010", "4020"].map((code) => [code, normalAmount(amountOn(accounting, code), "credit")]));
+  const revenue = Object.fromEntries(["4000", "4010", "4020", "4030"].map((code) => [code, normalAmount(amountOn(accounting, code), "credit")]));
   const contra = Math.max(0, amountOn(accounting, "4090"));
   const expenses = Object.fromEntries(CHART_OF_ACCOUNTS.filter((account) => account.type === "expense").map((account) => [account.code, Math.max(0, amountOn(accounting, account.code))]));
   const totalRevenue = Object.values(revenue).reduce((sum, value) => sum + value, 0);
@@ -323,10 +418,12 @@ function statementOfFinancialPosition(accounting, currentProfit = 0) {
   const liability = bankBorrowings + bankOverdraft;
   const capital = Math.max(0, -amountOn(accounting, "3000"));
   const retained = -amountOn(accounting, "3100");
-  const totalAssets = cash + inventory + ppeCost - ppeDep + rightsCost - rightsAmort;
+  const insuranceReceivables = Math.max(0, amountOn(accounting, "1200"));
+  const insuranceClaimReceivables = Math.max(0, amountOn(accounting, "1210"));
+  const totalAssets = cash + inventory + insuranceReceivables + insuranceClaimReceivables + ppeCost - ppeDep + rightsCost - rightsAmort;
   const equity = capital + retained + currentProfit;
   return {
-    assets: { cash, inventory, ppeCost, ppeDep, ppeNet: ppeCost - ppeDep, rightsCost, rightsAmort, rightsNet: rightsCost - rightsAmort, total: totalAssets },
+    assets: { cash, inventory, insuranceReceivables, insuranceClaimReceivables, ppeCost, ppeDep, ppeNet: ppeCost - ppeDep, rightsCost, rightsAmort, rightsNet: rightsCost - rightsAmort, total: totalAssets },
     liabilities: { bankBorrowings, bankOverdraft, total: liability },
     equity: { capital, retainedEarnings: retained, currentProfit, total: equity },
     totalLiabilitiesAndEquity: liability + equity,
