@@ -7,7 +7,7 @@ import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accou
 import { createGameEngine } from "../dist/game.js";
 import { applyCameraAction } from "../dist/scene.js";
 import {
-  createLedger, fixedOperatingCost, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
+  createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   loadState, normalizeState, saveState, todayEvent, todayMarketCard, ledgerIncome, ledgerNet
 } from "../dist/state.js";
 
@@ -420,6 +420,57 @@ test("acquired stalls can be stocked, opened, upgraded, and staffed with a manag
   assert.equal(engine.dismissOutletManager(branch.id).ok, true);
   assert.equal(branch.manager, false);
   assert.equal(createLedger(state).managerPayroll, 0);
+});
+
+test("each acquired storefront sells its trade-specific product with its own price and stock", () => {
+  const types = ["fish", "fruit", "sweet", "toy"];
+  const products = types.map((type) => DATA.outletProducts[type]);
+  assert.equal(new Set(products.map((product) => product.productName)).size, types.length);
+  assert.equal(new Set(products.map((product) => product.stockId)).size, types.length);
+  assert.equal(new Set(products.map((product) => product.price)).size, types.length);
+
+  types.forEach((type) => {
+    const product = DATA.outletProducts[type];
+    const state = freshState();
+    state.day = 8;
+    state.phase = "decision";
+    const engine = createGameEngine(state);
+    assert.equal(engine.chooseWeeklyDecision("acquire", type).ok, true);
+    const branch = state.outlets.find((outlet) => outlet.id === "acquired-1");
+    assert.equal(branch.type, type);
+    assert.equal(branch.stock[product.stockId], 0);
+    const wrongStockId = product.stockId === "fish" ? "fruit" : "fish";
+    assert.equal(engine.buyOutletStock(branch.id, wrongStockId).ok, false);
+    assert.equal(engine.buyOutletStock(branch.id, product.stockId).ok, true);
+    assert.equal(engine.toggleOutlet(branch.id).ok, true);
+    assert.equal(forecast(state).outletSales, product.price);
+    assert.equal(engine.chooseMarketCard("self-check").ok, true);
+    assert.equal(engine.openDoors().ok, true);
+    assert.equal(branch.lastResult.units, 1);
+    assert.equal(branch.lastResult.sales, product.price);
+    assert.equal(branch.lastResult.food, product.cost);
+    assert.equal(branch.stock[product.stockId], 0);
+    assert.equal(branch.autoPaused, true);
+    assert.equal(state.accounting.journal.some((entry) => entry.description.includes(product.productName)), true);
+  });
+});
+
+test("different food storefronts count toward the same culinary alliance without sharing products", () => {
+  const state = freshState();
+  state.day = 8;
+  state.phase = "decision";
+  state.expansions = 1;
+  state.acquisitions = 1;
+  state.acquisitionTypes = ["fish"];
+  const engine = createGameEngine(state);
+  assert.equal(engine.chooseWeeklyDecision("acquire", "fruit").ok, true);
+  assert.equal(hasBrandAlliance(state), true);
+  assert.deepEqual(state.acquisitionTypes, ["fish", "fruit"]);
+  assert.equal(state.outlets[1].type, "fruit");
+  assert.notEqual(DATA.outletProducts.fish.stockId, DATA.outletProducts.fruit.stockId);
+  state.campaignNet = 400;
+  state.fame = 55;
+  assert.equal(selectEnding(state), "night-market-alliance");
 });
 
 test("store managers surface weekly major decisions while keeping routine operations automated", () => {

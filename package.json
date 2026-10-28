@@ -1,6 +1,6 @@
 {
   "name": "yelan-night-market",
-  "description": "以台灣港邊夜市為舞台的 2.5D 經營模擬網頁遊戲，可管理併購分店、聘請店長自動營運，並處理夜市事件與 IFRS 導向的教育性財務報表。",
+  "description": "以台灣港邊夜市為舞台的 2.5D 經營模擬網頁遊戲，各類併購分店具備專屬商品與售價，可聘店長自動營運並處理夜市事件及 IFRS 導向的教育性財務報表。",
   "private": true,
   "type": "module",
   "scripts": {

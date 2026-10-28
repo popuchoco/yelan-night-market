@@ -1,4 +1,4 @@
-import { DATA } from "./data.js";
+import { DATA, createOutletInventory, getOutletProduct, outletAvailableStock, outletRetailPrice } from "./data.js";
 import { ACQUISITION_TYPES, ENDINGS, WEEKLY_OPTIONS, isWeeklyDecisionDay, selectEnding, weeklyOptionCost } from "./campaign.js";
 import {
   createLedger, fixedOperatingCost, getFoodCost, getPurchasePrice, getTonightGuests, hasBrandAlliance,
@@ -219,9 +219,10 @@ export function createGameEngine(state) {
     if (state.phase !== "prep") return response(false, "分店備料只能在開門前處理。", false);
     const outlet = findOutlet(outletId);
     if (!outlet) return response(false, "找不到這間分店。", false);
-    const item = outlet.type === "leisure"
-      ? (stockId === "leisure" ? { id: "leisure", name: "體驗代幣", cost: DATA.economy.outletGameSupplyCost } : null)
-      : DATA.ingredients.find((ingredient) => ingredient.id === stockId);
+    const product = getOutletProduct(outlet.type);
+    const item = product.legacyMixed
+      ? DATA.ingredients.find((ingredient) => ingredient.id === stockId)
+      : (product.stockId === stockId ? product : null);
     if (!item) return response(false, "這間分店不能採購該項備料。", false);
     const price = getPurchasePrice(state, item);
     if (state.coins < price) return response(false, "現金不足，暫時無法補進分店備料。", false);
@@ -240,8 +241,7 @@ export function createGameEngine(state) {
     const outlet = findOutlet(outletId);
     if (!outlet) return response(false, "找不到這間分店。", false);
     if (!outlet.active) {
-      const available = outlet.type === "leisure" ? Number(outlet.stock.leisure) || 0 :
-        DATA.ingredients.reduce((sum, item) => sum + (Number(outlet.stock[item.id]) || 0), 0);
+      const available = outletAvailableStock(outlet);
       if (!available) return response(false, "先補進至少一份營運備料，才能開啟分店。", false);
       outlet.active = true;
       outlet.autoPaused = false;
@@ -339,23 +339,25 @@ export function createGameEngine(state) {
       let units = 0;
       if (outlet.active) {
         const capacity = outlet.manager ? (outlet.efficiencyPenalty > 0 ? 1 : 2) : 1;
+        const product = getOutletProduct(outlet.type);
         for (let index = 0; index < capacity; index++) {
           let supply;
           let supplyName;
-          let price;
-          if (outlet.type === "leisure") {
-            if ((Number(outlet.stock.leisure) || 0) <= 0) break;
-            supply = "leisure";
-            supplyName = "體驗代幣";
-            price = DATA.economy.outletGamePrice + (Number(outlet.equipmentLevel) || 0) * 10;
-          } else {
+          let price = outletRetailPrice(outlet);
+          let unitCost;
+          if (product.legacyMixed) {
             const item = DATA.ingredients.find((ingredient) => (Number(outlet.stock[ingredient.id]) || 0) > 0);
             if (!item) break;
             supply = item.id;
             supplyName = item.name;
-            price = DATA.economy.outletMealPrice + (Number(outlet.equipmentLevel) || 0) * 12;
+            unitCost = item.cost;
+          } else {
+            if (outletAvailableStock(outlet) <= 0) break;
+            supply = product.stockId;
+            supplyName = product.productName;
+            unitCost = product.cost;
           }
-          const cost = Math.max(0, Number(outlet.stockCost[supply]) || DATA.economy.outletGameSupplyCost);
+          const cost = Math.max(0, Number(outlet.stockCost[supply]) || unitCost);
           outlet.stock[supply] = Math.max(0, (Number(outlet.stock[supply]) || 0) - 1);
           state.coins += price;
           state.ledger.sales += price;
@@ -373,9 +375,7 @@ export function createGameEngine(state) {
           recordSale(state, { dishName: outlet.name + "｜活動 Bonus", otherIncome: bonus });
         }
         outlet.nextNightBonus = 0;
-        const remainingStock = outlet.type === "leisure"
-          ? Number(outlet.stock.leisure) || 0
-          : DATA.ingredients.reduce((sum, item) => sum + (Number(outlet.stock[item.id]) || 0), 0);
+        const remainingStock = outletAvailableStock(outlet);
         if (remainingStock <= 0) {
           outlet.active = false;
           outlet.autoPaused = true;
@@ -415,7 +415,7 @@ export function createGameEngine(state) {
     return response(true, id === "paperboat" ? "紙船漂進港灣，手記多了一頁。" : "替熟客留了窗邊桌，收到 NT$ 80 心意。");
   }
 
-  function chooseWeeklyDecision(id, targetType = "food") {
+  function chooseWeeklyDecision(id, targetType = "fish") {
     if (state.phase !== "decision") return response(false, "目前不是本週投資決策時段。", false);
     if (state.managerEvent) return response(false, "先處理店長回報的重大營運事件，再決定本週投資。", false);
     const option = WEEKLY_OPTIONS[id];
@@ -437,13 +437,10 @@ export function createGameEngine(state) {
     } else if (id === "acquire") {
       state.acquisitions += 1;
       state.acquisitionTypes.push(targetType);
-      const stock = Object.fromEntries(DATA.ingredients.map((item) => [item.id, 0]));
-      stock.leisure = 0;
-      const stockCost = Object.fromEntries(DATA.ingredients.map((item) => [item.id, item.cost]));
-      stockCost.leisure = DATA.economy.outletGameSupplyCost;
+      const inventory = createOutletInventory();
       state.outlets.push({ id: "acquired-" + state.acquisitions,
         name: ACQUISITION_TYPES[targetType].name + "・分店 " + state.acquisitions, type: targetType,
-        active: false, manager: false, equipmentLevel: 0, stock, stockCost, nextNightBonus: 0,
+        active: false, manager: false, equipmentLevel: 0, stock: inventory.stock, stockCost: inventory.stockCost, nextNightBonus: 0,
         efficiencyPenalty: 0, reputation: 50, autoPaused: false, lastResult: null });
       state.fame = capAt(state.fame + 5, 100);
       state.regulars = capAt(state.regulars + 1, 24);
@@ -498,7 +495,7 @@ export function createGameEngine(state) {
       const outlet = managerBranches[Math.floor((state.day / 7) % managerBranches.length)];
       const type = ["equipment", "complaint", "festival"][Math.floor((state.day - 8) / 7) % 3];
       const incidents = {
-        equipment: { title: "設備開始異音", description: outlet.name + "回報爐台運轉不穩。要安排打烊後維修，或讓店長下週先降載營運？", choices: [{ id: "repair", name: "安排維修・NT$ 85" }, { id: "defer", name: "暫緩處理・下週少接一單" }] },
+        equipment: { title: "設備開始異音", description: outlet.name + "回報營運設備運轉不穩。要安排打烊後維修，或讓店長下週先降載營運？", choices: [{ id: "repair", name: "安排維修・NT$ 85" }, { id: "defer", name: "暫緩處理・下週少接一單" }] },
         complaint: { title: "分店客訴升級", description: outlet.name + "遇到一位不滿排隊安排的客人。由總部核准補償，或請店長當面說明？", choices: [{ id: "compensate", name: "核准補償・NT$ 55・口碑回升" }, { id: "explain", name: "由店長說明・不支出" }] },
         festival: { title: "收到慶典合作邀約", description: outlet.name + "獲邀參與下週夜市慶典；可以投入宣傳換取營收 Bonus，或維持日常節奏。", choices: [{ id: "promote", name: "接受邀約・NT$ 70・下夜 Bonus +NT$ 130" }, { id: "decline", name: "婉拒邀約・不增加成本" }] }
       };

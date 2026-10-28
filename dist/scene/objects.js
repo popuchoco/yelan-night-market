@@ -12,8 +12,13 @@ export function createObjectRenderer(api) {
     const claimedStalls = [];
     const acquiredStalls = acquiredOutlets.map(function(outlet) {
       let index = availableStalls.findIndex(function(item, candidate) {
-        return !claimedStalls.includes(candidate) && (outlet.type === "leisure" ? item.id === "toy" : item.id !== "toy");
+        return !claimedStalls.includes(candidate) && item.id === outlet.type;
       });
+      if (index < 0 && (outlet.type === "food" || outlet.type === "leisure")) {
+        index = availableStalls.findIndex(function(item, candidate) {
+          return !claimedStalls.includes(candidate) && (outlet.type === "leisure" ? item.id === "toy" : item.id !== "toy");
+        });
+      }
       if (index < 0) index = availableStalls.findIndex(function(item, candidate) { return !claimedStalls.includes(candidate); });
       if (index < 0) return null;
       claimedStalls.push(index);

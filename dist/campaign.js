@@ -53,10 +53,29 @@ export const MARKET_CARD_SCHEDULE = Object.freeze({
   26: "rain-subsidy"
 });
 
-export const ACQUISITION_TYPES = Object.freeze({
-  food: { id: "food", name: "熟食同業", note: "接手魚貨、果物或小吃攤，累積餐飲聯盟。" },
-  leisure: { id: "leisure", name: "遊戲同業", note: "接手遊戲與體驗攤，累積娛樂聯盟。" }
-});
+export const ACQUISITION_TYPES = Object.freeze(Object.fromEntries(
+  Object.entries(DATA.outletProducts).map(([id, product]) => [id, {
+    id,
+    name: product.storeName,
+    group: product.group,
+    typeLabel: product.typeLabel,
+    productName: product.productName,
+    icon: product.icon,
+    unit: product.unit,
+    price: product.price,
+    note: product.note,
+    selectable: product.selectable
+  }])
+));
+export const ACQUISITION_GROUPS = Object.freeze({ food: "餐飲類", leisure: "遊戲體驗類" });
+
+export function acquisitionGroupCounts(types) {
+  return (Array.isArray(types) ? types : []).reduce((counts, type) => {
+    const group = ACQUISITION_TYPES[type]?.group;
+    if (group) counts[group] = (counts[group] || 0) + 1;
+    return counts;
+  }, {});
+}
 
 // Every night has its own harbor beat. Economic event ids still map to the
 // existing simulation rules in state.js/game.js; the calendar supplies the
@@ -100,7 +119,7 @@ export const CAMPAIGN_CALENDAR = Object.freeze(
 export const WEEKLY_OPTIONS = Object.freeze({
   expand: { id: "expand", name: "擴大店家", icon: "🪑", max: 9, baseCost: 460, stepCost: 90, recurring: 24, label: "一次性裝修費", effect: "增加座位與客流、舒適度 +5；每夜租金 +NT$ 24。最多擴成九桌，會列入設備資產與折舊。" },
   hire: { id: "hire", name: "招聘人手", icon: "🧑🏻‍🍳", max: 6, baseCost: 360, stepCost: 120, recurring: 90, label: "一次性招募與訓練", effect: "每夜薪資 +NT$ 90，服務小費與尖峰應對提升。最多六位夥伴。" },
-  acquire: { id: "acquire", name: "併購攤販", icon: "🏮", max: 4, baseCost: 760, stepCost: 180, recurring: 38, label: "一次性併購費", effect: "選擇熟食或遊戲同業；接手後會成為可獨立管理的分店，可備料、升級設備與開關營業。每夜租金 +NT$ 38；同類攤位併購兩次並擴店，可解鎖夜市品牌聯盟。" },
+  acquire: { id: "acquire", name: "併購攤販", icon: "🏮", max: 4, baseCost: 760, stepCost: 180, recurring: 38, label: "一次性併購費", effect: "從炸物、果物冰飲、手作甜食或彈珠體驗中選擇業態；每種店有專屬商品、進貨成本與售價。接手後可獨立備料、升級、營業與聘店長；每夜租金 +NT$ 38。擴店並累積兩間同屬餐飲或遊戲體驗的分店，可解鎖品牌聯盟。" },
   hold: { id: "hold", name: "暫不投資", icon: "🧭", max: Infinity, baseCost: 0, stepCost: 0, recurring: 0, label: "保留現金", effect: "維持現有規模，不增加固定成本；把資金留給備料與設備。" }
 });
 
@@ -126,12 +145,7 @@ export function selectEnding(state) {
   const net = Number(state.campaignNet) || 0;
   if (net < -250 || state.coins < 0 || (Number(state.loanPrincipal) || 0) > 0) return "harbor-debt";
   if ((state.fame < 30 || state.regulars < 8) && state.coins < 1800) return "quiet-lantern";
-  const categoryCounts = (Array.isArray(state.acquisitionTypes) ? state.acquisitionTypes : [])
-    .filter((type) => type === "food" || type === "leisure")
-    .reduce((result, type) => {
-      result[type] = (result[type] || 0) + 1;
-      return result;
-    }, {});
+  const categoryCounts = acquisitionGroupCounts(state.acquisitionTypes);
   const allianceFormed = (Number(state.expansions) || 0) >= 1 && Object.values(categoryCounts).some((count) => count >= 2);
   if (allianceFormed && net >= 250 && state.fame >= 50) return "night-market-alliance";
   if (state.acquisitions >= 2 && net >= 500 && state.coins >= 1200) return "market-keeper";
@@ -146,7 +160,7 @@ export const ENDINGS = Object.freeze({
   "harbor-icon": { title: "港灣夜市名店", tone: "positive", text: "本期末，旅人開始專程為你轉進這條巷子。口碑、熟客與帳本都站得住腳；夜嵐成了港邊的一盞招牌燈，下一期仍會繼續迎客。" },
   "neighborhood-table": { title: "巷口的第二張餐桌", tone: "positive", text: "你把熟客照顧成了鄰里，把小店做成可以久坐的地方。夜嵐沒有變得最大，卻成為許多人每週都會回來的地方。" },
   "market-keeper": { title: "夜市共同經營人", tone: "positive", text: "你接下鄰攤，連起供應商與街坊，也守住了營運盈餘。夜市的招牌不再只屬於一家店，而是整條巷子的共同名字。" },
-  "night-market-alliance": { title: "夜市品牌聯盟", tone: "positive", text: "你把店面、熟食同業與共同採購串成一個能互相支援的聯盟。客人記住的不只是一個招牌，而是整個夜市彼此照應的味道。" },
+  "night-market-alliance": { title: "夜市品牌聯盟", tone: "positive", text: "你把主店、餐飲與遊戲體驗分店串成一個能互相支援的聯盟。客人記住的不只是一個招牌，而是整個夜市彼此照應的風景。" },
   "steady-lantern": { title: "穩穩亮著的小店", tone: "positive", text: "你沒有追逐一夜成名，而是讓帳本保持健康、讓每晚的燈如常亮起。對港邊來說，這份穩定就是一種成功。" },
   "soft-goodbye": { title: "把燈留給下一個夜晚", tone: "bittersweet", text: "本期有過熱鬧，也有幾次算不過來的帳。你決定在下一期收拾步伐，把學到的經驗與那盞手繪燈一起留在港邊。" },
   "quiet-lantern": { title: "巷口漸漸安靜", tone: "negative", text: "客流與口碑還沒接上彼此，現金也偏緊。你需要調整菜單、排班與投資節奏；巷口燈光暫時收斂，夜市並未停業。" },

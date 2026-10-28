@@ -1,6 +1,6 @@
 // avoid-ai-design-ignore-file: I2, SD4d - food, character, and event marks are in-world content; middle dots separate compact order and ledger facts.
-import { DATA } from "./data.js";
-import { ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, campaignCycleDay, weeklyOptionCost } from "./campaign.js";
+import { DATA, getOutletProduct, outletAvailableStock, outletRetailPrice } from "./data.js";
+import { ACQUISITION_GROUPS, ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, acquisitionGroupCounts, campaignCycleDay, weeklyOptionCost } from "./campaign.js";
 import { CHART_OF_ACCOUNTS, formatBalance } from "./accounting.js";
 import {
   createLedger as createLedgerForState, fixedOperatingCost as ledgerFixedOperatingCost, forecast, getFoodCost as getFoodCostForState,
@@ -181,18 +181,15 @@ export function createUI(runtime) {
 
   function allianceStatus(showProgress) {
     const card = el("section", "alliance-status" + (hasBrandAlliance(state) ? " active" : ""));
-    const counts = (state.acquisitionTypes || []).reduce(function(result, type) {
-      if (type === "food" || type === "leisure") result[type] = (result[type] || 0) + 1;
-      return result;
-    }, {});
-    const leadingType = Object.keys(ACQUISITION_TYPES).sort(function(a, b) { return (counts[b] || 0) - (counts[a] || 0); })[0];
+    const counts = acquisitionGroupCounts(state.acquisitionTypes);
+    const leadingGroup = Object.keys(ACQUISITION_GROUPS).sort(function(a, b) { return (counts[b] || 0) - (counts[a] || 0); })[0];
     if (hasBrandAlliance(state)) {
       append(card, el("b", "", "夜市品牌聯盟・已成立"),
         el("span", "", "持續加成：每夜多 1 桌聯盟來客，聯合採購進價 9 折。"));
     } else if (showProgress) {
       append(card, el("b", "", "夜市品牌聯盟・籌備中"),
-        el("span", "", "條件：先擴店，再併購 2 攤同類攤位。現況：擴店 " + state.expansions + " 次・" +
-          ACQUISITION_TYPES[leadingType].name + " " + (counts[leadingType] || 0) + " / 2。"));
+        el("span", "", "條件：先擴店，再接手 2 間同屬餐飲或遊戲體驗的店。現況：擴店 " + state.expansions + " 次・" +
+          ACQUISITION_GROUPS[leadingGroup] + "店 " + (counts[leadingGroup] || 0) + " / 2。"));
     } else return null;
     return card;
   }
@@ -292,10 +289,6 @@ export function createUI(runtime) {
     decision.append(managerPanel);
     const alliance = allianceStatus(true);
     if (alliance) decision.append(alliance);
-    const counts = (state.acquisitionTypes || []).reduce(function(result, type) {
-      if (type === "food" || type === "leisure") result[type] = (result[type] || 0) + 1;
-      return result;
-    }, {});
     const grid = el("div", "decision-grid");
     Object.values(WEEKLY_OPTIONS).forEach(function(option) {
       const cost = weeklyOptionCost(state, option.id);
@@ -310,9 +303,12 @@ export function createUI(runtime) {
         el("span", "decision-recurring", recurring));
       if (option.id === "acquire" && !capped) {
         const targets = el("div", "acquisition-targets");
-        Object.values(ACQUISITION_TYPES).forEach(function(target) {
-          const action = button("接手 " + target.name + (counts[target.id] ? "・已併購 " + counts[target.id] : ""),
-            "choose-weekly", { id: option.id, targetType: target.id }, insufficient, "decision-action acquisition-action");
+        Object.values(ACQUISITION_TYPES).filter(function(target) { return target.selectable; }).forEach(function(target) {
+          const action = button("", "choose-weekly", { id: option.id, targetType: target.id }, insufficient,
+            "decision-action acquisition-action");
+          append(action,
+            el("span", "acquisition-choice-title", target.icon + " 接手 " + target.name),
+            el("span", "acquisition-choice-product", target.productName + "・" + money(target.price) + "/" + target.unit));
           action.title = target.note;
           targets.append(action);
         });
@@ -835,10 +831,11 @@ export function createUI(runtime) {
     const section = el("section", "outlet-management");
     append(section, subhead("接手攤位・分店管理", branches.length + " 間", true));
     if (!branches.length) {
-      section.append(helper("目前只有夜嵐主店。每週經營決策選擇「併購攤販」後，接手的熟食或遊戲攤會出現在這裡，可獨立補貨、升級、開關店，再培養店長自動營運。", "helper-copy"));
+      section.append(helper("目前只有夜嵐主店。每週經營決策可選擇港口炸物、山海果物、花生糖舖或彈珠小屋；各有專屬商品與售價，接手後可獨立補貨、升級、開關店，再培養店長自動營運。", "helper-copy"));
       return section;
     }
     branches.forEach(function(outlet) {
+      const product = getOutletProduct(outlet.type);
       const card = el("article", "outlet-card" + (outlet.active ? " operating" : "") +
         (selectedOutletId === outlet.id ? " selected" : ""), null,
         { id: "outlet-card-" + outlet.id, tabIndex: -1 });
@@ -850,8 +847,9 @@ export function createUI(runtime) {
       const staffLine = outlet.manager
         ? "店長自動營運・每夜薪資 " + money(DATA.economy.managerWage)
         : "你親自照看・每夜最多一筆生意";
-      append(heading, title, el("span", "outlet-kind", outlet.type === "leisure" ? "遊戲體驗" : "熟食餐飲"));
-      const summary = el("p", "outlet-summary", staffLine + "・設備 Lv." + outlet.equipmentLevel + "・口碑 " + outlet.reputation);
+      append(heading, title, el("span", "outlet-kind", product.typeLabel));
+      const summary = el("p", "outlet-summary", staffLine + "・主打 " + product.productName + " " +
+        money(outletRetailPrice(outlet)) + "/" + product.unit + "・設備 Lv." + outlet.equipmentLevel + "・口碑 " + outlet.reputation);
       card.append(heading, summary);
       if (outlet.lastResult) {
         card.append(el("div", "outlet-last-result",
@@ -860,21 +858,19 @@ export function createUI(runtime) {
           "・分店淨額 " + (outlet.lastResult.net >= 0 ? "+" : "−") + money(Math.abs(outlet.lastResult.net))));
       }
       const supplies = el("div", "outlet-stock-list");
-      const choices = outlet.type === "leisure"
-        ? [{ id: "leisure", name: "體驗代幣", icon: "🎟", cost: DATA.economy.outletGameSupplyCost }]
-        : ingredients;
+      const choices = product.legacyMixed ? ingredients :
+        [{ id: product.stockId, name: product.productName, icon: product.icon, cost: product.cost, unit: product.unit }];
       choices.forEach(function(item) {
         const cost = getPurchasePrice(item);
         const row = el("div", "outlet-stock-row");
         append(row, el("span", "outlet-stock-name", item.icon + " " + item.name),
-          el("b", "outlet-stock-count", String(outlet.stock[item.id] || 0) + " 份"),
+          el("b", "outlet-stock-count", String(outlet.stock[item.id] || 0) + " " + (item.unit || "份")),
           button("補貨 " + money(cost), "buy-outlet-stock", { outletId: outlet.id, stockId: item.id },
             state.phase !== "prep" || state.coins < cost, "outlet-small-action"));
         supplies.append(row);
       });
       const actions = el("div", "outlet-actions");
-      const available = outlet.type === "leisure" ? Number(outlet.stock.leisure) || 0 :
-        ingredients.reduce(function(sum, item) { return sum + (Number(outlet.stock[item.id]) || 0); }, 0);
+      const available = outletAvailableStock(outlet);
       const nextEquipmentCost = DATA.economy.outletEquipmentCosts[outlet.equipmentLevel];
       append(actions,
         button(outlet.active ? "暫停營業" : "補好備料後開店", "toggle-outlet", { outletId: outlet.id },

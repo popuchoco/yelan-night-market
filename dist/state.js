@@ -1,5 +1,5 @@
-import { DATA } from "./data.js";
-import { ACQUISITION_TYPES, CAMPAIGN_DAYS, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
+import { DATA, createOutletInventory, getOutletProduct, outletAvailableStock, outletRetailPrice } from "./data.js";
+import { ACQUISITION_TYPES, CAMPAIGN_DAYS, acquisitionGroupCounts, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
 import { createAccountingState, ensureAccounting } from "./accounting.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
@@ -61,7 +61,7 @@ export function normalizeState(data) {
   fresh.expansions = Math.max(0, Math.min(9, Number(fresh.expansions) || 0));
   fresh.hiredCrew = Math.max(0, Math.min(6, Number(fresh.hiredCrew) || 0));
   fresh.acquisitions = Math.max(0, Math.min(4, Number(fresh.acquisitions) || 0));
-  const validAcquisitionTypes = new Set(["food", "leisure"]);
+  const validAcquisitionTypes = new Set(Object.keys(DATA.outletProducts));
   fresh.acquisitionTypes = Array.isArray(data.acquisitionTypes)
     ? data.acquisitionTypes.filter((type) => validAcquisitionTypes.has(type)).slice(0, fresh.acquisitions)
     : [];
@@ -80,20 +80,16 @@ export function normalizeState(data) {
   mainOutlet.id = "main";
   mainOutlet.name = "夜嵐攤號";
   const storedBranches = sourceOutlets.filter((outlet) => outlet && outlet.id !== "main").slice(0, fresh.acquisitions);
-  const outletNames = { food: "熟食同業", leisure: "遊戲同業" };
+  const outletNames = Object.fromEntries(Object.entries(ACQUISITION_TYPES).map(([type, details]) => [type, details.name]));
   fresh.outlets = [mainOutlet, ...storedBranches.map((outlet, index) => {
-    const type = outlet.type === "leisure" || outlet.type === "food" ? outlet.type : fresh.acquisitionTypes[index] || "food";
-    const stock = Object.fromEntries(DATA.ingredients.map((item) => [item.id, Math.max(0, Math.floor(Number(outlet.stock?.[item.id]) || 0))]));
-    stock.leisure = Math.max(0, Math.floor(Number(outlet.stock?.leisure) || 0));
-    const stockCost = Object.fromEntries(DATA.ingredients.map((item) => [item.id,
-      Math.max(0, Math.round(Number(outlet.stockCost?.[item.id]) || item.cost))]));
-    stockCost.leisure = Math.max(0, Math.round(Number(outlet.stockCost?.leisure) || DATA.economy.outletGameSupplyCost));
+    const type = hasOwn(DATA.outletProducts, outlet.type) ? outlet.type : fresh.acquisitionTypes[index] || "food";
+    const inventory = createOutletInventory(outlet.stock, outlet.stockCost);
     return {
       id: String(outlet.id || "acquired-" + (index + 1)),
       name: String(outlet.name || outletNames[type] + "・分店 " + (index + 1)),
       type, active: !!outlet.active, manager: !!outlet.manager,
       equipmentLevel: Math.max(0, Math.min(DATA.economy.outletEquipmentCosts.length, Number(outlet.equipmentLevel) || 0)),
-      stock, stockCost,
+      stock: inventory.stock, stockCost: inventory.stockCost,
       nextNightBonus: Math.max(0, Math.round(Number(outlet.nextNightBonus) || 0)),
       efficiencyPenalty: Math.max(0, Math.min(1, Number(outlet.efficiencyPenalty) || 0)),
       reputation: Math.max(0, Math.min(100, Number(outlet.reputation) || 50)),
@@ -104,12 +100,9 @@ export function normalizeState(data) {
   while (fresh.outlets.length <= fresh.acquisitions) {
     const index = fresh.outlets.length - 1;
     const type = fresh.acquisitionTypes[index] || "food";
-    const stock = Object.fromEntries(DATA.ingredients.map((item) => [item.id, 0]));
-    stock.leisure = 0;
-    const stockCost = Object.fromEntries(DATA.ingredients.map((item) => [item.id, item.cost]));
-    stockCost.leisure = DATA.economy.outletGameSupplyCost;
+    const inventory = createOutletInventory();
     fresh.outlets.push({ id: "acquired-" + (index + 1), name: outletNames[type] + "・分店 " + (index + 1), type,
-      active: false, manager: false, equipmentLevel: 0, stock, stockCost, nextNightBonus: 0, efficiencyPenalty: 0,
+      active: false, manager: false, equipmentLevel: 0, stock: inventory.stock, stockCost: inventory.stockCost, nextNightBonus: 0, efficiencyPenalty: 0,
       reputation: 50, autoPaused: false, lastResult: null });
   }
   fresh.managerEvent = data.managerEvent && typeof data.managerEvent === "object" ? data.managerEvent : null;
@@ -240,12 +233,7 @@ export function marketCardChoice(state) {
 
 export function hasBrandAlliance(state) {
   if ((Number(state.expansions) || 0) < 1) return false;
-  const counts = (Array.isArray(state.acquisitionTypes) ? state.acquisitionTypes : [])
-    .filter((type) => type === "food" || type === "leisure")
-    .reduce((result, type) => {
-      result[type] = (result[type] || 0) + 1;
-      return result;
-    }, {});
+  const counts = acquisitionGroupCounts(state.acquisitionTypes);
   return Object.values(counts).some((count) => count >= 2);
 }
 
@@ -366,16 +354,17 @@ export function forecast(state) {
   let outletSales = 0;
   let outletFood = 0;
   (Array.isArray(state.outlets) ? state.outlets : []).filter((outlet) => outlet.id !== "main" && outlet.active).forEach((outlet) => {
+    const product = getOutletProduct(outlet.type);
     const capacity = outlet.manager ? (outlet.efficiencyPenalty > 0 ? 1 : 2) : 1;
     let remaining = capacity;
-    if (outlet.type === "leisure") {
-      const units = Math.min(remaining, Math.max(0, Number(outlet.stock?.leisure) || 0));
-      outletSales += units * (DATA.economy.outletGamePrice + (Number(outlet.equipmentLevel) || 0) * 10);
-      outletFood += units * Math.max(0, Number(outlet.stockCost?.leisure) || DATA.economy.outletGameSupplyCost);
+    if (!product.legacyMixed) {
+      const units = Math.min(remaining, outletAvailableStock(outlet));
+      outletSales += units * outletRetailPrice(outlet);
+      outletFood += units * Math.max(0, Number(outlet.stockCost?.[product.stockId]) || product.cost);
     } else {
       DATA.ingredients.forEach((item) => {
         const units = Math.min(remaining, Math.max(0, Number(outlet.stock?.[item.id]) || 0));
-        outletSales += units * (DATA.economy.outletMealPrice + (Number(outlet.equipmentLevel) || 0) * 12);
+        outletSales += units * outletRetailPrice(outlet);
         outletFood += units * Math.max(0, Number(outlet.stockCost?.[item.id]) || item.cost);
         remaining -= units;
       });

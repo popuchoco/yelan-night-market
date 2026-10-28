@@ -52,6 +52,17 @@ export const DATA = Object.freeze({
     outletGameSupplyCost: 32,
     outletEquipmentCosts: [260, 420]
   },
+  // Acquired storefronts use a dedicated SKU and retail price for their trade.
+  // `food` and `leisure` remain as legacy save formats; new acquisitions use
+  // the four specific formats below.
+  outletProducts: {
+    fish: { group: "food", selectable: true, storeName: "港口炸物", typeLabel: "現炸海味", productName: "現炸海味拼盤", icon: "🍤", stockId: "fish", unit: "份", cost: 76, price: 190, pricePerLevel: 12, note: "漁獲進貨成本較高，主打現炸海味拼盤，每份 NT$ 190。" },
+    fruit: { group: "food", selectable: true, storeName: "山海果物", typeLabel: "果物冰飲", productName: "海風水果冰", icon: "🍧", stockId: "fruit", unit: "杯", cost: 42, price: 135, pricePerLevel: 8, note: "季節水果與冰飲，主打海風水果冰，每杯 NT$ 135。" },
+    sweet: { group: "food", selectable: true, storeName: "花生糖舖", typeLabel: "手作甜食", productName: "手作花生糖盒", icon: "🥜", stockId: "sweet", unit: "盒", cost: 28, price: 98, pricePerLevel: 6, note: "低耗損伴手禮，主打手作花生糖盒，每盒 NT$ 98。" },
+    toy: { group: "leisure", selectable: true, storeName: "彈珠小屋", typeLabel: "遊戲體驗", productName: "招牌彈珠一局", icon: "🎯", stockId: "toy", unit: "局", cost: 25, price: 90, pricePerLevel: 8, note: "親子與熟客體驗攤，主打招牌彈珠一局，每局 NT$ 90。" },
+    food: { group: "food", selectable: false, storeName: "熟食同業", typeLabel: "熟食餐飲", productName: "港邊熱食", icon: "🍲", stockId: null, unit: "份", cost: 0, price: 150, pricePerLevel: 12, legacyMixed: true, note: "舊版存檔的綜合熟食分店。" },
+    leisure: { group: "leisure", selectable: false, storeName: "遊戲同業", typeLabel: "遊戲體驗", productName: "體驗代幣", icon: "🎟", stockId: "leisure", unit: "張", cost: 32, price: 120, pricePerLevel: 10, note: "舊版存檔的遊戲體驗分店。" }
+  },
   camera: {
     defaultYaw: 0,
     defaultElevation: 0.63,
@@ -160,3 +171,38 @@ export const DATA = Object.freeze({
     { title: "一張明信片繞了半座島。", icon: "📮", text: "老周把它交給等了很久的人，郵戳上的海風仍然新鮮。" }
   ]
 });
+
+export function getOutletProduct(type) {
+  return DATA.outletProducts[type] || DATA.outletProducts.food;
+}
+
+export function createOutletInventory(sourceStock, sourceCost) {
+  const stockIds = Array.from(new Set([
+    ...DATA.ingredients.map((item) => item.id),
+    ...Object.values(DATA.outletProducts).map((product) => product.stockId).filter(Boolean)
+  ]));
+  const stockDefaults = Object.fromEntries(DATA.ingredients.map((item) => [item.id, item.cost]));
+  Object.values(DATA.outletProducts).forEach((product) => {
+    if (product.stockId) stockDefaults[product.stockId] = product.cost;
+  });
+  return {
+    stock: Object.fromEntries(stockIds.map((id) => [id, Math.max(0, Math.floor(Number(sourceStock?.[id]) || 0))])),
+    stockCost: Object.fromEntries(stockIds.map((id) => [id,
+      Math.max(0, Math.round(Number(sourceCost?.[id]) || stockDefaults[id] || 0))]))
+  };
+}
+
+export function outletAvailableStock(outlet) {
+  if (!outlet || outlet.id === "main") return 0;
+  const product = getOutletProduct(outlet.type);
+  if (product.legacyMixed) {
+    return DATA.ingredients.reduce((sum, item) => sum + (Number(outlet.stock?.[item.id]) || 0), 0);
+  }
+  return Math.max(0, Number(outlet.stock?.[product.stockId]) || 0);
+}
+
+export function outletRetailPrice(outlet) {
+  const product = getOutletProduct(outlet?.type);
+  const basePrice = product.legacyMixed ? DATA.economy.outletMealPrice : product.price;
+  return Math.max(0, Number(basePrice) || 0) + Math.max(0, Number(outlet?.equipmentLevel) || 0) * (Number(product.pricePerLevel) || 0);
+}
