@@ -36,21 +36,31 @@
           <span class="world-event-copy"><span id="worldEventLabel">今晚事件</span><strong id="worldEventTitle">查看夜市消息</strong></span>
         </button>
         <div class="outlet-event-triggers" id="outletEventTriggers" aria-label="分店現場事件"></div>
-        <div class="camera-tools" aria-label="3D 相機控制">
-          <span class="camera-label" id="cameraLabel">斜俯視 ｜ 北岸</span>
-          <button class="icon-button" data-action="orbit-left" aria-label="將相機往左旋轉 45 度">⟲</button>
-          <button class="icon-button" data-action="tilt-up" aria-label="相機抬高">⌃</button>
-          <button class="icon-button" data-action="tilt-down" aria-label="相機降低">⌄</button>
-          <button class="icon-button" data-action="zoom-out" aria-label="縮小">−</button>
-          <button class="icon-button" data-action="zoom-in" aria-label="放大">+</button>
-          <button class="icon-button" data-action="camera-reset" aria-label="重設相機">◎</button>
-          <button class="icon-button" data-action="orbit-right" aria-label="將相機往右旋轉 45 度">⟳</button>
+        <div class="world-tools" aria-label="場景工具">
+          <button class="world-visibility-toggle" id="worldVisibilityToggle" type="button" data-action="toggle-world-ui" aria-label="隱藏場景按鈕與說明" aria-pressed="false" title="隱藏場景按鈕與說明">
+            <svg class="eye-icon eye-visible" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.3-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.3 6.5-9.5 6.5S2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-icon eye-hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 5.7c.5-.1.9-.2 1.4-.2 6.2 0 9.5 6.5 9.5 6.5a14.7 14.7 0 0 1-3 3.9M6.2 6.6C3.8 8.2 2.5 12 2.5 12S5.8 18.5 12 18.5c1 0 2-.2 2.8-.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+          </button>
+          <button class="world-tool-action" data-action="toggle-sound" aria-pressed="false" aria-label="開啟音效" title="開啟音效"><span aria-hidden="true">♪</span></button>
+          <button class="world-tool-action" data-action="toggle-pause" aria-pressed="false" aria-label="暫停場景動畫" title="暫停場景動畫"><span id="pauseIcon" aria-hidden="true">Ⅱ</span></button>
+          <div class="camera-control-group">
+            <button class="camera-collapse" id="cameraCollapse" type="button" data-action="toggle-camera-tools" aria-expanded="true" aria-controls="cameraTools" aria-label="收合相機控制" title="收合相機控制"><span aria-hidden="true">−</span></button>
+            <div class="camera-tools" id="cameraTools" role="group" aria-label="3D 相機控制">
+              <span class="camera-label" id="cameraLabel">斜俯視 ｜ 北岸</span>
+              <button class="icon-button" data-action="orbit-left" aria-label="將相機往左旋轉 45 度">⟲</button>
+              <button class="icon-button" data-action="tilt-up" aria-label="相機抬高">⌃</button>
+              <button class="icon-button" data-action="tilt-down" aria-label="相機降低">⌄</button>
+              <button class="icon-button" data-action="zoom-out" aria-label="縮小">−</button>
+              <button class="icon-button" data-action="zoom-in" aria-label="放大">+</button>
+              <button class="icon-button" data-action="camera-reset" aria-label="重設相機">◎</button>
+              <button class="icon-button" data-action="orbit-right" aria-label="將相機往右旋轉 45 度">⟳</button>
+            </div>
+          </div>
         </div>
         <div class="world-hint" id="sceneHelp"><b>操作：</b>拖曳旋轉・滾輪縮放・Enter 開攤</div>
         <div class="world-actions">
           <button class="world-action" data-action="open-stall">⌂ 攤位管理</button>
-          <button class="world-action" data-action="toggle-sound" aria-pressed="false">♫ 音效：關</button>
-          <button class="world-action" data-action="toggle-pause" aria-pressed="false">Ⅱ 暫停場景</button>
+          <button class="world-action" data-action="open-main-stock">◈ 店面備料</button>
           <button class="world-action primary" id="mainAction" data-action="main-action">掛燈迎客</button>
         </div>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>

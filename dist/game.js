@@ -563,8 +563,10 @@ function boot() {
     if (!button) return;
     button.disabled = scene.motionReduced;
     button.setAttribute("aria-pressed", String(scene.motionReduced || scene.paused));
-    button.textContent = scene.motionReduced ? "低動態：依系統" : (scene.paused ? "▶ 恢復場景" : "Ⅱ 暫停場景");
-    button.title = scene.motionReduced ? "已依作業系統減少動態效果" : "暫停或恢復夜市場景動畫";
+    const label = scene.motionReduced ? "動畫暫停控制受系統低動態設定限制" : (scene.paused ? "恢復場景動畫" : "暫停場景動畫");
+    button.setAttribute("aria-label", label);
+    button.title = scene.motionReduced ? "已依作業系統減少動態效果" : label;
+    button.querySelector("#pauseIcon").textContent = scene.paused ? "▶" : "Ⅱ";
   }
   function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
   const reportDialog = document.getElementById("reportDialog");
@@ -576,6 +578,21 @@ function boot() {
   let worldEventReturnFocus = null;
   let storyChoiceReturnFocus = null;
   let worldEventPosition = "";
+  const cameraCollapseButton = document.getElementById("cameraCollapse");
+  let cameraToolsTouched = false;
+  function setCameraToolsExpanded(expanded) {
+    document.querySelector(".world-frame").classList.toggle("camera-collapsed", !expanded);
+    cameraCollapseButton.setAttribute("aria-expanded", String(expanded));
+    cameraCollapseButton.setAttribute("aria-label", expanded ? "收合相機控制" : "展開相機控制");
+    cameraCollapseButton.title = expanded ? "收合相機控制" : "展開相機控制";
+    cameraCollapseButton.querySelector("span").textContent = expanded ? "−" : "+";
+  }
+  function syncCameraToolsToViewport() {
+    if (!cameraCollapseButton || cameraToolsTouched) return;
+    setCameraToolsExpanded(!window.matchMedia("(max-width: 800px)").matches);
+  }
+  syncCameraToolsToViewport();
+  window.addEventListener("resize", syncCameraToolsToViewport, { passive: true });
   const outletEventButtons = new Map();
   function syncWorldEventTrigger() {
     const trigger = document.getElementById("worldEventTrigger");
@@ -909,6 +926,20 @@ function boot() {
     const button = event.target.closest("[data-action]");
     if (!button) return;
     const action = button.dataset.action;
+    if (action === "toggle-camera-tools") {
+      const expanded = button.getAttribute("aria-expanded") !== "true";
+      cameraToolsTouched = true;
+      setCameraToolsExpanded(expanded);
+    }
+    if (action === "toggle-world-ui") {
+      const hidden = document.querySelector(".world-frame").classList.toggle("world-ui-hidden");
+      button.setAttribute("aria-pressed", String(hidden));
+      button.setAttribute("aria-label", hidden ? "顯示場景按鈕與說明" : "隱藏場景按鈕與說明");
+      button.title = hidden ? "顯示場景按鈕與說明" : "隱藏場景按鈕與說明";
+      const canvas = document.getElementById("worldCanvas");
+      if (hidden) canvas.removeAttribute("aria-describedby");
+      else canvas.setAttribute("aria-describedby", "sceneHelp");
+    }
     if (action === "open-world-event") openWorldEvent();
     if (action === "close-story-choice" && storyChoiceDialog.open) storyChoiceDialog.close();
     if (action === "open-outlet-event") {
@@ -933,6 +964,7 @@ function boot() {
       else { ui.setTab("ops"); renderUI(); }
     }
     if (action === "open-stall") { ui.setTab("stall"); renderUI(); toast("攤位工作台已開啟：備料、設備與班表都在這裡。"); }
+    if (action === "open-main-stock") { ui.setTab("stock"); renderUI(); toast("主店備料與菜單已開啟；分店可在攤位工作台逐間補貨。"); }
     if (action === "open-doors") openDoors();
     if (action === "call-next") openOrder(state.customerIndex);
     if (action === "serve-dish") runOrderAction(engine.serveDish(button.dataset.id));
@@ -985,7 +1017,9 @@ function boot() {
       soundEnabled = !soundEnabled;
       try { localStorage.setItem("yelan-sound-enabled", String(soundEnabled)); } catch {}
       button.setAttribute("aria-pressed", String(soundEnabled));
-      button.textContent = soundEnabled ? "♫ 音效：開" : "♫ 音效：關";
+      button.setAttribute("aria-label", soundEnabled ? "關閉音效" : "開啟音效");
+      button.title = soundEnabled ? "關閉音效" : "開啟音效";
+      button.querySelector("span").textContent = soundEnabled ? "♫" : "♪";
       toast(soundEnabled ? "輕柔音效已開啟。" : "音效已關閉。");
       if (soundEnabled) playTone("success");
     }
@@ -1059,7 +1093,9 @@ function boot() {
   const soundButton = document.querySelector('[data-action="toggle-sound"]');
   if (soundButton) {
     soundButton.setAttribute("aria-pressed", String(soundEnabled));
-    soundButton.textContent = soundEnabled ? "♫ 音效：開" : "♫ 音效：關";
+    soundButton.setAttribute("aria-label", soundEnabled ? "關閉音效" : "開啟音效");
+    soundButton.title = soundEnabled ? "關閉音效" : "開啟音效";
+    soundButton.querySelector("span").textContent = soundEnabled ? "♫" : "♪";
   }
   syncToastPosition();
   renderUI();

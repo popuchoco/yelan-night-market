@@ -624,3 +624,47 @@ body { font-size: var(--type-body); }
 @media (prefers-reduced-motion: reduce) {
   .world-event-trigger, .world-event-trigger[data-pending="true"] .world-event-mark { animation: none !important; transition: none !important; }
 }
+
+/* Scene controls are grouped in one compact dock; camera controls can collapse independently. */
+.world-tools { position: absolute; z-index: 4; top: 16px; right: 16px; display: flex; align-items: flex-start; gap: 7px; max-width: calc(100% - 32px); }
+.world-visibility-toggle, .camera-collapse, .world-tool-action { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; padding: 0; border: 1px solid #ffffff18; border-radius: 11px; color: #e6e8da; background: #152321e8; box-shadow: 0 6px 18px #0003; backdrop-filter: blur(10px); cursor: pointer; }
+.world-visibility-toggle:hover, .camera-collapse:hover, .world-tool-action:hover { border-color: #e6c77c88; color: #ffe5a7; background: #1b302d; }
+.world-tool-action { font-size: 18px; font-weight: 850; }
+.world-visibility-toggle[aria-pressed="true"] { border-color: #edc77c88; color: var(--gold); }
+.eye-icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.eye-hidden { display: none; }
+.world-visibility-toggle[aria-pressed="true"] .eye-visible { display: none; }
+.world-visibility-toggle[aria-pressed="true"] .eye-hidden { display: block; }
+.camera-control-group { display: flex; align-items: flex-start; gap: 5px; flex: 0 0 auto; width: max-content; }
+.camera-collapse { color: #d8dfd1; font-size: 19px; font-weight: 800; }
+.camera-tools { position: static; z-index: auto; flex: 0 0 auto; width: max-content; min-width: 0; }
+.camera-tools .icon-button { flex: 0 0 44px; }
+.world-frame.camera-collapsed .camera-tools { display: none; }
+.world-frame.world-ui-hidden .world-top-left,
+.world-frame.world-ui-hidden .world-event-trigger,
+.world-frame.world-ui-hidden .outlet-event-triggers,
+.world-frame.world-ui-hidden .camera-control-group,
+.world-frame.world-ui-hidden .world-tool-action,
+.world-frame.world-ui-hidden .world-hint,
+.world-frame.world-ui-hidden .world-actions { display: none !important; }
+@media (max-width: 1060px) {
+  .camera-label { display: none; }
+}
+@media (max-width: 800px) {
+  .world-tools { top: 10px; right: 10px; display: block; width: 44px; height: 44px; }
+  .world-visibility-toggle { position: absolute; top: 0; right: 0; }
+  .world-tool-action[data-action="toggle-sound"] { position: absolute; top: 0; right: 49px; }
+  .world-tool-action[data-action="toggle-pause"] { position: absolute; top: 0; right: 98px; }
+  .camera-control-group { display: contents; }
+  .camera-collapse { position: absolute; top: 49px; right: 0; }
+  .camera-tools { position: absolute; top: 98px; right: 0; display: grid; grid-template-columns: repeat(4, 44px); grid-auto-rows: 44px; justify-content: center; gap: 5px; width: max-content; max-width: calc(100vw - 118px); overflow: visible; flex-wrap: wrap; padding: 5px; }
+  .camera-tools .icon-button { flex: 0 0 44px; }
+}
+@media (max-width: 480px) {
+  .world-tools { top: 8px; right: 8px; }
+  .world-visibility-toggle, .camera-collapse, .world-tool-action { width: 44px; height: 44px; flex-basis: 44px; }
+}
+.world-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: ". primary" "manage stock"; width: min(420px, 58%); gap: 7px; }
+.world-actions [data-action="open-stall"] { grid-area: manage; }
+.world-actions [data-action="main-action"] { grid-area: primary; }
+.world-actions [data-action="open-main-stock"] { grid-area: stock; }

@@ -651,6 +651,12 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(html, /id="worldCanvas" tabindex="0"/);
   assert.match(html, /id="worldEventTrigger"[^>]*data-action="open-world-event"/);
   assert.match(html, /id="outletEventTriggers"/);
+  assert.match(html, /data-action="toggle-camera-tools"[^>]*aria-expanded="true"[^>]*aria-controls="cameraTools"/);
+  assert.match(html, /data-action="toggle-world-ui"[^>]*aria-pressed="false"/);
+  assert.match(html, /class="eye-icon eye-visible"/);
+  assert.match(html, /data-action="open-main-stock">◈ 店面備料/);
+  assert.match(html, /data-action="toggle-sound"[^>]*aria-label="開啟音效"/);
+  assert.match(html, /data-action="toggle-pause"[^>]*aria-label="暫停場景動畫"/);
   assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
   assert.match(html, /<dialog class="story-choice-dialog" id="storyChoiceDialog"/);
   const worldFrameStart = html.indexOf('<section class="world-frame"');
@@ -660,7 +666,13 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   const css = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
   const game = await readFile(new URL("../dist/game.js", import.meta.url), "utf8");
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /\.world-frame\.camera-collapsed \.camera-tools\s*\{\s*display:\s*none/);
+  assert.match(css, /\.world-frame\.world-ui-hidden \.world-actions/);
   assert.match(scene, /motionReduced/);
+  assert.match(game, /action === "toggle-camera-tools"/);
+  assert.match(game, /action === "toggle-world-ui"/);
+  assert.match(game, /action === "open-main-stock"\) \{ ui\.setTab\("stock"\)/);
+  assert.match(game, /button\.querySelector\("#pauseIcon"\)/);
   assert.match(game, /orderModal\.addEventListener\("keydown"/);
   assert.match(game, /orderReturnFocus/);
   assert.match(ui, /function renderJournalReport\(/);
