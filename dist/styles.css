@@ -490,3 +490,86 @@ body { font-size: var(--type-body); }
   .manager-event-choices { grid-template-columns: 1fr; }
   .modal { padding: var(--space-4); }
 }
+
+/* World-first incident access: the notice is projected above the affected stall. */
+.world-event-trigger {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: min(248px, 48%);
+  min-height: 58px;
+  padding: 8px 11px;
+  border: 1px solid #d9c27b77;
+  border-radius: 13px;
+  color: #f1ead4;
+  background: #172523ed;
+  box-shadow: 0 9px 26px #07111099, inset 0 1px #ffffff12;
+  backdrop-filter: blur(8px);
+  text-align: left;
+  cursor: pointer;
+  transform: translate(-50%, -100%);
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
+}
+.world-event-trigger:after {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid #d9c27b77;
+  border-bottom: 1px solid #d9c27b77;
+  background: #172523ed;
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+.world-event-trigger:hover { border-color: #efd995; background: #20312e; box-shadow: 0 12px 30px #071110b8, inset 0 1px #ffffff18; }
+.world-event-trigger:focus-visible { outline: 3px solid #f2d68d; outline-offset: 3px; }
+.world-event-trigger[data-tone="negative"] { border-color: #df997f99; }
+.world-event-trigger[data-tone="negative"]:after { border-color: #df997f99; }
+.world-event-trigger[data-pending="true"] .world-event-mark { animation: event-beacon 1.8s ease-in-out infinite; }
+.world-event-mark { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; border: 1px solid #dfca8b33; border-radius: 10px; color: #f4d98d; background: #dfca8b14; font-size: 19px; }
+.world-event-trigger[data-tone="negative"] .world-event-mark { color: #f2b29a; background: #df997f18; border-color: #df997f44; }
+.world-event-copy { display: grid; gap: 3px; min-width: 0; }
+.world-event-copy > span { overflow: hidden; color: #d2c18b; font-size: var(--type-caption); font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.world-event-copy strong { overflow: hidden; color: #f1ead4; font-size: var(--type-body); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes event-beacon { 50% { box-shadow: 0 0 0 5px #efd99520; } }
+.world-event-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(82dvh, 680px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #9cae8f55;
+  border-radius: 18px;
+  color: #e9ecdc;
+  background: linear-gradient(155deg, #21312f, #142120 72%);
+  box-shadow: 0 26px 80px #0009;
+}
+.world-event-dialog::backdrop { background: #081110bd; backdrop-filter: blur(5px); }
+.world-event-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 20px 16px; border-bottom: 1px solid #ffffff17; }
+.world-event-dialog-header .modal-title { margin: 5px 0 6px; }
+.world-event-dialog-header .modal-desc { margin: 0; line-height: 1.6; }
+.world-event-dialog-content { padding: 16px 20px 20px; }
+.world-event-options { display: grid; gap: var(--space-3); }
+.world-event-options.negative { padding: var(--space-3); border: 1px solid #df997f55; border-radius: 12px; background: #9e563d18; }
+.world-event-options .manager-event-choices { grid-template-columns: 1fr 1fr; }
+.world-event-options .market-announcement-choices { grid-template-columns: 1fr; }
+.world-event-impact { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid #91a88244; border-radius: 12px; background: #73936f12; }
+.world-event-impact.negative { border-color: #df997f55; background: #9e563d18; }
+.world-event-impact-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; color: #f0d694; background: #dfca8b17; font-size: 21px; }
+.world-event-impact-copy { display: grid; gap: 5px; }
+.world-event-impact-copy b { color: #f0e5c9; font-size: var(--type-body); }
+.world-event-impact-copy p { margin: 0; color: #bbc7b8; font-size: var(--type-caption); line-height: 1.6; }
+@media (max-width: 640px) {
+  .world-event-trigger { width: min(216px, 58%); min-height: 54px; gap: 8px; padding: 7px 9px; }
+  .world-event-mark { width: 34px; height: 34px; flex-basis: 34px; }
+  .world-event-dialog { width: calc(100vw - 20px); max-width: calc(100vw - 20px); max-height: calc(100dvh - 24px); border-radius: 15px; }
+  .world-event-dialog-header { padding: 16px; gap: 10px; }
+  .world-event-dialog-content { padding: 14px 16px max(16px, env(safe-area-inset-bottom)); }
+  .world-event-options .manager-event-choices { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world-event-trigger, .world-event-trigger[data-pending="true"] .world-event-mark { animation: none !important; transition: none !important; }
+}

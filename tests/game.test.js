@@ -609,6 +609,8 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(objects, /drawStall/);
   assert.match(effects, /createEffectRenderer/);
   assert.match(html, /id="worldCanvas" tabindex="0"/);
+  assert.match(html, /id="worldEventTrigger"[^>]*data-action="open-world-event"/);
+  assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
   const css = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
   const game = await readFile(new URL("../dist/game.js", import.meta.url), "utf8");
   assert.match(css, /prefers-reduced-motion/);
@@ -624,4 +626,12 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(css, /\.report-launch-grid/);
   assert.match(ui, /accounting-mobile-list/);
   assert.match(css, /\.accounting-mobile-record/);
+  assert.match(ui, /function getWorldEventInfo\(/);
+  assert.match(ui, /function renderWorldEventContent\(/);
+  assert.match(scene, /function eventAnchor\(/);
+  assert.match(game, /function openWorldEvent\(/);
+  assert.match(game, /scene\.eventAnchor\(info\.anchorOutletId\)/);
+  assert.match(game, /worldEventDialog\.addEventListener\("close"/);
+  assert.match(css, /\.world-event-trigger:focus-visible/);
+  assert.match(css, /\.world-event-trigger\[data-pending="true"\]/);
 });

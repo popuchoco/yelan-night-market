@@ -31,6 +31,10 @@
           <strong class="world-title">潮聲近了，準備開門嗎？</strong>
           <span class="world-state" id="worldState"><i class="state-dot"></i><span id="worldStateText">備料與排班中</span></span>
         </div>
+        <button class="world-event-trigger" id="worldEventTrigger" type="button" data-action="open-world-event" aria-haspopup="dialog" aria-label="開啟今晚夜市事件">
+          <span class="world-event-mark" id="worldEventIcon" aria-hidden="true">🏮</span>
+          <span class="world-event-copy"><span id="worldEventLabel">今晚事件</span><strong id="worldEventTitle">查看夜市消息</strong></span>
+        </button>
         <div class="camera-tools" aria-label="3D 相機控制">
           <span class="camera-label" id="cameraLabel">斜俯視 ｜ 北岸</span>
           <button class="icon-button" data-action="orbit-left" aria-label="將相機往左旋轉 45 度">⟲</button>
@@ -73,6 +77,17 @@
       <div id="orderChoices"></div>
     </section>
   </div>
+  <dialog class="world-event-dialog" id="worldEventDialog" aria-modal="true" aria-labelledby="worldEventDialogTitle" aria-describedby="worldEventDialogDescription">
+    <header class="world-event-dialog-header">
+      <div>
+        <div class="modal-kicker" id="worldEventDialogKicker">NIGHT MARKET NOTICE</div>
+        <h2 class="modal-title" id="worldEventDialogTitle">今晚事件</h2>
+        <p class="modal-desc" id="worldEventDialogDescription">夜市現場消息。</p>
+      </div>
+      <button class="close-button" type="button" data-action="close-world-event" aria-label="關閉事件視窗">×</button>
+    </header>
+    <div class="world-event-dialog-content" id="worldEventDialogContent"></div>
+  </dialog>
   <dialog class="report-dialog" id="reportDialog" aria-modal="true" aria-labelledby="reportDialogTitle" aria-describedby="reportDialogDescription">
     <header class="report-dialog-header">
       <div class="report-dialog-heading">

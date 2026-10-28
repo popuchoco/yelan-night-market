@@ -309,6 +309,33 @@ export function createScene(runtime) {
     return null;
   }
 
+  function eventAnchor(outletId) {
+    var stall = mainStall;
+    if (outletId && outletId !== "main") {
+      var outlet = (state.outlets || []).find(function(item) { return item.id === outletId; });
+      if (outlet) {
+        var available = marketStalls.filter(function(item) { return !item.main; });
+        var claimed = [];
+        var branches = (state.outlets || []).filter(function(item) { return item.id !== "main"; });
+        branches.forEach(function(branch) {
+          var index = available.findIndex(function(item, candidate) { return !claimed.includes(candidate) && item.id === branch.type; });
+          if (index < 0 && (branch.type === "food" || branch.type === "leisure")) {
+            index = available.findIndex(function(item, candidate) {
+              return !claimed.includes(candidate) && (branch.type === "leisure" ? item.id === "toy" : item.id !== "toy");
+            });
+          }
+          if (index < 0) index = available.findIndex(function(item, candidate) { return !claimed.includes(candidate); });
+          if (index >= 0) {
+            claimed.push(index);
+            if (branch.id === outletId) stall = available[index];
+          }
+        });
+      }
+    }
+    var point = project(stall.x + stall.w * 0.5, stall.h + 74, stall.z + stall.d * 0.45);
+    return { x: point.x, y: point.y };
+  }
+
   function endPointer() {
     if (pointer && pointer.moved) canvas._ignoreNextClick = true;
     pointer = null;
@@ -365,7 +392,7 @@ export function createScene(runtime) {
   setCameraLabel();
   resizeCanvas();
   return { canvas: canvas, update: update, draw: draw, spawnGuests: spawnGuests, cameraAction: cameraAction,
-    setCameraLabel: setCameraLabel, hitTest: hitTest, showToast: setToast, togglePause: togglePause,
+    setCameraLabel: setCameraLabel, hitTest: hitTest, eventAnchor: eventAnchor, showToast: setToast, togglePause: togglePause,
     get paused() { return paused; }, get motionReduced() { return motionReduced; },
     get motionSuppressed() { return paused || motionReduced; } };
 }

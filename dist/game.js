@@ -566,9 +566,54 @@ function boot() {
     button.textContent = scene.motionReduced ? "低動態：依系統" : (scene.paused ? "▶ 恢復場景" : "Ⅱ 暫停場景");
     button.title = scene.motionReduced ? "已依作業系統減少動態效果" : "暫停或恢復夜市場景動畫";
   }
-  function renderUI() { ui.renderUI(); syncMotionControl(); }
+  function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); }
   const reportDialog = document.getElementById("reportDialog");
   const reportDialogContent = document.getElementById("reportDialogContent");
+  const worldEventDialog = document.getElementById("worldEventDialog");
+  const worldEventDialogContent = document.getElementById("worldEventDialogContent");
+  let worldEventReturnFocus = null;
+  let worldEventPosition = "";
+  function syncWorldEventTrigger() {
+    const trigger = document.getElementById("worldEventTrigger");
+    const info = ui.getWorldEventInfo();
+    if (!trigger || !info) return;
+    document.getElementById("worldEventIcon").textContent = info.icon || "⚑";
+    document.getElementById("worldEventLabel").textContent = info.label;
+    document.getElementById("worldEventTitle").textContent = info.title;
+    trigger.dataset.tone = info.tone || "positive";
+    trigger.dataset.pending = String(!!info.pending);
+    trigger.setAttribute("aria-label", (info.pending ? "待處理：" : "查看：") + info.title + "。開啟夜市事件視窗");
+    const point = scene.eventAnchor(info.anchorOutletId);
+    const frame = document.querySelector(".world-frame");
+    if (!point || !frame) return;
+    const frameRect = frame.getBoundingClientRect();
+    const canvasRect = scene.canvas.getBoundingClientRect();
+    const halfWidth = (trigger.offsetWidth || 216) / 2;
+    const rawX = canvasRect.left - frameRect.left + point.x;
+    const rawY = canvasRect.top - frameRect.top + point.y;
+    const left = Math.max(halfWidth + 9, Math.min(frame.clientWidth - halfWidth - 9, rawX));
+    const top = Math.max(86, Math.min(frame.clientHeight - 104, rawY));
+    const position = Math.round(left) + "px|" + Math.round(top) + "px";
+    if (position !== worldEventPosition) {
+      trigger.style.left = Math.round(left) + "px";
+      trigger.style.top = Math.round(top) + "px";
+      worldEventPosition = position;
+    }
+  }
+  function openWorldEvent() {
+    const info = ui.getWorldEventInfo();
+    if (info.kind === "complaint") { openOrder(state.customerIndex); return; }
+    worldEventReturnFocus = document.activeElement;
+    document.getElementById("worldEventDialogKicker").textContent = info.label;
+    document.getElementById("worldEventDialogTitle").textContent = info.title;
+    document.getElementById("worldEventDialogDescription").textContent = info.description;
+    worldEventDialogContent.replaceChildren(ui.renderWorldEventContent());
+    if (!worldEventDialog.open) worldEventDialog.showModal();
+    const firstAction = worldEventDialogContent.querySelector("button:not(:disabled)");
+    const focusTarget = firstAction || worldEventDialog.querySelector('[data-action="close-world-event"]');
+    if (focusTarget) focusTarget.focus();
+    playTone("open");
+  }
   function renderReportDialogContent(focusAction, focusId, resetScroll = false) {
     const previousScroll = resetScroll ? 0 : reportDialogContent.scrollTop;
     reportDialogContent.replaceChildren(ui.renderJournalReport());
@@ -597,6 +642,15 @@ function boot() {
     const fallback = document.getElementById("tab-journal");
     const target = reportReturnFocus && reportReturnFocus.isConnected ? reportReturnFocus : fallback;
     reportReturnFocus = null;
+    if (target && target.focus) requestAnimationFrame(() => target.focus());
+  });
+  worldEventDialog.addEventListener("click", (event) => {
+    if (event.target === worldEventDialog) worldEventDialog.close();
+  });
+  worldEventDialog.addEventListener("close", () => {
+    const fallback = document.getElementById("worldEventTrigger");
+    const target = worldEventReturnFocus && worldEventReturnFocus.isConnected ? worldEventReturnFocus : fallback;
+    worldEventReturnFocus = null;
     if (target && target.focus) requestAnimationFrame(() => target.focus());
   });
   document.addEventListener("scene-motion-change", syncMotionControl);
@@ -676,6 +730,8 @@ function boot() {
     const button = event.target.closest("[data-action]");
     if (!button) return;
     const action = button.dataset.action;
+    if (action === "open-world-event") openWorldEvent();
+    if (action === "close-world-event" && worldEventDialog.open) worldEventDialog.close();
     if (action === "panel-tab") { ui.setTab(button.dataset.tab); renderUI(); }
     if (action === "open-report") openJournalReport(button.dataset.id);
     if (action === "close-report" && reportDialog.open) reportDialog.close();
@@ -706,12 +762,20 @@ function boot() {
     if (action === "upgrade-outlet-equipment") showResult(engine.upgradeOutletEquipment(button.dataset.outletId));
     if (action === "hire-outlet-manager") showResult(engine.hireOutletManager(button.dataset.outletId));
     if (action === "dismiss-outlet-manager") showResult(engine.dismissOutletManager(button.dataset.outletId));
-    if (action === "resolve-manager-event") showResult(engine.resolveManagerEvent(button.dataset.choice));
+    if (action === "resolve-manager-event") {
+      const result = engine.resolveManagerEvent(button.dataset.choice);
+      if (result.ok && worldEventDialog.open) worldEventDialog.close();
+      showResult(result);
+    }
     if (action === "upgrade-equipment") showResult(engine.upgradeEquipment(button.dataset.id));
     if (action === "buy-upgrade") showResult(engine.buyUpgrade(button.dataset.id));
     if (action === "toggle-staff") showResult(engine.toggleStaff(button.dataset.role));
     if (action === "choose-story") showResult(engine.chooseStory(button.dataset.id));
-    if (action === "choose-market-card") showResult(engine.chooseMarketCard(button.dataset.id));
+    if (action === "choose-market-card") {
+      const result = engine.chooseMarketCard(button.dataset.id);
+      if (result.ok && worldEventDialog.open) worldEventDialog.close();
+      showResult(result);
+    }
     if (action === "next-night") {
       const result = engine.nextNight();
       if (result.ok) { scene.spawnGuests([]); if (state.phase === "decision") ui.setTab("ops"); }
@@ -805,7 +869,7 @@ function boot() {
   function frame(time) {
     const dt = lastFrame ? Math.min(0.05, (time - lastFrame) / 1000) : 0.016;
     lastFrame = time;
-    if (!document.hidden) { scene.update(dt); scene.draw(); }
+    if (!document.hidden) { scene.update(dt); scene.draw(); syncWorldEventTrigger(); }
     requestAnimationFrame(frame);
   }
   const soundButton = document.querySelector('[data-action="toggle-sound"]');

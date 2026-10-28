@@ -6,7 +6,7 @@ import {
   createLedger as createLedgerForState, fixedOperatingCost as ledgerFixedOperatingCost, forecast, getFoodCost as getFoodCostForState,
   hasBrandAlliance,
   getPurchasePrice as getPurchasePriceForState, getTonightGuests as getTonightGuestsForState,
-  ledgerIncome, ledgerNet, money, staffCost as staffCostForState,
+  ledgerIncome, ledgerNet, marketCardChoice, money, staffCost as staffCostForState,
   todayEvent as selectEvent, todayMarketCard, todayStory as selectStory
 } from "./state.js";
 
@@ -54,6 +54,84 @@ export function createUI(runtime) {
   function getPurchasePrice(item) { return getPurchasePriceForState(state, item); }
   function getFoodCost(dish) { return getFoodCostForState(state, dish); }
   function createLedger() { return createLedgerForState(state); }
+
+  function getWorldEventInfo() {
+    if (state.managerEvent) {
+      return { kind: "manager", icon: "⚠️", label: "店長重大回報・待總部決定", title: state.managerEvent.title,
+        description: state.managerEvent.description, tone: "negative", pending: true,
+        anchorOutletId: state.managerEvent.outletId || "main" };
+    }
+    if (state.phase === "service") {
+      const guest = getTonightGuests()[state.customerIndex];
+      if (guest && guest.difficult) {
+        return { kind: "complaint", icon: guest.icon || "😤", label: "現場客訴・需要處理", title: guest.name + "提出客訴",
+          description: guest.line, tone: "negative", pending: true, anchorOutletId: "main" };
+      }
+    }
+    const card = todayMarketCard(state);
+    if (card) {
+      const choiceId = marketCardChoice(state);
+      const choice = choiceId && card.choices.find(function(item) { return item.id === choiceId; });
+      const pending = state.phase === "prep" && !choice;
+      return { kind: "market-card", icon: card.icon, label: pending ? "市集公告・待選方案" : "市集公告・今晚消息",
+        title: card.name, description: choice ? choice.detail : card.description,
+        tone: card.tone, pending: pending, anchorOutletId: "main", card: card, choice: choice };
+    }
+    const event = todayEvent();
+    return { kind: "market", icon: event.icon, label: event.tone === "negative" ? "夜市突發狀況" : "今晚夜市消息",
+      title: event.name, description: event.description, tone: event.tone, pending: false, anchorOutletId: "main", event: event };
+  }
+
+  function renderWorldEventContent() {
+    const info = getWorldEventInfo();
+    if (info.kind === "manager") {
+      const incident = el("section", "world-event-options");
+      incident.append(el("span", "manager-event-kicker", "總部決策・選擇處理方式"));
+      const choices = el("div", "manager-event-choices");
+      (state.managerEvent.choices || []).forEach(function(choice) {
+        const insufficient = state.managerEvent.type === "equipment" && choice.id === "repair" ? state.coins < 85 :
+          (state.managerEvent.type === "complaint" && choice.id === "compensate" ? state.coins < 55 :
+            (state.managerEvent.type === "festival" && choice.id === "promote" ? state.coins < 70 : false));
+        choices.append(button(choice.name, "resolve-manager-event", { choice: choice.id }, insufficient,
+          choice.id === "explain" || choice.id === "defer" || choice.id === "decline" ? "secondary-button" : "primary-button"));
+      });
+      incident.append(choices);
+      return incident;
+    }
+    if (info.kind === "market-card") {
+      const panel = el("section", "world-event-options" + (info.tone === "negative" ? " negative" : ""));
+      if (info.choice) {
+        const result = el("div", "market-announcement-result");
+        append(result, el("b", "", "今晚已選擇：" + info.choice.name),
+          el("span", "", info.choice.detail + "。"),
+          el("span", "announcement-result-preview", marketChoicePreview(info.card, info.choice)));
+        panel.append(result);
+      } else if (state.phase === "prep") {
+        const choices = el("div", "market-announcement-choices");
+        info.card.choices.forEach(function(choice) {
+          const action = button("", "choose-market-card", { id: choice.id }, choice.cost > 0 && state.coins < choice.cost, "announcement-choice");
+          append(action, el("span", "announcement-choice-name", choice.name),
+            el("span", "announcement-choice-detail", choice.detail),
+            el("span", "announcement-choice-preview", marketChoicePreview(info.card, choice)));
+          choices.append(action);
+        });
+        panel.append(choices);
+      } else {
+        panel.append(helper(state.phase === "decision"
+          ? "完成本週經營方向後，再選擇今晚公告卡的處理方式。"
+          : "本夜公告卡選擇已隨營業流程鎖定。", "market-announcement-result"));
+      }
+      return panel;
+    }
+    const summary = el("section", "world-event-impact" + (info.tone === "negative" ? " negative" : ""));
+    append(summary, el("span", "world-event-impact-icon", info.icon), el("div", "world-event-impact-copy"));
+    const copy = summary.querySelector(".world-event-impact-copy");
+    append(copy, el("b", "", "今晚營運事件"),
+      el("p", "", state.phase === "service"
+        ? "事件效果會在今晚營運中反映，營收與支出會隨打烊結算入帳。"
+        : "事件效果會在開門與今晚營運中反映，相關金額會列入帳本。"));
+    return summary;
+  }
 
   function button(label, action, data, disabled, className) {
     return el("button", className || "secondary-button", label, {
@@ -1074,6 +1152,8 @@ export function createUI(runtime) {
   return {
     renderUI: renderUI,
     renderOrderChoices: renderOrderChoices,
+    getWorldEventInfo: getWorldEventInfo,
+    renderWorldEventContent: renderWorldEventContent,
     setTab: setTab,
     setOutletTarget: setOutletTarget,
     setTabAndRender: setTabAndRender,
