@@ -1,5 +1,5 @@
 import { DATA } from "./data.js";
-import { CAMPAIGN_DAYS, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
+import { ACQUISITION_TYPES, CAMPAIGN_DAYS, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
 import { createAccountingState, ensureAccounting } from "./accounting.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
@@ -29,6 +29,10 @@ export function freshState() {
     hiredCrew: 0,
     acquisitions: 0,
     acquisitionTypes: [],
+    outlets: [{ id: "main", name: "夜嵐攤號", type: "main", active: true, manager: false,
+      equipmentLevel: 0, stock: {}, stockCost: {}, nextNightBonus: 0, efficiencyPenalty: 0,
+      reputation: 50, autoPaused: false, lastResult: null }],
+    managerEvent: null,
     loanUsed: false,
     loanPrincipal: 0,
     loanTakenDay: 0,
@@ -65,6 +69,50 @@ export function normalizeState(data) {
   // Treat those legacy purchases as food stalls so the new alliance can still
   // be reached instead of permanently locking out the feature.
   while (fresh.acquisitionTypes.length < fresh.acquisitions) fresh.acquisitionTypes.push("food");
+  const sourceOutlets = Array.isArray(data.outlets) ? data.outlets : [];
+  const storedMain = sourceOutlets.find((outlet) => outlet && outlet.id === "main");
+  const mainOutlet = {
+    id: "main", name: "夜嵐攤號", type: "main", active: true, manager: false,
+    equipmentLevel: 0, stock: {}, stockCost: {}, nextNightBonus: 0, efficiencyPenalty: 0,
+    reputation: 50, autoPaused: false, lastResult: null,
+    ...(storedMain && typeof storedMain === "object" ? storedMain : {})
+  };
+  mainOutlet.id = "main";
+  mainOutlet.name = "夜嵐攤號";
+  const storedBranches = sourceOutlets.filter((outlet) => outlet && outlet.id !== "main").slice(0, fresh.acquisitions);
+  const outletNames = { food: "熟食同業", leisure: "遊戲同業" };
+  fresh.outlets = [mainOutlet, ...storedBranches.map((outlet, index) => {
+    const type = outlet.type === "leisure" || outlet.type === "food" ? outlet.type : fresh.acquisitionTypes[index] || "food";
+    const stock = Object.fromEntries(DATA.ingredients.map((item) => [item.id, Math.max(0, Math.floor(Number(outlet.stock?.[item.id]) || 0))]));
+    stock.leisure = Math.max(0, Math.floor(Number(outlet.stock?.leisure) || 0));
+    const stockCost = Object.fromEntries(DATA.ingredients.map((item) => [item.id,
+      Math.max(0, Math.round(Number(outlet.stockCost?.[item.id]) || item.cost))]));
+    stockCost.leisure = Math.max(0, Math.round(Number(outlet.stockCost?.leisure) || DATA.economy.outletGameSupplyCost));
+    return {
+      id: String(outlet.id || "acquired-" + (index + 1)),
+      name: String(outlet.name || outletNames[type] + "・分店 " + (index + 1)),
+      type, active: !!outlet.active, manager: !!outlet.manager,
+      equipmentLevel: Math.max(0, Math.min(DATA.economy.outletEquipmentCosts.length, Number(outlet.equipmentLevel) || 0)),
+      stock, stockCost,
+      nextNightBonus: Math.max(0, Math.round(Number(outlet.nextNightBonus) || 0)),
+      efficiencyPenalty: Math.max(0, Math.min(1, Number(outlet.efficiencyPenalty) || 0)),
+      reputation: Math.max(0, Math.min(100, Number(outlet.reputation) || 50)),
+      autoPaused: !!outlet.autoPaused,
+      lastResult: outlet.lastResult && typeof outlet.lastResult === "object" ? outlet.lastResult : null
+    };
+  })];
+  while (fresh.outlets.length <= fresh.acquisitions) {
+    const index = fresh.outlets.length - 1;
+    const type = fresh.acquisitionTypes[index] || "food";
+    const stock = Object.fromEntries(DATA.ingredients.map((item) => [item.id, 0]));
+    stock.leisure = 0;
+    const stockCost = Object.fromEntries(DATA.ingredients.map((item) => [item.id, item.cost]));
+    stockCost.leisure = DATA.economy.outletGameSupplyCost;
+    fresh.outlets.push({ id: "acquired-" + (index + 1), name: outletNames[type] + "・分店 " + (index + 1), type,
+      active: false, manager: false, equipmentLevel: 0, stock, stockCost, nextNightBonus: 0, efficiencyPenalty: 0,
+      reputation: 50, autoPaused: false, lastResult: null });
+  }
+  fresh.managerEvent = data.managerEvent && typeof data.managerEvent === "object" ? data.managerEvent : null;
   fresh.loanPrincipal = Math.max(0, Math.round(Number(fresh.loanPrincipal) || 0));
   fresh.loanUsed = !!fresh.loanUsed || fresh.loanPrincipal > 0;
   fresh.loanTakenDay = Math.max(0, Math.floor(Number(fresh.loanTakenDay) || 0));
@@ -218,7 +266,8 @@ export function getTonightGuests(state) {
 }
 
 export function staffCost(state) {
-  return DATA.staff.reduce((sum, person) => sum + (state.staff[person.id] ? person.wage : 0), 0) + (Number(state.hiredCrew) || 0) * 90;
+  return DATA.staff.reduce((sum, person) => sum + (state.staff[person.id] ? person.wage : 0), 0) +
+    (Number(state.hiredCrew) || 0) * 90;
 }
 
 export function inspectionFee(state) {
@@ -261,6 +310,8 @@ export function createLedger(state) {
     expansionRent: (Number(state.expansions) || 0) * 24,
     acquisitionRent: (Number(state.acquisitions) || 0) * 38,
     labor: staffCost(state),
+    managerPayroll: (Array.isArray(state.outlets) ? state.outlets.filter((outlet) => outlet && outlet.manager).length : 0) * DATA.economy.managerWage,
+    outletUtilities: (Array.isArray(state.outlets) ? state.outlets.filter((outlet) => outlet && outlet.id !== "main" && outlet.active).length : 0) * DATA.economy.outletUtilities,
     water: Math.max(DATA.economy.minWater, DATA.economy.water),
     electricity: Math.max(DATA.economy.minElectricity, DATA.economy.electricity - hood * DATA.economy.hoodElectricitySavings) + (event.id === "rain" ? rainElectricity : 0) + blackout,
     gas: Math.max(DATA.economy.minGas, DATA.economy.gas - hood * DATA.economy.hoodGasSavings) + (event.id === "rain" ? rainGas : 0),
@@ -283,6 +334,7 @@ export function ledgerIncome(ledger) {
 
 export function fixedOperatingCost(ledger) {
   return ledger.rent + (ledger.expansionRent || 0) + (ledger.acquisitionRent || 0) + ledger.labor +
+    (ledger.managerPayroll || 0) + (ledger.outletUtilities || 0) +
     (ledger.water || 0) + ledger.electricity + ledger.gas + (ledger.fees || 0) +
     (ledger.marketing || 0) + (ledger.preparation || 0) + (ledger.interest || 0);
 }
@@ -311,6 +363,29 @@ export function forecast(state) {
   ledger.tips = tips;
   ledger.bonus = bonus;
   ledger.food = paying * averageFood;
+  let outletSales = 0;
+  let outletFood = 0;
+  (Array.isArray(state.outlets) ? state.outlets : []).filter((outlet) => outlet.id !== "main" && outlet.active).forEach((outlet) => {
+    const capacity = outlet.manager ? (outlet.efficiencyPenalty > 0 ? 1 : 2) : 1;
+    let remaining = capacity;
+    if (outlet.type === "leisure") {
+      const units = Math.min(remaining, Math.max(0, Number(outlet.stock?.leisure) || 0));
+      outletSales += units * (DATA.economy.outletGamePrice + (Number(outlet.equipmentLevel) || 0) * 10);
+      outletFood += units * Math.max(0, Number(outlet.stockCost?.leisure) || DATA.economy.outletGameSupplyCost);
+    } else {
+      DATA.ingredients.forEach((item) => {
+        const units = Math.min(remaining, Math.max(0, Number(outlet.stock?.[item.id]) || 0));
+        outletSales += units * (DATA.economy.outletMealPrice + (Number(outlet.equipmentLevel) || 0) * 12);
+        outletFood += units * Math.max(0, Number(outlet.stockCost?.[item.id]) || item.cost);
+        remaining -= units;
+      });
+    }
+    outletSales += Math.max(0, Number(outlet.nextNightBonus) || 0);
+  });
+  ledger.sales += outletSales;
+  ledger.food += outletFood;
+  ledger.bonus += (Array.isArray(state.outlets) ? state.outlets : []).filter((outlet) => outlet.id !== "main" && outlet.active)
+    .reduce((sum, outlet) => sum + Math.max(0, Number(outlet.nextNightBonus) || 0), 0);
   const net = ledgerNet(ledger);
-  return { guests, paying, food: paying * averageFood, sales: paying * averagePrice, tips, bonus, ledger, net };
+  return { guests, paying, food: paying * averageFood + outletFood, sales: paying * averagePrice + outletSales, tips, bonus, outletSales, ledger, net };
 }

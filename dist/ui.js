@@ -21,6 +21,7 @@ export function createUI(runtime) {
   let selectedReportPeriod = null;
   let selectedWeek = null;
   let selectedJournalDay = null;
+  let selectedOutletId = null;
 
   function el(tag, className, text, attrs) {
     const node = document.createElement(tag);
@@ -45,6 +46,7 @@ export function createUI(runtime) {
     return append(document.createDocumentFragment(), ...children);
   }
   function setTab(tab) { activeTab = tab; }
+  function setOutletTarget(id) { selectedOutletId = id || null; }
   function todayEvent() { return selectEvent(state); }
   function todayStory() { return selectStory(state); }
   function getTonightGuests() { return getTonightGuestsForState(state); }
@@ -211,7 +213,7 @@ export function createUI(runtime) {
     const decision = el("section", "weekly-decision");
     append(decision,
       subhead("新的一週・經營方向", "第 " + state.day + " 夜開始前", true),
-      helper("每完成七夜結算一次週轉工作底稿；下一週可擴店、招聘、併購或保留現金。投資將持續影響往後的客流、租金、人事與資產折舊。", "helper-copy manager-intro"));
+      helper("每完成七夜結算一次週轉工作底稿；下一週可擴店、招聘、併購、培養分店店長或保留現金。店長接手日常營運，總部只需決定重大事件。", "helper-copy manager-intro"));
     const summary = el("div", "decision-summary");
     append(summary, el("span", "", "可用現金"), el("b", "", money(state.coins)),
       el("span", "", "目前每夜固定營運成本"), el("b", "", money(fixedOperatingCost(createLedger()))));
@@ -243,6 +245,51 @@ export function createUI(runtime) {
     }
     append(finance, financeCopy, financeAction);
     decision.append(finance);
+    if (state.managerEvent) {
+      const incident = el("section", "manager-event-card");
+      append(incident, el("span", "manager-event-kicker", "總部決策・店長回報"),
+        el("h3", "", state.managerEvent.title),
+        el("p", "", state.managerEvent.description));
+      const choices = el("div", "manager-event-choices");
+      state.managerEvent.choices.forEach(function(choice) {
+        choices.append(button(choice.name, "resolve-manager-event", { choice: choice.id },
+          state.managerEvent.type === "equipment" && choice.id === "repair" ? state.coins < 85 :
+            (state.managerEvent.type === "complaint" && choice.id === "compensate" ? state.coins < 55 :
+              (state.managerEvent.type === "festival" && choice.id === "promote" ? state.coins < 70 : false)),
+          choice.id === "explain" || choice.id === "defer" || choice.id === "decline" ? "secondary-button" : "primary-button"));
+      });
+      incident.append(choices);
+      decision.append(incident);
+    }
+    const branches = (Array.isArray(state.outlets) ? state.outlets : []).filter(function(outlet) { return outlet.id !== "main"; });
+    const activeLocations = 1 + branches.filter(function(outlet) { return outlet.active; }).length;
+    const availableManagers = branches.filter(function(outlet) { return outlet.active && !outlet.manager; });
+    const managerPanel = el("section", "manager-hiring-panel");
+    const managerHeading = el("div", "manager-hiring-heading");
+    append(managerHeading, el("div", "", "分店自動營運"),
+      el("span", "", activeLocations + " 間營業中・店長薪資 " + money(DATA.economy.managerWage) + " / 夜"));
+    managerPanel.append(managerHeading);
+    if (!branches.length) {
+      managerPanel.append(helper("先併購一間鄰攤並替它備料、開門；夜嵐主店 + 1 間分店達到兩店規模後，就能招聘店長。", "helper-copy"));
+    } else if (activeLocations < 2) {
+      managerPanel.append(helper("至少兩間店同時營業，才會開放店長職缺。到「攤位」管理分店，先補備料並開門。", "helper-copy"));
+    } else if (!availableManagers.length) {
+      managerPanel.append(helper("目前所有營業分店都有店長；日常人事、備料節奏與營運由店長自動處理。", "helper-copy"));
+    } else {
+      const managerList = el("div", "manager-hiring-list");
+      availableManagers.forEach(function(outlet) {
+        const cost = DATA.economy.managerHireCost + branches.filter(function(item) { return item.manager; }).length * 140;
+        const row = el("div", "manager-hiring-row");
+        const copy = el("div", "manager-hiring-copy");
+        append(copy, el("b", "", outlet.name),
+          el("span", "", "招募訓練 " + money(cost) + "・每夜薪資 " + money(DATA.economy.managerWage)));
+        row.append(copy);
+        row.append(button("聘請店長", "hire-outlet-manager", { outletId: outlet.id }, state.coins < cost, "manager-hire-button"));
+        managerList.append(row);
+      });
+      managerPanel.append(managerList);
+    }
+    decision.append(managerPanel);
     const alliance = allianceStatus(true);
     if (alliance) decision.append(alliance);
     const counts = (state.acquisitionTypes || []).reduce(function(result, type) {
@@ -314,16 +361,19 @@ export function createUI(runtime) {
       parts.push(ledger([
         { label: "租金（含拓展 / 併購）", value: "−" + money(outlook.ledger.rent + outlook.ledger.expansionRent + outlook.ledger.acquisitionRent) },
         { label: "排班薪資", value: "−" + money(outlook.ledger.labor) },
+        ...(outlook.ledger.managerPayroll ? [{ label: "分店店長薪資", value: "−" + money(outlook.ledger.managerPayroll) }] : []),
         { label: "水電瓦斯", value: "−" + money(outlook.ledger.water + outlook.ledger.electricity + outlook.ledger.gas) },
+        ...(outlook.ledger.outletUtilities ? [{ label: "分店營運能源", value: "−" + money(outlook.ledger.outletUtilities) }] : []),
         ...(outlook.ledger.fees ? [{ label: "活動改善費", value: "−" + money(outlook.ledger.fees) }] : []),
         ...(outlook.ledger.marketing ? [{ label: "觀光行銷", value: "−" + money(outlook.ledger.marketing) }] : []),
         ...(outlook.ledger.preparation ? [{ label: "衛生快清", value: "−" + money(outlook.ledger.preparation) }] : []),
         ...(outlook.ledger.interest ? [{ label: "週轉金利息", value: "−" + money(outlook.ledger.interest) }] : []),
         ...(outlook.ledger.subsidies ? [{ label: "市集雨天補助", value: "+" + money(outlook.ledger.subsidies), tone: "income" }] : []),
+        ...(outlook.outletSales ? [{ label: "分店自動營收 / Bonus", value: "+" + money(outlook.outletSales), tone: "income" }] : []),
         { label: "預估食材耗用", value: "−" + money(outlook.food), tone: "outflow" },
         { label: "預估小費 / 活動 Bonus", value: "+" + money(outlook.tips + outlook.bonus), tone: "income" }
       ], { label: "預估營業淨額", value: moneyNet(outlook.net), negative: outlook.net < 0 }));
-      parts.push(helper("租金、人事與能源在開門時扣款；食材採購先扣現金，實際耗用按庫存成本入帳。"));
+      parts.push(helper("租金、人事與能源在開門時扣款；分店依備料預估自動營收。採購先扣現金，實際耗用按加權平均成本入帳。"));
       parts.push(subhead("開門前快速檢查", "一切準備好了嗎？"));
 
       const list = el("div", "guest-list");
@@ -780,6 +830,67 @@ export function createUI(runtime) {
     return fragment(nav, view());
   }
 
+  function renderOutletManagement() {
+    const branches = (Array.isArray(state.outlets) ? state.outlets : []).filter(function(outlet) { return outlet.id !== "main"; });
+    const section = el("section", "outlet-management");
+    append(section, subhead("接手攤位・分店管理", branches.length + " 間", true));
+    if (!branches.length) {
+      section.append(helper("目前只有夜嵐主店。每週經營決策選擇「併購攤販」後，接手的熟食或遊戲攤會出現在這裡，可獨立補貨、升級、開關店，再培養店長自動營運。", "helper-copy"));
+      return section;
+    }
+    branches.forEach(function(outlet) {
+      const card = el("article", "outlet-card" + (outlet.active ? " operating" : "") +
+        (selectedOutletId === outlet.id ? " selected" : ""), null,
+        { id: "outlet-card-" + outlet.id, tabIndex: -1 });
+      const heading = el("div", "outlet-card-heading");
+      const title = el("div", "outlet-card-title");
+      append(title, el("h4", "", outlet.name),
+        el("span", "outlet-status" + (outlet.active ? " open" : ""),
+          outlet.autoPaused ? "備料耗盡・自動暫停" : (outlet.active ? "營業中" : "尚未開門")));
+      const staffLine = outlet.manager
+        ? "店長自動營運・每夜薪資 " + money(DATA.economy.managerWage)
+        : "你親自照看・每夜最多一筆生意";
+      append(heading, title, el("span", "outlet-kind", outlet.type === "leisure" ? "遊戲體驗" : "熟食餐飲"));
+      const summary = el("p", "outlet-summary", staffLine + "・設備 Lv." + outlet.equipmentLevel + "・口碑 " + outlet.reputation);
+      card.append(heading, summary);
+      if (outlet.lastResult) {
+        card.append(el("div", "outlet-last-result",
+          "第 " + outlet.lastResult.day + " 夜｜" +
+          (outlet.lastResult.units ? "接待 " + outlet.lastResult.units + " 筆・營收 " + money(outlet.lastResult.sales) : "未有成交") +
+          "・分店淨額 " + (outlet.lastResult.net >= 0 ? "+" : "−") + money(Math.abs(outlet.lastResult.net))));
+      }
+      const supplies = el("div", "outlet-stock-list");
+      const choices = outlet.type === "leisure"
+        ? [{ id: "leisure", name: "體驗代幣", icon: "🎟", cost: DATA.economy.outletGameSupplyCost }]
+        : ingredients;
+      choices.forEach(function(item) {
+        const cost = getPurchasePrice(item);
+        const row = el("div", "outlet-stock-row");
+        append(row, el("span", "outlet-stock-name", item.icon + " " + item.name),
+          el("b", "outlet-stock-count", String(outlet.stock[item.id] || 0) + " 份"),
+          button("補貨 " + money(cost), "buy-outlet-stock", { outletId: outlet.id, stockId: item.id },
+            state.phase !== "prep" || state.coins < cost, "outlet-small-action"));
+        supplies.append(row);
+      });
+      const actions = el("div", "outlet-actions");
+      const available = outlet.type === "leisure" ? Number(outlet.stock.leisure) || 0 :
+        ingredients.reduce(function(sum, item) { return sum + (Number(outlet.stock[item.id]) || 0); }, 0);
+      const nextEquipmentCost = DATA.economy.outletEquipmentCosts[outlet.equipmentLevel];
+      append(actions,
+        button(outlet.active ? "暫停營業" : "補好備料後開店", "toggle-outlet", { outletId: outlet.id },
+          state.phase !== "prep" || (!outlet.active && available <= 0), "outlet-toggle-action"),
+        button(nextEquipmentCost ? "升級設備 " + money(nextEquipmentCost) : "設備已滿級", "upgrade-outlet-equipment", { outletId: outlet.id },
+          state.phase !== "prep" || !nextEquipmentCost || state.coins < nextEquipmentCost, "outlet-small-action"));
+      card.append(supplies, actions);
+      if (outlet.manager) {
+        card.append(button("解除店長・改回自營", "dismiss-outlet-manager", { outletId: outlet.id },
+          state.phase !== "prep", "outlet-manager-action"));
+      }
+      section.append(card);
+    });
+    return section;
+  }
+
   function renderStall() {
     const outlook = forecast(state);
     const staffNames = staffRoles.filter(function(person) { return state.staff[person.id]; }).map(function(person) { return person.name; });
@@ -791,6 +902,7 @@ export function createUI(runtime) {
     if (alliance) parts.push(alliance);
     const announcement = marketAnnouncement();
     if (announcement) parts.push(announcement);
+    parts.push(renderOutletManagement());
     const summary = el("div", "stall-summary-grid");
     [
       ["🥬", (state.stock.chicken || 0) + " / " + (state.stock.seafood || 0) + " / " + (state.stock.tea || 0), "雞湯・海味・茶點庫存"],
@@ -905,6 +1017,7 @@ export function createUI(runtime) {
     renderUI: renderUI,
     renderOrderChoices: renderOrderChoices,
     setTab: setTab,
+    setOutletTarget: setOutletTarget,
     setTabAndRender: setTabAndRender,
     setJournalView: setJournalView,
     setStatementView: setStatementView,

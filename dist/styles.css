@@ -198,6 +198,45 @@
 .stall-summary small { color: #98a49a; font-size: var(--type-caption); line-height: 1.4; }
 .stall-actions { display: grid; gap: 7px; margin: 12px 0; }
 .stall-actions .secondary-button { justify-content: flex-start; text-align: left; }
+.outlet-management { display: grid; gap: var(--space-2); margin: 12px 0 18px; }
+.outlet-card { display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid #ffffff17; border-radius: 13px; background: #ffffff06; }
+.outlet-card.operating { border-color: #91bd9c55; background: linear-gradient(145deg,#263932,#1c2b2b); }
+.outlet-card.selected, .outlet-card:focus { outline: 2px solid var(--gold); outline-offset: 2px; }
+.outlet-card-heading, .outlet-card-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.outlet-card-title { justify-content: flex-start; flex-wrap: wrap; }
+.outlet-card-title h4 { margin: 0; color: #f0e4c6; font-size: var(--type-body); }
+.outlet-status, .outlet-kind { flex: 0 0 auto; padding: 4px 8px; border: 1px solid #ffffff18; border-radius: 999px; color: #b1b9ac; font-size: var(--type-caption); }
+.outlet-status.open { border-color: #91bd9c55; color: #cae2c4; background: #91bd9c16; }
+.outlet-kind { color: #e5d39f; background: #d6bb6c10; }
+.outlet-summary, .outlet-last-result { margin: 0; color: #b2c0b3; font-size: var(--type-caption); line-height: 1.55; }
+.outlet-last-result { padding: var(--space-2); border-radius: 8px; color: #e4d7ad; background: #0c171844; font-variant-numeric: tabular-nums; }
+.outlet-stock-list { display: grid; gap: var(--space-1); }
+.outlet-stock-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: var(--space-2); min-width: 0; padding: var(--space-2) 0; border-top: 1px solid #ffffff0d; }
+.outlet-stock-name { overflow-wrap: anywhere; color: #cbd5c4; font-size: var(--type-caption); }
+.outlet-stock-count { color: #e9d69e; font-size: var(--type-caption); white-space: nowrap; }
+.outlet-actions { display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--space-2); }
+.outlet-small-action, .outlet-toggle-action, .manager-hire-button { min-width: 0; min-height: 44px; padding: 0 var(--space-2); border: 1px solid #c1d2b244; border-radius: 9px; color: #e5ead8; background: #8ba6841b; font: inherit; font-size: var(--type-caption); font-weight: 800; cursor: pointer; }
+.outlet-toggle-action { border-color: #d6bb6c55; color: #f0d99e; background: #d6bb6c12; }
+.outlet-manager-action { width: 100%; min-height: 44px; padding: 0 var(--space-2); border: 1px solid #ffffff1b; border-radius: 9px; color: #cbd5c4; background: #ffffff08; font: inherit; font-size: var(--type-caption); font-weight: 750; cursor: pointer; }
+.outlet-manager-action:hover:not(:disabled) { border-color: #d6bb6c55; background: #d6bb6c10; }
+.outlet-manager-action:disabled { opacity: .48; cursor: not-allowed; }
+.outlet-small-action:hover:not(:disabled), .outlet-toggle-action:hover:not(:disabled), .manager-hire-button:hover:not(:disabled) { border-color: #e1ca85aa; background: #d6bb6c22; }
+.outlet-small-action:disabled, .outlet-toggle-action:disabled, .manager-hire-button:disabled { opacity: .48; cursor: not-allowed; }
+.manager-hiring-panel { display: grid; gap: var(--space-2); padding: var(--space-3); margin: var(--space-2) 0; border: 1px solid #7f9a8744; border-radius: 12px; background: linear-gradient(125deg,#253a36,#1c2c2c); }
+.manager-hiring-heading { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); color: #e8e5d4; font-size: var(--type-body); font-weight: 800; }
+.manager-hiring-heading span { color: #9fb2a3; font-size: var(--type-caption); font-weight: 600; text-align: right; }
+.manager-hiring-list { display: grid; gap: var(--space-2); }
+.manager-hiring-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid #ffffff12; }
+.manager-hiring-copy { display: grid; gap: var(--space-1); min-width: 0; }
+.manager-hiring-copy b { overflow-wrap: anywhere; color: #e8d59c; font-size: var(--type-caption); }
+.manager-hiring-copy span { color: #b2c1b4; font-size: var(--type-caption); line-height: 1.5; }
+.manager-hire-button { color: #25342b; border-color: #e8d39a; background: linear-gradient(135deg,#f0d99c,#cfb475); white-space: nowrap; }
+.manager-event-card { display: grid; gap: var(--space-2); padding: var(--space-3); margin: var(--space-3) 0; border: 1px solid #cf9b6d66; border-radius: 13px; background: linear-gradient(135deg,#44362e,#2a2e2a); }
+.manager-event-kicker { color: #f0c98e; font-size: var(--type-caption); font-weight: 850; letter-spacing: .08em; }
+.manager-event-card h3 { margin: 0; color: #f2e8cf; font-size: var(--type-body); }
+.manager-event-card p { margin: 0; color: #d0c7b2; font-size: var(--type-caption); line-height: 1.6; }
+.manager-event-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2); }
+.manager-event-choices button { min-height: 48px; }
 .guide-card { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border: 1px solid #dfc37e33; border-radius: 12px; color: #bec9b9; background: linear-gradient(135deg, #d9bd7018, #ffffff06); font-size: var(--type-body); line-height: 1.55; }
 .guide-card b { color: #f2dcaa; font-size: var(--type-body); }
 
@@ -397,5 +436,12 @@ body { font-size: var(--type-body); }
   .market-announcement-choices, .acquisition-targets { grid-template-columns: 1fr; }
   .finance-panel { align-items: stretch; flex-direction: column; }
   .finance-action { width: 100%; }
+  .outlet-stock-row { grid-template-columns: minmax(0,1fr) auto; }
+  .outlet-stock-row .outlet-small-action { grid-column: 1 / -1; width: 100%; }
+  .manager-hiring-heading { align-items: flex-start; flex-direction: column; }
+  .manager-hiring-heading span { text-align: left; }
+  .manager-hiring-row { grid-template-columns: 1fr; }
+  .manager-hire-button { width: 100%; }
+  .manager-event-choices { grid-template-columns: 1fr; }
   .modal { padding: var(--space-4); }
 }

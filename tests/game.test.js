@@ -383,6 +383,82 @@ test("hiring improves tips while acquiring a stall adds rent, visitors, and repu
   assert.equal(acquired.fame, 43);
 });
 
+test("acquired stalls can be stocked, opened, upgraded, and staffed with a manager after reaching two operating locations", () => {
+  const state = freshState();
+  state.coins = 2600;
+  postJournal(state, "測試開業注資", [{ account: "1000", debit: 1120 }, { account: "3000", credit: 1120 }]);
+  state.day = 8;
+  state.phase = "decision";
+  const engine = createGameEngine(state);
+  assert.equal(engine.chooseWeeklyDecision("acquire", "food").ok, true);
+  const branch = state.outlets.find((outlet) => outlet.id === "acquired-1");
+  assert.equal(branch.active, false);
+  assert.equal(engine.buyOutletStock(branch.id, "chicken").ok, true);
+  assert.equal(engine.buyOutletStock(branch.id, "chicken").ok, true);
+  assert.equal(branch.stock.chicken, 2);
+  assert.equal(engine.toggleOutlet(branch.id).ok, true);
+  assert.equal(branch.active, true);
+  assert.equal(engine.upgradeOutletEquipment(branch.id).ok, true);
+  assert.equal(branch.equipmentLevel, 1);
+
+  state.day = 15;
+  state.phase = "decision";
+  assert.equal(engine.hireOutletManager(branch.id).ok, true);
+  assert.equal(branch.manager, true);
+  assert.equal(state.phase, "prep");
+  assert.equal(state.accounting.journal.some((entry) => entry.description.includes("店長")), true);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(branch.stock.chicken, 0);
+  assert.equal(branch.lastResult.units, 2);
+  assert.equal(branch.active, false);
+  assert.equal(branch.autoPaused, true);
+  assert.equal(state.ledger.sales >= DATA.economy.outletMealPrice * 2, true);
+  assert.equal(state.ledger.managerPayroll, DATA.economy.managerWage);
+  assert.equal(state.accounting.journal.some((entry) => entry.description.includes("熟食同業・分店 1")), true);
+  assert.equal(state.accounting.balances["1000"], state.coins);
+  state.phase = "prep";
+  assert.equal(engine.dismissOutletManager(branch.id).ok, true);
+  assert.equal(branch.manager, false);
+  assert.equal(createLedger(state).managerPayroll, 0);
+});
+
+test("store managers surface weekly major decisions while keeping routine operations automated", () => {
+  const state = freshState();
+  const branch = {
+    id: "acquired-1", name: "熟食同業・分店 1", type: "food", active: true, manager: true,
+    equipmentLevel: 0, stock: { chicken: 0, seafood: 0, tea: 0, leisure: 0 },
+    stockCost: { chicken: 42, seafood: 78, tea: 25, leisure: 32 }, nextNightBonus: 0,
+    efficiencyPenalty: 0, reputation: 50, lastResult: null
+  };
+  state.acquisitions = 1;
+  state.acquisitionTypes = ["food"];
+  state.outlets.push(branch);
+  state.day = 7;
+  state.phase = "report";
+  state.ledger = createLedger(state);
+  state.reportChoice = "paperboat";
+  const engine = createGameEngine(state);
+  assert.equal(engine.nextNight().ok, true);
+  assert.equal(state.day, 8);
+  assert.equal(state.phase, "decision");
+  assert.equal(state.managerEvent.type, "equipment");
+  assert.equal(engine.chooseWeeklyDecision("hold").ok, false);
+  assert.equal(engine.resolveManagerEvent("defer").ok, true);
+  assert.equal(branch.efficiencyPenalty, 1);
+  assert.equal(engine.chooseWeeklyDecision("hold").ok, true);
+  assert.equal(engine.chooseMarketCard("self-check").ok, true);
+  assert.equal(state.phase, "prep");
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(branch.lastResult.units, 0);
+});
+
+test("legacy acquisition counts migrate into individually manageable outlets", () => {
+  const migrated = normalizeState({ acquisitions: 2, acquisitionTypes: ["food", "leisure"] });
+  assert.equal(migrated.outlets.length, 3);
+  assert.deepEqual(migrated.outlets.slice(1).map((outlet) => outlet.type), ["food", "leisure"]);
+  assert.equal(migrated.outlets.slice(1).every((outlet) => !outlet.active && !outlet.manager), true);
+});
+
 test("inspection events charge for missing equipment and reward a prepared stall", () => {
   const unprepared = freshState();
   unprepared.day = 8;

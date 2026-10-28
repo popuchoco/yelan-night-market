@@ -43,7 +43,14 @@ export const DATA = Object.freeze({
     allianceExtraGuest: 1,
     touristPromotionCost: 100,
     hygieneQuickCleanCost: 55,
-    rainSubsidy: 60
+    rainSubsidy: 60,
+    managerHireCost: 420,
+    managerWage: 62,
+    outletUtilities: 18,
+    outletMealPrice: 150,
+    outletGamePrice: 120,
+    outletGameSupplyCost: 32,
+    outletEquipmentCosts: [260, 420]
   },
   camera: {
     defaultYaw: 0,

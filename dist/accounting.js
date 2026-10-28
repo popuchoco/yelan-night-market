@@ -161,7 +161,9 @@ export function recordOperatingClose(state, ledger) {
   const expenseLines = [
     ["5200", ledger.rent + (ledger.expansionRent || 0) + (ledger.acquisitionRent || 0)],
     ["5100", ledger.labor],
+    ["5100", ledger.managerPayroll || 0],
     ["5300", (ledger.water || 0) + ledger.electricity + ledger.gas],
+    ["5300", ledger.outletUtilities || 0],
     ["5400", (ledger.fees || 0) + (ledger.preparation || 0)],
     ["5410", ledger.marketing || 0],
     ["5700", ledger.interest || 0]

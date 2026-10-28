@@ -7,6 +7,20 @@ export function createObjectRenderer(api) {
 
   function drawStall(stall, time) {
     const scale = view.scale;
+    const acquiredOutlets = (state.outlets || []).filter(function(item) { return item.id !== "main"; });
+    const availableStalls = DATA.stalls.filter(function(item) { return !item.main; });
+    const claimedStalls = [];
+    const acquiredStalls = acquiredOutlets.map(function(outlet) {
+      let index = availableStalls.findIndex(function(item, candidate) {
+        return !claimedStalls.includes(candidate) && (outlet.type === "leisure" ? item.id === "toy" : item.id !== "toy");
+      });
+      if (index < 0) index = availableStalls.findIndex(function(item, candidate) { return !claimedStalls.includes(candidate); });
+      if (index < 0) return null;
+      claimedStalls.push(index);
+      return availableStalls[index];
+    }).filter(Boolean);
+    const acquiredIndex = acquiredStalls.findIndex(function(item) { return item.id === stall.id; });
+    const outlet = acquiredIndex >= 0 ? acquiredOutlets[acquiredIndex] : null;
     const shadow = [
       project(stall.x - 18, 0, stall.z - 14),
       project(stall.x + stall.w + 18, 0, stall.z - 14),
@@ -117,14 +131,13 @@ export function createObjectRenderer(api) {
     const sign = project(stall.x + stall.w / 2, stall.h + 31, stall.z + stall.d * 0.43);
     drawBillboard(sign, stall.name, !!stall.main, stall.roof);
     if (!stall.main) {
-      const acquiredStalls = DATA.stalls.filter(function(item) { return !item.main; }).slice(0, Number(state.acquisitions) || 0);
-      if (acquiredStalls.some(function(item) { return item.id === stall.id; })) {
+      if (acquiredIndex >= 0) {
         drawRoundRect(sign.x + 27 * scale, sign.y - 15 * scale, 16 * scale, 16 * scale, 5 * scale, "#d8b665", "#fff0ba");
         ctx.fillStyle = "#332d20";
         ctx.font = "800 " + Math.max(8, 9 * scale) + "px system-ui";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("合", sign.x + 27 * scale, sign.y - 14 * scale);
+        ctx.fillText(outlet?.manager ? "店" : (outlet?.active ? "營" : "休"), sign.x + 27 * scale, sign.y - 14 * scale);
       }
     }
     const lanternCount = stall.main ? 3 : 2;
@@ -148,7 +161,7 @@ export function createObjectRenderer(api) {
       ctx.globalAlpha = 1;
     }
 
-    if (stall.main) {
+    if (stall.main || acquiredIndex >= 0) {
       const corners = [
         project(stall.x - 5, stall.h + 30, stall.z - 10),
         project(stall.x + stall.w + 5, stall.h + 30, stall.z - 10),
@@ -160,8 +173,8 @@ export function createObjectRenderer(api) {
       onStallBounds({
         left: Math.min.apply(null, xs) - 12, top: Math.min.apply(null, ys) - 12,
         right: Math.max.apply(null, xs) + 12, bottom: Math.max.apply(null, ys) + 12
-      });
-      if (state.phase === "prep") {
+      }, { type: stall.main ? "main" : "outlet", outletId: outlet?.id || null, outletName: outlet?.name || stall.name });
+      if (stall.main && state.phase === "prep") {
         const marker = project(stall.x + stall.w * 0.5, stall.h + 96, stall.z + stall.d * 0.5);
         const bounce = Math.sin(time / 260) * 3 * scale;
         ctx.fillStyle = "#f4d588";

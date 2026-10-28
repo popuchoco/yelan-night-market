@@ -24,7 +24,7 @@ export function createScene(runtime) {
   var view = { w: 0, h: 0, scale: 1, dpr: 1 };
   var marketStalls = DATA.stalls;
   var mainStall = marketStalls.find(function(stall) { return stall.main; });
-  var stallHitBounds = null;
+  var stallHitBounds = [];
   var actorHits = [];
   var rainSeed = [];
   var smokeSeed = [];
@@ -232,7 +232,7 @@ export function createScene(runtime) {
       const objectRenderer = createObjectRenderer({
         ctx: ctx, view: view, project: project, pathPolygon: pathPolygon, drawBox: drawBox,
         drawRoundRect: drawRoundRect, drawBillboard: drawBillboard, state: state, DATA: DATA,
-        onStallBounds: function(bounds) { stallHitBounds = bounds; },
+        onStallBounds: function(bounds, target) { stallHitBounds.push({ ...bounds, target: target || { type: "main" } }); },
         recordActorHit: function(hit) { actorHits.push(hit); }
       });
       const drawStall = objectRenderer.drawStall;
@@ -248,6 +248,7 @@ export function createScene(runtime) {
         ctx.setTransform(view.dpr,0,0,view.dpr,0,0);
         ctx.clearRect(0,0,view.w,view.h);
         actorHits=[];
+        stallHitBounds=[];
         drawGround();
         var items=[];
         marketStalls.forEach(function(stall){items.push({depth:cameraDepth(stall.x+stall.w/2,stall.z+stall.d/2),draw:function(){drawStall(stall,time);}});});
@@ -297,7 +298,14 @@ export function createScene(runtime) {
       var hit = actorHits[i], dx = x - hit.x, dy = y - hit.y;
       if (dx * dx + dy * dy <= hit.r * hit.r) return { type: "guest", index: hit.index };
     }
-    if (stallHitBounds && x >= stallHitBounds.left && x <= stallHitBounds.right && y >= stallHitBounds.top && y <= stallHitBounds.bottom) return { type: "stall" };
+    for (var j = stallHitBounds.length - 1; j >= 0; j--) {
+      var stallHit = stallHitBounds[j];
+      if (x >= stallHit.left && x <= stallHit.right && y >= stallHit.top && y <= stallHit.bottom) {
+        return stallHit.target.type === "outlet"
+          ? { type: "outlet", outletId: stallHit.target.outletId, outletName: stallHit.target.outletName }
+          : { type: "stall" };
+      }
+    }
     return null;
   }
 

@@ -100,7 +100,7 @@ export const CAMPAIGN_CALENDAR = Object.freeze(
 export const WEEKLY_OPTIONS = Object.freeze({
   expand: { id: "expand", name: "擴大店家", icon: "🪑", max: 9, baseCost: 460, stepCost: 90, recurring: 24, label: "一次性裝修費", effect: "增加座位與客流、舒適度 +5；每夜租金 +NT$ 24。最多擴成九桌，會列入設備資產與折舊。" },
   hire: { id: "hire", name: "招聘人手", icon: "🧑🏻‍🍳", max: 6, baseCost: 360, stepCost: 120, recurring: 90, label: "一次性招募與訓練", effect: "每夜薪資 +NT$ 90，服務小費與尖峰應對提升。最多六位夥伴。" },
-  acquire: { id: "acquire", name: "併購攤販", icon: "🏮", max: 4, baseCost: 760, stepCost: 180, recurring: 38, label: "一次性併購費", effect: "選擇熟食或遊戲同業；接手後增加客流、口碑 +5，每夜租金 +NT$ 38。同類攤位併購兩次並擴店，可解鎖夜市品牌聯盟。" },
+  acquire: { id: "acquire", name: "併購攤販", icon: "🏮", max: 4, baseCost: 760, stepCost: 180, recurring: 38, label: "一次性併購費", effect: "選擇熟食或遊戲同業；接手後會成為可獨立管理的分店，可備料、升級設備與開關營業。每夜租金 +NT$ 38；同類攤位併購兩次並擴店，可解鎖夜市品牌聯盟。" },
   hold: { id: "hold", name: "暫不投資", icon: "🧭", max: Infinity, baseCost: 0, stepCost: 0, recurring: 0, label: "保留現金", effect: "維持現有規模，不增加固定成本；把資金留給備料與設備。" }
 });
 

@@ -23,12 +23,14 @@ export function createGameEngine(state) {
   function openDoors() {
     if (state.phase !== "prep") return response(false, "現在不是開門準備時段。");
     if (todayMarketCard(state) && !marketCardChoice(state)) return response(false, "先處理今晚的市集公告卡，再掛燈迎客。", false);
+    if (state.managerEvent) return response(false, "先處理店長送來的重大營運事件，再開始今晚營業。", false);
     state.phase = "service";
     state.customerIndex = 0;
     state.revenue = 0;
     state.results = [];
     state.reportChoice = null;
     state.ledger = createLedger(state);
+    simulateOutletOperations();
     const fixed = fixedOperatingCost(state.ledger);
     state.coins -= fixed;
     state.coins += state.ledger.subsidies || 0;
@@ -209,6 +211,187 @@ export function createGameEngine(state) {
     return response(true, state.staff[role] ? "已加入今晚班表。" : "改由老闆代班，薪資省下但服務小費會下降。");
   }
 
+  function findOutlet(outletId) {
+    return (Array.isArray(state.outlets) ? state.outlets : []).find((outlet) => outlet.id === outletId && outlet.id !== "main");
+  }
+
+  function buyOutletStock(outletId, stockId) {
+    if (state.phase !== "prep") return response(false, "分店備料只能在開門前處理。", false);
+    const outlet = findOutlet(outletId);
+    if (!outlet) return response(false, "找不到這間分店。", false);
+    const item = outlet.type === "leisure"
+      ? (stockId === "leisure" ? { id: "leisure", name: "體驗代幣", cost: DATA.economy.outletGameSupplyCost } : null)
+      : DATA.ingredients.find((ingredient) => ingredient.id === stockId);
+    if (!item) return response(false, "這間分店不能採購該項備料。", false);
+    const price = getPurchasePrice(state, item);
+    if (state.coins < price) return response(false, "現金不足，暫時無法補進分店備料。", false);
+    const quantity = Math.max(0, Number(outlet.stock[stockId]) || 0);
+    const oldCost = Math.max(0, Number(outlet.stockCost[stockId]) || item.cost);
+    outlet.stockCost[stockId] = Math.round((quantity * oldCost + price) / (quantity + 1));
+    outlet.stock[stockId] = quantity + 1;
+    state.coins -= price;
+    state.shiftPurchases = (state.shiftPurchases || 0) + price;
+    recordInventoryPurchase(state, outlet.name + "｜" + item.name, price);
+    return response(true, outlet.name + "補進 1 份" + item.name + "，已列入存貨與現金流。");
+  }
+
+  function toggleOutlet(outletId) {
+    if (state.phase !== "prep") return response(false, "分店營業狀態只能在開門前調整。", false);
+    const outlet = findOutlet(outletId);
+    if (!outlet) return response(false, "找不到這間分店。", false);
+    if (!outlet.active) {
+      const available = outlet.type === "leisure" ? Number(outlet.stock.leisure) || 0 :
+        DATA.ingredients.reduce((sum, item) => sum + (Number(outlet.stock[item.id]) || 0), 0);
+      if (!available) return response(false, "先補進至少一份營運備料，才能開啟分店。", false);
+      outlet.active = true;
+      outlet.autoPaused = false;
+      return response(true, outlet.name + "已開門；" + (outlet.manager ? "店長會自動排班與營運。" : "目前由你兼顧，分店每夜最多接待一筆生意。"));
+    }
+    outlet.active = false;
+    outlet.autoPaused = false;
+    return response(true, outlet.name + "今晚暫停營業；已聘店長的薪資仍會照常列帳。");
+  }
+
+  function dismissOutletManager(outletId) {
+    if (state.phase !== "prep") return response(false, "店長人事只能在開門前調整。", false);
+    const outlet = findOutlet(outletId);
+    if (!outlet || !outlet.manager) return response(false, "這間分店目前沒有受聘店長。", false);
+    outlet.manager = false;
+    return response(true, outlet.name + "已改由你親自照看；往後每夜店長薪資停止，但接待量回到每夜一筆。");
+  }
+
+  function upgradeOutletEquipment(outletId) {
+    if (state.phase !== "prep") return response(false, "分店設備只能在開門前添購。", false);
+    const outlet = findOutlet(outletId);
+    if (!outlet) return response(false, "找不到這間分店。", false);
+    const level = Number(outlet.equipmentLevel) || 0;
+    const cost = DATA.economy.outletEquipmentCosts[level];
+    if (typeof cost !== "number") return response(false, "這間分店的營運設備已達最高級。", false);
+    if (state.coins < cost) return response(false, "現金不足，無法添購分店設備。", false);
+    state.coins -= cost;
+    outlet.equipmentLevel = level + 1;
+    recordAssetPurchase(state, { id: outlet.id + "-equipment-" + (level + 1) + "-day-" + state.day,
+      name: outlet.name + "｜營運設備 Lv." + (level + 1), cost,
+      usefulLifeDays: DATA.accounting.equipmentUsefulLifeDays,
+      residualValue: Math.round(cost * DATA.accounting.equipmentResidualRate) });
+    return response(true, outlet.name + "設備升至 Lv." + (level + 1) + "；自動營運的單筆收入提高。");
+  }
+
+  function hireOutletManager(outletId) {
+    if (state.phase !== "decision") return response(false, "店長招聘安排在每週經營決策時處理。", false);
+    if (state.managerEvent) return response(false, "先決定如何處理店長回報的重大事件。", false);
+    const outlet = findOutlet(outletId);
+    if (!outlet) return response(false, "找不到這間分店。", false);
+    const operatingLocations = 1 + (Array.isArray(state.outlets) ? state.outlets.filter((item) => item.id !== "main" && item.active).length : 0);
+    if (operatingLocations < 2) return response(false, "至少要有兩間營業中的店家，才能建立店長職缺。", false);
+    if (!outlet.active) return response(false, "分店目前尚未開門，先備料並開始營業，再聘請店長。", false);
+    if (outlet.manager) return response(false, "這間分店已經有店長。", false);
+    const cost = DATA.economy.managerHireCost + (state.outlets.filter((item) => item.manager).length * 140);
+    if (state.coins < cost) return response(false, "現金不足，無法支付店長招募與訓練費。", false);
+    state.coins -= cost;
+    outlet.manager = true;
+    recordExpense(state, "5110", "招募與訓練｜" + outlet.name + "店長", cost);
+    state.decisions.push({ day: state.day, id: "manager", name: "聘請店長｜" + outlet.name, cost, outletId: outlet.id });
+    state.phase = "prep";
+    state.selectedDish = (state.day - 1) % DATA.dishes.length;
+    return response(true, outlet.name + "店長到任：往後每夜薪資 " + money(DATA.economy.managerWage) + "，可自動排班、補足出餐並處理日常營運；重大事件仍由你拍板。");
+  }
+
+  function resolveManagerEvent(choice) {
+    if (state.phase !== "decision" || !state.managerEvent) return response(false, "目前沒有待決定的店長事件。", false);
+    const incident = state.managerEvent;
+    const outlet = findOutlet(incident.outletId);
+    if (!outlet) { state.managerEvent = null; return response(false, "事件所屬分店已不存在，已清除此筆事件。", false); }
+    if (incident.type === "equipment" && choice === "repair") {
+      const cost = 85;
+      if (state.coins < cost) return response(false, "現金不足；可選擇讓分店先以降載方式營業。", false);
+      state.coins -= cost;
+      recordExpense(state, "5400", "設備維護｜" + outlet.name, cost);
+      outlet.efficiencyPenalty = 0;
+    } else if (incident.type === "equipment" && choice === "defer") {
+      outlet.efficiencyPenalty = 1;
+    } else if (incident.type === "complaint" && choice === "compensate") {
+      const cost = 55;
+      if (state.coins < cost) return response(false, "現金不足，請選擇由店長說明處理。", false);
+      state.coins -= cost;
+      recordExpense(state, "5500", "分店客訴補償｜" + outlet.name, cost);
+      outlet.reputation = capAt(outlet.reputation + 3, 100);
+    } else if (incident.type === "complaint" && choice === "explain") {
+      outlet.reputation = Math.max(0, outlet.reputation - 2);
+    } else if (incident.type === "festival" && choice === "promote") {
+      const cost = 70;
+      if (state.coins < cost) return response(false, "現金不足，無法支付分店慶典宣傳費。", false);
+      state.coins -= cost;
+      recordExpense(state, "5410", "分店慶典宣傳｜" + outlet.name, cost);
+      outlet.nextNightBonus = (Number(outlet.nextNightBonus) || 0) + 130;
+    } else if (incident.type === "festival" && choice === "decline") {
+      outlet.nextNightBonus = 0;
+    } else return response(false, "請選擇一項重大事件處理方式。", false);
+    state.managerEvent = null;
+    return response(true, outlet.name + "的重大事件已依你的決策處理；一般營運仍由店長自動進行。");
+  }
+
+  function simulateOutletOperations() {
+    (Array.isArray(state.outlets) ? state.outlets : []).filter((outlet) => outlet.id !== "main").forEach((outlet) => {
+      const wasActive = !!outlet.active;
+      let sales = 0;
+      let food = 0;
+      let units = 0;
+      if (outlet.active) {
+        const capacity = outlet.manager ? (outlet.efficiencyPenalty > 0 ? 1 : 2) : 1;
+        for (let index = 0; index < capacity; index++) {
+          let supply;
+          let supplyName;
+          let price;
+          if (outlet.type === "leisure") {
+            if ((Number(outlet.stock.leisure) || 0) <= 0) break;
+            supply = "leisure";
+            supplyName = "體驗代幣";
+            price = DATA.economy.outletGamePrice + (Number(outlet.equipmentLevel) || 0) * 10;
+          } else {
+            const item = DATA.ingredients.find((ingredient) => (Number(outlet.stock[ingredient.id]) || 0) > 0);
+            if (!item) break;
+            supply = item.id;
+            supplyName = item.name;
+            price = DATA.economy.outletMealPrice + (Number(outlet.equipmentLevel) || 0) * 12;
+          }
+          const cost = Math.max(0, Number(outlet.stockCost[supply]) || DATA.economy.outletGameSupplyCost);
+          outlet.stock[supply] = Math.max(0, (Number(outlet.stock[supply]) || 0) - 1);
+          state.coins += price;
+          state.ledger.sales += price;
+          state.ledger.food += cost;
+          sales += price;
+          food += cost;
+          units += 1;
+          recordSale(state, { dishName: outlet.name + "｜" + supplyName, price, foodCost: cost });
+        }
+        const bonus = Math.max(0, Number(outlet.nextNightBonus) || 0);
+        if (bonus) {
+          state.coins += bonus;
+          state.ledger.bonus += bonus;
+          sales += bonus;
+          recordSale(state, { dishName: outlet.name + "｜活動 Bonus", otherIncome: bonus });
+        }
+        outlet.nextNightBonus = 0;
+        const remainingStock = outlet.type === "leisure"
+          ? Number(outlet.stock.leisure) || 0
+          : DATA.ingredients.reduce((sum, item) => sum + (Number(outlet.stock[item.id]) || 0), 0);
+        if (remainingStock <= 0) {
+          outlet.active = false;
+          outlet.autoPaused = true;
+        }
+      }
+      outlet.efficiencyPenalty = 0;
+      outlet.lastResult = {
+        day: state.day, units, sales,
+        food, utilities: wasActive ? DATA.economy.outletUtilities : 0,
+        managerPayroll: outlet.manager ? DATA.economy.managerWage : 0,
+        rent: 38,
+        net: sales - food - (wasActive ? DATA.economy.outletUtilities : 0) - (outlet.manager ? DATA.economy.managerWage : 0) - 38
+      };
+    });
+  }
+
   function selectDish(index) {
     if (state.phase !== "prep") return response(false, "開門後不能更換招牌菜。", false);
     const selected = Number(index);
@@ -234,6 +417,7 @@ export function createGameEngine(state) {
 
   function chooseWeeklyDecision(id, targetType = "food") {
     if (state.phase !== "decision") return response(false, "目前不是本週投資決策時段。", false);
+    if (state.managerEvent) return response(false, "先處理店長回報的重大營運事件，再決定本週投資。", false);
     const option = WEEKLY_OPTIONS[id];
     const cost = weeklyOptionCost(state, id);
     if (!option || cost === null) return response(false, "這項發展已達目前場景容量，請選其他方向。", false);
@@ -253,6 +437,14 @@ export function createGameEngine(state) {
     } else if (id === "acquire") {
       state.acquisitions += 1;
       state.acquisitionTypes.push(targetType);
+      const stock = Object.fromEntries(DATA.ingredients.map((item) => [item.id, 0]));
+      stock.leisure = 0;
+      const stockCost = Object.fromEntries(DATA.ingredients.map((item) => [item.id, item.cost]));
+      stockCost.leisure = DATA.economy.outletGameSupplyCost;
+      state.outlets.push({ id: "acquired-" + state.acquisitions,
+        name: ACQUISITION_TYPES[targetType].name + "・分店 " + state.acquisitions, type: targetType,
+        active: false, manager: false, equipmentLevel: 0, stock, stockCost, nextNightBonus: 0,
+        efficiencyPenalty: 0, reputation: 50, autoPaused: false, lastResult: null });
       state.fame = capAt(state.fame + 5, 100);
       state.regulars = capAt(state.regulars + 1, 24);
       recordAssetPurchase(state, { id: "concession-" + state.acquisitions + "-day-" + state.day,
@@ -301,6 +493,17 @@ export function createGameEngine(state) {
     state.day = finishedDay + 1;
     const weeklyDecision = isWeeklyDecisionDay(state.day);
     state.phase = weeklyDecision ? "decision" : "prep";
+    if (weeklyDecision && state.outlets.some((outlet) => outlet.id !== "main" && outlet.manager && outlet.active)) {
+      const managerBranches = state.outlets.filter((outlet) => outlet.id !== "main" && outlet.manager && outlet.active);
+      const outlet = managerBranches[Math.floor((state.day / 7) % managerBranches.length)];
+      const type = ["equipment", "complaint", "festival"][Math.floor((state.day - 8) / 7) % 3];
+      const incidents = {
+        equipment: { title: "設備開始異音", description: outlet.name + "回報爐台運轉不穩。要安排打烊後維修，或讓店長下週先降載營運？", choices: [{ id: "repair", name: "安排維修・NT$ 85" }, { id: "defer", name: "暫緩處理・下週少接一單" }] },
+        complaint: { title: "分店客訴升級", description: outlet.name + "遇到一位不滿排隊安排的客人。由總部核准補償，或請店長當面說明？", choices: [{ id: "compensate", name: "核准補償・NT$ 55・口碑回升" }, { id: "explain", name: "由店長說明・不支出" }] },
+        festival: { title: "收到慶典合作邀約", description: outlet.name + "獲邀參與下週夜市慶典；可以投入宣傳換取營收 Bonus，或維持日常節奏。", choices: [{ id: "promote", name: "接受邀約・NT$ 70・下夜 Bonus +NT$ 130" }, { id: "decline", name: "婉拒邀約・不增加成本" }] }
+      };
+      state.managerEvent = { ...incidents[type], id: "manager-event-" + state.day, type, outletId: outlet.id };
+    }
     state.selectedDish = (state.day - 1) % DATA.dishes.length;
     if (monthlyClose) return response(true, "第 " + monthlyClose.period + " 期已結帳，財務報表與本期故事走向「" + monthlyClose.outcome.title + "」已歸檔。夜市持續營業，第 " + state.day + " 夜開始。" + (weeklyClose?.balanced ? " 本週試算平衡。" : ""));
     if (weeklyClose) return response(true, "第 " + weeklyClose.week + " 週工作底稿已歸檔，試算" + (weeklyClose.balanced ? "平衡" : "待核對") + "；新的一週開始前，請選擇經營方向。");
@@ -317,6 +520,7 @@ export function createGameEngine(state) {
   }
 
   return { openDoors, chooseMarketCard, borrowWorkingCapital, repayWorkingCapital, serveDish, resolveComplaint, buyStock, upgradeEquipment, buyUpgrade, toggleStaff, selectDish, chooseStory, chooseWeeklyDecision, nextNight, restartCampaign,
+    buyOutletStock, toggleOutlet, upgradeOutletEquipment, hireOutletManager, dismissOutletManager, resolveManagerEvent,
     getEvent: event, getGuests: guests, getStaffCost: () => staffCost(state), getIncome: () => state.ledger ? ledgerIncome(state.ledger) : 0 };
 }
 
@@ -426,6 +630,15 @@ function boot() {
     const hit = scene.hitTest(event.clientX - rect.left, event.clientY - rect.top);
     if (hit && hit.type === "guest") { openOrder(hit.index); return; }
     if (hit && hit.type === "stall") { ui.setTab("stall"); renderUI(); toast("攤位工作台已開啟：備料、設備與班表都在這裡。"); return; }
+    if (hit && hit.type === "outlet") {
+      ui.setOutletTarget(hit.outletId);
+      ui.setTab("stall");
+      renderUI();
+      const card = document.getElementById("outlet-card-" + hit.outletId);
+      if (card) { card.focus({ preventScroll: true }); card.scrollIntoView({ block: "nearest" }); }
+      toast(hit.outletName + "管理已開啟：可在右側補貨、升級或查看店長營運。");
+      return;
+    }
     toast("夜市巷弄裡，還有鄰攤與往來的人潮。");
   }
 
@@ -454,6 +667,12 @@ function boot() {
     if (action === "close-order") closeOrder();
     if (action === "select-dish") showResult(engine.selectDish(button.dataset.index));
     if (action === "buy-stock") showResult(engine.buyStock(button.dataset.id));
+    if (action === "buy-outlet-stock") showResult(engine.buyOutletStock(button.dataset.outletId, button.dataset.stockId));
+    if (action === "toggle-outlet") showResult(engine.toggleOutlet(button.dataset.outletId));
+    if (action === "upgrade-outlet-equipment") showResult(engine.upgradeOutletEquipment(button.dataset.outletId));
+    if (action === "hire-outlet-manager") showResult(engine.hireOutletManager(button.dataset.outletId));
+    if (action === "dismiss-outlet-manager") showResult(engine.dismissOutletManager(button.dataset.outletId));
+    if (action === "resolve-manager-event") showResult(engine.resolveManagerEvent(button.dataset.choice));
     if (action === "upgrade-equipment") showResult(engine.upgradeEquipment(button.dataset.id));
     if (action === "buy-upgrade") showResult(engine.buyUpgrade(button.dataset.id));
     if (action === "toggle-staff") showResult(engine.toggleStaff(button.dataset.role));
