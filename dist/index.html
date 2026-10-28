@@ -43,6 +43,8 @@
         <div class="world-hint"><b>操作：</b>拖曳旋轉視角・滾輪縮放・點擊攤位管理・點擊客人接單</div>
         <div class="world-actions">
           <button class="world-action" data-action="open-stall">⌂ 攤位管理</button>
+          <button class="world-action" data-action="toggle-sound" aria-pressed="false">♫ 音效：關</button>
+          <button class="world-action" data-action="toggle-pause" aria-pressed="false">Ⅱ 暫停場景</button>
           <button class="world-action primary" id="mainAction" data-action="main-action">掛燈迎客　→</button>
         </div>
       </section>
@@ -53,6 +55,7 @@
         </div>
         <nav class="panel-tabs" aria-label="攤位管理">
           <button class="panel-tab active" data-action="panel-tab" data-tab="ops"><span>◷</span>營運</button>
+          <button class="panel-tab" data-action="panel-tab" data-tab="stall"><span>⌂</span>攤位</button>
           <button class="panel-tab" data-action="panel-tab" data-tab="stock"><span>🥬</span>備料</button>
           <button class="panel-tab" data-action="panel-tab" data-tab="equipment"><span>⚒</span>設備</button>
           <button class="panel-tab" data-action="panel-tab" data-tab="staff"><span>♙</span>排班</button>
@@ -70,6 +73,6 @@
     </section>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js" defer></script>
+  <script src="./app.js" type="module"></script>
 </body>
 </html>

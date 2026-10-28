@@ -56,7 +56,7 @@
     .panel-title-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; }
     .panel-title { margin: 0; color: #f3eedc; font-size: 16px; letter-spacing: -.03em; }
     .mini-status { padding: 5px 8px; border: 1px solid #ffffff13; border-radius: 999px; color: #aab7a9; background: #ffffff07; font-size: 8px; white-space: nowrap; }
-    .panel-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+    .panel-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; padding: 9px 10px; border-bottom: 1px solid var(--line); }
     .panel-tab { min-height: 38px; padding: 4px 2px; border: 0; border-radius: 9px; color: #92a196; background: transparent; font-size: 8px; font-weight: 750; cursor: pointer; transition: .16s ease; }
     .panel-tab span { display: block; margin-bottom: 2px; font-size: 14px; }
     .panel-tab:hover { color: #eff0df; background: #ffffff0a; }
@@ -190,3 +190,12 @@
 .subhead.compact { margin-top: 0; }
 .helper-copy.manager-intro { margin: 0 2px 10px; }
 .story-card.journal-entry { margin-bottom: 8px; }
+.stall-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 10px 0; }
+.stall-summary { display: grid; gap: 4px; min-width: 0; padding: 11px 9px; border: 1px solid #ffffff12; border-radius: 13px; background: #ffffff07; }
+.stall-summary > span { font-size: 16px; }
+.stall-summary b { overflow: hidden; color: #f0e4c6; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.stall-summary small { color: #98a49a; font-size: 8px; line-height: 1.4; }
+.stall-actions { display: grid; gap: 7px; margin: 12px 0; }
+.stall-actions .secondary-button { justify-content: flex-start; text-align: left; }
+.guide-card { display: grid; gap: 4px; margin: 10px 0; padding: 10px 12px; border: 1px solid #dfc37e33; border-radius: 12px; color: #bec9b9; background: linear-gradient(135deg, #d9bd7018, #ffffff06); font-size: 9px; line-height: 1.55; }
+.guide-card b { color: #f2dcaa; font-size: 10px; }

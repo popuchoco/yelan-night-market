@@ -1,0 +1,8 @@
+{
+  "name": "yelan-night-market",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/game.test.js"
+  }
+}
