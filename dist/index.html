@@ -24,7 +24,7 @@
       </div>
     </header>
     <main class="game-layout">
-      <section class="world-frame" aria-label="夜嵐夜市 2.5D 斜俯視經營場景">
+      <section class="world-frame camera-collapsed" aria-label="夜嵐夜市 2.5D 斜俯視經營場景">
         <canvas id="worldCanvas" tabindex="0" role="img" aria-describedby="sceneHelp" aria-keyshortcuts="Enter Space ArrowLeft ArrowRight + -" aria-label="可旋轉夜市地圖；鍵盤聚焦後按 Enter 或空白鍵開啟攤位工作台，左右方向鍵旋轉視角，上下方向鍵調整角度，正負鍵縮放"></canvas>
         <div class="world-top-left">
           <span class="world-eyebrow">NORTH COAST ｜ DISTRICT 09</span>
@@ -44,7 +44,7 @@
           <button class="world-tool-action" data-action="toggle-sound" aria-pressed="false" aria-label="開啟音效" title="開啟音效"><span aria-hidden="true">♪</span></button>
           <button class="world-tool-action" data-action="toggle-pause" aria-pressed="false" aria-label="暫停場景動畫" title="暫停場景動畫"><span id="pauseIcon" aria-hidden="true">Ⅱ</span></button>
           <div class="camera-control-group">
-            <button class="camera-collapse" id="cameraCollapse" type="button" data-action="toggle-camera-tools" aria-expanded="true" aria-controls="cameraTools" aria-label="收合相機控制" title="收合相機控制"><span aria-hidden="true">−</span></button>
+            <button class="camera-collapse" id="cameraCollapse" type="button" data-action="toggle-camera-tools" aria-expanded="false" aria-controls="cameraTools" aria-label="展開相機控制" title="展開相機控制"><span aria-hidden="true">+</span></button>
             <div class="camera-tools" id="cameraTools" role="group" aria-label="3D 相機控制">
               <span class="camera-label" id="cameraLabel">斜俯視 ｜ 北岸</span>
               <button class="icon-button" data-action="orbit-left" aria-label="將相機往左旋轉 45 度">⟲</button>

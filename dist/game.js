@@ -819,7 +819,6 @@ function boot() {
   let storyChoiceReturnFocus = null;
   let worldEventPosition = "";
   const cameraCollapseButton = document.getElementById("cameraCollapse");
-  let cameraToolsTouched = false;
   function setCameraToolsExpanded(expanded) {
     document.querySelector(".world-frame").classList.toggle("camera-collapsed", !expanded);
     cameraCollapseButton.setAttribute("aria-expanded", String(expanded));
@@ -827,12 +826,6 @@ function boot() {
     cameraCollapseButton.title = expanded ? "收合相機控制" : "展開相機控制";
     cameraCollapseButton.querySelector("span").textContent = expanded ? "−" : "+";
   }
-  function syncCameraToolsToViewport() {
-    if (!cameraCollapseButton || cameraToolsTouched) return;
-    setCameraToolsExpanded(!window.matchMedia("(max-width: 800px)").matches);
-  }
-  syncCameraToolsToViewport();
-  window.addEventListener("resize", syncCameraToolsToViewport, { passive: true });
   const outletEventButtons = new Map();
   function syncWorldEventTrigger() {
     const trigger = document.getElementById("worldEventTrigger");
@@ -1185,7 +1178,6 @@ function boot() {
     if (action === "close-game-guide" && gameGuideDialog.open) gameGuideDialog.close();
     if (action === "toggle-camera-tools") {
       const expanded = button.getAttribute("aria-expanded") !== "true";
-      cameraToolsTouched = true;
       setCameraToolsExpanded(expanded);
     }
     if (action === "toggle-world-ui") {

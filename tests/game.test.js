@@ -652,7 +652,7 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(html, /id="worldCanvas" tabindex="0"/);
   assert.match(html, /id="worldEventTrigger"[^>]*data-action="open-world-event"/);
   assert.match(html, /id="outletEventTriggers"/);
-  assert.match(html, /data-action="toggle-camera-tools"[^>]*aria-expanded="true"[^>]*aria-controls="cameraTools"/);
+  assert.match(html, /data-action="toggle-camera-tools"[^>]*aria-expanded="false"[^>]*aria-controls="cameraTools"/);
   assert.match(html, /data-action="toggle-world-ui"[^>]*aria-pressed="false"/);
   assert.match(html, /class="eye-icon eye-visible"/);
   assert.match(html, /data-action="open-main-stock">◈ 店面備料/);
@@ -660,7 +660,7 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(html, /data-action="toggle-pause"[^>]*aria-label="暫停場景動畫"/);
   assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
   assert.match(html, /<dialog class="story-choice-dialog" id="storyChoiceDialog"/);
-  const worldFrameStart = html.indexOf('<section class="world-frame"');
+  const worldFrameStart = html.indexOf('<section class="world-frame');
   const mainEnd = html.indexOf("</main>", worldFrameStart);
   const toastIndex = html.indexOf('id="toast"');
   assert.ok(worldFrameStart >= 0 && mainEnd > worldFrameStart && toastIndex > worldFrameStart && toastIndex < mainEnd);
