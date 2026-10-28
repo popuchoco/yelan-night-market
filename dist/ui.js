@@ -564,6 +564,7 @@ export function createUI(runtime) {
   function accountingTable(label, headers, rows) {
     const shell = el("div", "accounting-table-shell", null, { role: "region", "aria-label": label, tabindex: 0 });
     const table = el("table", "accounting-table");
+    const mobileList = el("div", "accounting-mobile-list", null, { role: "list", "aria-label": label });
     const head = el("thead");
     const headRow = el("tr");
     headers.forEach(function(title) { headRow.append(el("th", "", title, { scope: "col" })); });
@@ -571,13 +572,24 @@ export function createUI(runtime) {
     const body = el("tbody");
     rows.forEach(function(values) {
       const row = el("tr");
-      values.forEach(function(value) {
-        row.append(el("td", "", value));
+      values.forEach(function(value, index) {
+        row.append(el("td", "", value, { dataset: { label: headers[index] || "資料" } }));
       });
       body.append(row);
+
+      const record = el("article", "accounting-mobile-record", null, { role: "listitem" });
+      record.append(el("h4", "accounting-mobile-record-title", values[0] || label));
+      const details = el("dl", "accounting-mobile-details");
+      values.slice(1).forEach(function(value, index) {
+        const item = el("div", "accounting-mobile-item");
+        append(item, el("dt", "", headers[index + 1] || "資料"), el("dd", "", value));
+        details.append(item);
+      });
+      record.append(details);
+      mobileList.append(record);
     });
     table.append(head, body);
-    shell.append(table);
+    shell.append(table, mobileList);
     return shell;
   }
 
@@ -747,14 +759,18 @@ export function createUI(runtime) {
     const select = filterSelect("財務期間", "report-period", reports.slice().reverse().map((item) => ({
       value: item.period, label: "第 " + item.period + " 期・第 " + item.startDay + "–" + item.endDay + " 夜"
     })), report.period);
-    const statementTabs = el("nav", "statement-tabs", null, { role: "tablist", "aria-label": "財務報表種類" });
+    const statementTabs = el("div", "statement-picker", null, { role: "group", "aria-label": "選擇財務報表" });
     [
       ["income", "綜合損益表"],
       ["equity", "權益變動表"],
       ["position", "資產負債表"],
       ["cashflow", "現金流量表"]
-    ].forEach(([id, name]) => statementTabs.append(button(name, "statement-view", { id },
-      false, "statement-tab" + (reportStatement === id ? " active" : ""))));
+    ].forEach(([id, name]) => {
+      const choice = button(name, "statement-view", { id }, false,
+        "statement-picker-button" + (reportStatement === id ? " active" : ""));
+      choice.setAttribute("aria-pressed", String(reportStatement === id));
+      statementTabs.append(choice);
+    });
     const title = { income: "綜合損益表", equity: "權益變動表", position: "資產負債表", cashflow: "現金流量表" }[reportStatement];
     const rows = statementRows(report, reportStatement);
     const parts = [
@@ -811,11 +827,57 @@ export function createUI(runtime) {
     return fragment(parts);
   }
 
+  const journalReports = {
+    daily: { title: "前一日日記簿", description: "逐筆查看借貸分錄與當夜營運手記。", icon: "◷" },
+    weekly: { title: "每週工作底稿", description: "檢視試算平衡、借貸發生額與期末餘額。", icon: "▤" },
+    monthly: { title: "30 夜財務報表", description: "查閱綜合損益、權益變動、資產負債與現金流量。", icon: "▦" },
+    chart: { title: "會計科目表", description: "查看遊戲內部 IFRS 導向科目與報表分類。", icon: "≡" },
+    stories: { title: "港邊手記", description: "回顧每夜事件、選擇與經營故事。", icon: "▣" }
+  };
+
+  function journalReportStatus(view) {
+    const accounting = state.accounting || {};
+    if (view === "daily") {
+      const days = Array.from(new Set((accounting.journal || []).filter((entry) => entry.day > 0 && entry.day < state.day)
+        .map((entry) => entry.day))).sort((a, b) => b - a);
+      return days.length ? "最近完成・第 " + days[0] + " 夜" : "完成第一晚營業後開放";
+    }
+    if (view === "weekly") return accounting.weeklyReports?.length
+      ? "已結帳 " + accounting.weeklyReports.length + " 週" : "每 7 夜產生一次";
+    if (view === "monthly") return accounting.monthlyReports?.length
+      ? "已結帳 " + accounting.monthlyReports.length + " 期" : "完成第 30 夜後產生";
+    if (view === "chart") return CHART_OF_ACCOUNTS.length + " 個內部科目";
+    return "已記錄 " + (state.journal || []).length + " 夜";
+  }
+
   function renderJournal() {
-    const nav = el("nav", "accounting-tabs", null, { role: "tablist", "aria-label": "帳務檢視" });
-    [["daily", "前一日日記"], ["weekly", "週工作底稿"], ["monthly", "30 夜報表"], ["chart", "科目表"], ["stories", "港邊手記"]]
-      .forEach(([id, name]) => nav.append(button(name, "journal-view", { id }, false,
-        "accounting-tab" + (journalView === id ? " active" : ""))));
+    const grid = el("div", "report-launch-grid", null, { role: "group", "aria-label": "帳務與手記資料" });
+    Object.entries(journalReports).forEach(([id, report]) => {
+      const launch = button("", "open-report", { id }, false, "report-launch");
+      launch.setAttribute("aria-haspopup", "dialog");
+      launch.setAttribute("aria-controls", "reportDialog");
+      append(launch,
+        el("span", "report-launch-icon", report.icon, { "aria-hidden": "true" }),
+        el("span", "report-launch-copy"),
+        el("span", "report-launch-arrow", "›", { "aria-hidden": "true" }));
+      const copy = launch.querySelector(".report-launch-copy");
+      append(copy, el("b", "report-launch-title", report.title),
+        el("span", "report-launch-description", report.description),
+        el("span", "report-launch-status", journalReportStatus(id)));
+      grid.append(launch);
+    });
+    return fragment(
+      subhead("查閱帳務資料", "點選項目以開啟", true),
+      helper("報表會在獨立視窗展開；手機版明細改以卡片呈現。可按 Escape 或右上角返回。", "helper-copy report-intro"),
+      grid
+    );
+  }
+
+  function getJournalReportInfo() {
+    return journalReports[journalView] || journalReports.daily;
+  }
+
+  function renderJournalReport() {
     const view = {
       daily: renderDailyJournal,
       weekly: renderWeeklyWorksheet,
@@ -823,7 +885,7 @@ export function createUI(runtime) {
       chart: renderChartOfAccounts,
       stories: renderStoryJournal
     }[journalView] || renderDailyJournal;
-    return fragment(nav, view());
+    return view();
   }
 
   function renderOutletManagement() {
@@ -1018,6 +1080,8 @@ export function createUI(runtime) {
     setJournalView: setJournalView,
     setStatementView: setStatementView,
     setJournalFilter: setJournalFilter,
+    getJournalReportInfo: getJournalReportInfo,
+    renderJournalReport: renderJournalReport,
     getTab: function() { return activeTab; }
   };
 }

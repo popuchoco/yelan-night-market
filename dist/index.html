@@ -73,6 +73,17 @@
       <div id="orderChoices"></div>
     </section>
   </div>
+  <dialog class="report-dialog" id="reportDialog" aria-modal="true" aria-labelledby="reportDialogTitle" aria-describedby="reportDialogDescription">
+    <header class="report-dialog-header">
+      <div class="report-dialog-heading">
+        <div class="modal-kicker">HARBOR LEDGER</div>
+        <h2 class="modal-title" id="reportDialogTitle">帳務資料</h2>
+        <p class="modal-desc" id="reportDialogDescription">選擇一份紀錄以檢視詳細內容。</p>
+      </div>
+      <button class="close-button" type="button" data-action="close-report" aria-label="關閉帳務視窗">×</button>
+    </header>
+    <div class="report-dialog-content" id="reportDialogContent" tabindex="0" aria-label="報表內容"></div>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="./app.js" type="module"></script>
 </body>

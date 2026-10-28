@@ -532,6 +532,7 @@ function boot() {
   const ui = createUI({ state, saveState });
   const scene = createScene({ state, todayEvent: () => todayEvent(state), getTonightGuests: () => getTonightGuests(state) });
   let orderReturnFocus = null;
+  let reportReturnFocus = null;
 
   function playTone(kind = "tap") {
     if (!soundEnabled) return;
@@ -566,6 +567,38 @@ function boot() {
     button.title = scene.motionReduced ? "已依作業系統減少動態效果" : "暫停或恢復夜市場景動畫";
   }
   function renderUI() { ui.renderUI(); syncMotionControl(); }
+  const reportDialog = document.getElementById("reportDialog");
+  const reportDialogContent = document.getElementById("reportDialogContent");
+  function renderReportDialogContent(focusAction, focusId, resetScroll = false) {
+    const previousScroll = resetScroll ? 0 : reportDialogContent.scrollTop;
+    reportDialogContent.replaceChildren(ui.renderJournalReport());
+    reportDialogContent.scrollTop = previousScroll;
+    if (focusAction) {
+      const control = Array.from(reportDialogContent.querySelectorAll('[data-action="' + focusAction + '"]'))
+        .find((item) => !focusId || item.dataset.id === focusId);
+      if (control) control.focus();
+    }
+  }
+  function openJournalReport(id) {
+    reportReturnFocus = document.activeElement;
+    ui.setJournalView(id);
+    const report = ui.getJournalReportInfo();
+    document.getElementById("reportDialogTitle").textContent = report.title;
+    document.getElementById("reportDialogDescription").textContent = report.description;
+    renderReportDialogContent();
+    if (!reportDialog.open) reportDialog.showModal();
+    reportDialog.querySelector('[data-action="close-report"]').focus();
+    playTone("open");
+  }
+  reportDialog.addEventListener("click", (event) => {
+    if (event.target === reportDialog) reportDialog.close();
+  });
+  reportDialog.addEventListener("close", () => {
+    const fallback = document.getElementById("tab-journal");
+    const target = reportReturnFocus && reportReturnFocus.isConnected ? reportReturnFocus : fallback;
+    reportReturnFocus = null;
+    if (target && target.focus) requestAnimationFrame(() => target.focus());
+  });
   document.addEventListener("scene-motion-change", syncMotionControl);
   function toast(message) {
     const el = document.getElementById("toast");
@@ -644,8 +677,12 @@ function boot() {
     if (!button) return;
     const action = button.dataset.action;
     if (action === "panel-tab") { ui.setTab(button.dataset.tab); renderUI(); }
-    if (action === "journal-view") { ui.setJournalView(button.dataset.id); renderUI(); }
-    if (action === "statement-view") { ui.setStatementView(button.dataset.id); renderUI(); }
+    if (action === "open-report") openJournalReport(button.dataset.id);
+    if (action === "close-report" && reportDialog.open) reportDialog.close();
+    if (action === "statement-view") {
+      ui.setStatementView(button.dataset.id);
+      if (reportDialog.open) renderReportDialogContent("statement-view", button.dataset.id, true);
+    }
     if (action === "main-action") {
       if (state.phase === "prep") openDoors();
       else if (state.phase === "service") openOrder(state.customerIndex);
@@ -711,7 +748,8 @@ function boot() {
     if (!control) return;
     if (control.dataset.action === "diary-day" || control.dataset.action === "report-period" || control.dataset.action === "week-report") {
       ui.setJournalFilter(control.dataset.action, control.value);
-      renderUI();
+      if (reportDialog.open) renderReportDialogContent(control.dataset.action);
+      else renderUI();
     }
   });
 

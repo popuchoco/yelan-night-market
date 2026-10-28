@@ -615,4 +615,13 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(scene, /motionReduced/);
   assert.match(game, /orderModal\.addEventListener\("keydown"/);
   assert.match(game, /orderReturnFocus/);
+  assert.match(ui, /function renderJournalReport\(/);
+  assert.match(ui, /button\("", "open-report"/);
+  assert.match(game, /reportDialog\.showModal\(\)/);
+  assert.match(game, /reportDialog\.addEventListener\("close"/);
+  assert.match(html, /<dialog class="report-dialog" id="reportDialog"/);
+  assert.match(css, /\.report-dialog\[open\]/);
+  assert.match(css, /\.report-launch-grid/);
+  assert.match(ui, /accounting-mobile-list/);
+  assert.match(css, /\.accounting-mobile-record/);
 });
