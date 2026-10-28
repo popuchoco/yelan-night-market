@@ -1,11 +1,13 @@
 // avoid-ai-design-ignore-file: I2, SD4d - food, character, and event marks are in-world content; middle dots separate compact order and ledger facts.
 import { DATA } from "./data.js";
-import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, weeklyOptionCost } from "./campaign.js";
+import { ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, campaignCycleDay, weeklyOptionCost } from "./campaign.js";
+import { CHART_OF_ACCOUNTS, formatBalance } from "./accounting.js";
 import {
-  createLedger as createLedgerForState, forecast, getFoodCost as getFoodCostForState,
+  createLedger as createLedgerForState, fixedOperatingCost as ledgerFixedOperatingCost, forecast, getFoodCost as getFoodCostForState,
+  hasBrandAlliance,
   getPurchasePrice as getPurchasePriceForState, getTonightGuests as getTonightGuestsForState,
   ledgerIncome, ledgerNet, money, staffCost as staffCostForState,
-  todayEvent as selectEvent, todayStory as selectStory
+  todayEvent as selectEvent, todayMarketCard, todayStory as selectStory
 } from "./state.js";
 
 // UI nodes are built with DOM APIs so player names, journal entries, and game data
@@ -14,6 +16,11 @@ export function createUI(runtime) {
   const { state, saveState } = runtime;
   const { dishes, ingredients, equipment, staff: staffRoles, upgrades } = DATA;
   let activeTab = "ops";
+  let journalView = "daily";
+  let reportStatement = "income";
+  let selectedReportPeriod = null;
+  let selectedWeek = null;
+  let selectedJournalDay = null;
 
   function el(tag, className, text, attrs) {
     const node = document.createElement(tag);
@@ -101,23 +108,76 @@ export function createUI(runtime) {
       el("div", "event-desc", event.description));
     return append(card, el("div", "event-icon", event.icon), copy);
   }
+  function marketAnnouncement() {
+    const card = todayMarketCard(state);
+    if (!card) return null;
+    const currentChoice = state.marketChoiceDay === state.day
+      ? card.choices.find(function(item) { return item.id === state.marketCardChoice; })
+      : null;
+    const panel = el("section", "market-announcement" + (card.tone === "negative" ? " negative" : ""));
+    const heading = el("div", "market-announcement-head");
+    append(heading, el("span", "market-announcement-icon", card.icon),
+      el("div", "", null, { className: "market-announcement-copy" }));
+    const copy = heading.querySelector(".market-announcement-copy");
+    append(copy, el("span", "market-announcement-label", "市集公告卡・第 " + state.day + " 夜"),
+      el("h3", "", card.name), el("p", "", card.description));
+    panel.append(heading);
+    if (currentChoice) {
+      const result = el("div", "market-announcement-result");
+      append(result, el("b", "", "今晚已選擇：" + currentChoice.name),
+        el("span", "", currentChoice.detail + "。"));
+      panel.append(result);
+    } else if (state.phase === "prep") {
+      const choices = el("div", "market-announcement-choices");
+      card.choices.forEach(function(choice) {
+        const action = button("", "choose-market-card", { id: choice.id }, choice.cost > 0 && state.coins < choice.cost, "announcement-choice");
+        append(action, el("span", "announcement-choice-name", choice.name),
+          el("span", "announcement-choice-detail", choice.detail));
+        choices.append(action);
+      });
+      panel.append(choices);
+    } else {
+      panel.append(helper(state.phase === "decision"
+        ? "完成本週經營方向後，再選擇今晚公告卡的處理方式。"
+        : "本夜公告卡選擇已隨營業流程鎖定。", "market-announcement-result"));
+    }
+    return panel;
+  }
   function storyCard(title, text, className) {
     const card = el("div", className || "story-card");
     append(card, el("h3", "", title), el("p", "", text));
     return card;
   }
 
-  function fixedOperatingCost(value) {
-    return value.rent + (value.expansionRent || 0) + (value.acquisitionRent || 0) +
-      value.labor + (value.water || 0) + value.electricity + value.gas + (value.fees || 0);
+  function fixedOperatingCost(value) { return ledgerFixedOperatingCost(value); }
+
+  function allianceStatus(showProgress) {
+    const card = el("section", "alliance-status" + (hasBrandAlliance(state) ? " active" : ""));
+    const counts = (state.acquisitionTypes || []).reduce(function(result, type) {
+      if (type === "food" || type === "leisure") result[type] = (result[type] || 0) + 1;
+      return result;
+    }, {});
+    const leadingType = Object.keys(ACQUISITION_TYPES).sort(function(a, b) { return (counts[b] || 0) - (counts[a] || 0); })[0];
+    if (hasBrandAlliance(state)) {
+      append(card, el("b", "", "夜市品牌聯盟・已成立"),
+        el("span", "", "持續加成：每夜多 1 桌聯盟來客，聯合採購進價 9 折。"));
+    } else if (showProgress) {
+      append(card, el("b", "", "夜市品牌聯盟・籌備中"),
+        el("span", "", "條件：先擴店，再併購 2 攤同類攤位。現況：擴店 " + state.expansions + " 次・" +
+          ACQUISITION_TYPES[leadingType].name + " " + (counts[leadingType] || 0) + " / 2。"));
+    } else return null;
+    return card;
   }
 
   function campaignMeter() {
-    const meter = el("div", "campaign-meter", null, { role: "progressbar", "aria-label": "三十夜經營進度", "aria-valuemin": 0, "aria-valuemax": CAMPAIGN_DAYS, "aria-valuenow": state.day });
+    const cycleDay = campaignCycleDay(state.day);
+    const period = Math.floor((state.day - 1) / CAMPAIGN_DAYS) + 1;
+    const meter = el("div", "campaign-meter", null, { role: "progressbar", "aria-label": "本期三十夜財務期間進度", "aria-valuemin": 0, "aria-valuemax": CAMPAIGN_DAYS, "aria-valuenow": cycleDay });
     const label = el("div", "campaign-meter-label");
-    append(label, el("span", "", "港邊經營週期"), el("b", "", "第 " + state.day + " / " + CAMPAIGN_DAYS + " 夜"));
+    append(label, el("span", "", "持續經營・第 " + state.day + " 夜"),
+      el("b", "", "第 " + period + " 期・" + cycleDay + " / " + CAMPAIGN_DAYS + " 夜"));
     const track = el("div", "campaign-meter-track");
-    track.append(el("span", "", null, { style: "width:" + Math.round(state.day / CAMPAIGN_DAYS * 100) + "%" }));
+    track.append(el("span", "", null, { style: "width:" + Math.round(cycleDay / CAMPAIGN_DAYS * 100) + "%" }));
     return append(meter, label, track);
   }
 
@@ -125,11 +185,40 @@ export function createUI(runtime) {
     const decision = el("section", "weekly-decision");
     append(decision,
       subhead("新的一週・經營方向", "第 " + state.day + " 夜開始前", true),
-      helper("三十夜共四次週轉決策。一次投入會帶來不同客流，也會改變往後每一夜的租金、人事與結局。", "helper-copy manager-intro"));
+      helper("每完成七夜結算一次週轉工作底稿；下一週可擴店、招聘、併購或保留現金。投資將持續影響往後的客流、租金、人事與資產折舊。", "helper-copy manager-intro"));
     const summary = el("div", "decision-summary");
     append(summary, el("span", "", "可用現金"), el("b", "", money(state.coins)),
       el("span", "", "目前每夜固定營運成本"), el("b", "", money(fixedOperatingCost(createLedger()))));
     decision.append(summary);
+    const finance = el("section", "finance-panel");
+    const debt = Number(state.loanPrincipal) || 0;
+    const interest = debt ? createLedger().interest : 0;
+    const financeCopy = el("div", "finance-copy");
+    append(financeCopy, el("span", "finance-kicker", "港邊合作金庫"),
+      el("h3", "", debt ? "週轉額度使用中" : "低利週轉金"),
+      el("p", "", debt
+        ? "未償本金 " + money(debt) + "・每營業夜利息 " + money(interest) + "。" +
+          (state.day <= state.loanTakenDay ? "完成本夜營業後，可於下次週轉決策還款。" : "可在本次週轉決策一次還清本金。") +
+          ""
+        : (state.loanUsed
+          ? "本世界已使用過一次週轉額度。若已還清，仍不會再次開放。"
+          : "可申請一次 " + money(DATA.economy.loanPrincipal) + " 營運週轉金；週利率 " +
+            Math.round(DATA.economy.loanWeeklyRate * 100) + "%，依營業夜攤提利息，之後可提前還清。")));
+    let financeAction = null;
+    if (debt) {
+      financeAction = button("償還本金 " + money(debt), "repay-loan", {},
+        state.coins < debt || (state.loanTakenDay && state.day <= state.loanTakenDay), "finance-action");
+    } else if (!state.loanUsed) {
+      financeAction = button("申請週轉金 +" + money(DATA.economy.loanPrincipal), "borrow-loan", {}, false, "finance-action");
+    }
+    append(finance, financeCopy, financeAction);
+    decision.append(finance);
+    const alliance = allianceStatus(true);
+    if (alliance) decision.append(alliance);
+    const counts = (state.acquisitionTypes || []).reduce(function(result, type) {
+      if (type === "food" || type === "leisure") result[type] = (result[type] || 0) + 1;
+      return result;
+    }, {});
     const grid = el("div", "decision-grid");
     Object.values(WEEKLY_OPTIONS).forEach(function(option) {
       const cost = weeklyOptionCost(state, option.id);
@@ -139,44 +228,27 @@ export function createUI(runtime) {
       const header = el("div", "decision-card-head");
       append(header, el("span", "decision-icon", option.icon), el("h3", "", option.name));
       const recurring = option.recurring ? "往後每夜固定增加 " + money(option.recurring) : "不增加每夜固定成本";
-      const price = capped ? "本周目已達上限" : (cost ? option.label + " ｜ " + money(cost) : option.label + " ｜ 免費");
-      const action = button(capped ? "已達發展上限" : (insufficient ? "現金不足" : (cost ? "投資 " + money(cost) : "維持現狀・繼續")),
-        "choose-weekly", { id: option.id }, capped || insufficient, "decision-action");
+      const price = capped ? "此項發展已達場景容量" : (cost ? option.label + " ｜ " + money(cost) : option.label + " ｜ 免費");
       append(card, header, el("span", "decision-cost", price), el("p", "", option.effect),
-        el("span", "decision-recurring", recurring), action);
+        el("span", "decision-recurring", recurring));
+      if (option.id === "acquire" && !capped) {
+        const targets = el("div", "acquisition-targets");
+        Object.values(ACQUISITION_TYPES).forEach(function(target) {
+          const action = button("接手 " + target.name + (counts[target.id] ? "・已併購 " + counts[target.id] : ""),
+            "choose-weekly", { id: option.id, targetType: target.id }, insufficient, "decision-action acquisition-action");
+          action.title = target.note;
+          targets.append(action);
+        });
+        card.append(targets);
+      } else {
+        const action = button(capped ? "場景容量已滿" : (insufficient ? "現金不足" : (cost ? "投資 " + money(cost) : "維持現狀・繼續")),
+          "choose-weekly", { id: option.id }, capped || insufficient, "decision-action");
+        card.append(action);
+      }
       grid.append(card);
     });
     decision.append(grid);
     return decision;
-  }
-
-  function renderEnding() {
-    const ending = ENDINGS[state.endingId] || ENDINGS["soft-goodbye"];
-    const card = el("section", "ending-card " + ending.tone);
-    append(card, el("span", "ending-kicker", "THIRTY NIGHTS ｜ HARBOR STORY"),
-      el("h2", "", ending.title), el("p", "", ending.text));
-    const recap = el("div", "ending-stats");
-    [
-      ["口碑", state.fame], ["熟客", state.regulars + " / 24"],
-      ["舒適度", state.cozy], ["三十夜營運淨額", money(state.campaignNet)],
-      ["擴店", state.expansions + " 次"], ["招聘", state.hiredCrew + " 人"],
-      ["併購", state.acquisitions + " 攤"]
-    ].forEach(function(item) {
-      const stat = el("div", "ending-stat");
-      append(stat, el("span", "", item[0]), el("b", "", item[1]));
-      recap.append(stat);
-    });
-    const decisions = el("div", "ending-decisions");
-    append(decisions, el("h3", "", "你的週轉選擇"));
-    if (state.decisions.length) {
-      const list = el("ol");
-      state.decisions.forEach(function(item) {
-        list.append(el("li", "", "第 " + item.day + " 夜・" + item.name + (item.cost ? " ｜ " + money(item.cost) : "")));
-      });
-      decisions.append(list);
-    } else decisions.append(el("p", "", "本周目沒有進行擴張、招聘或併購。"));
-    return append(card, recap, decisions,
-      button("再經營一個三十夜周目　", "restart-campaign", {}, false, "primary-button full-width"));
   }
 
   function renderOverview() {
@@ -184,20 +256,27 @@ export function createUI(runtime) {
     const outlook = forecast(state);
     const parts = [campaignMeter()];
     if (state.phase === "decision") {
-      parts.push(eventCard(event), renderWeeklyDecision());
-      return fragment(parts);
-    }
-    if (state.phase === "ending") {
-      parts.push(renderEnding());
+      parts.push(eventCard(event));
+      const announcement = marketAnnouncement();
+      if (announcement) parts.push(announcement);
+      parts.push(renderWeeklyDecision());
       return fragment(parts);
     }
     if (state.day === 1) {
       const guide = el("aside", "guide-card");
       append(guide, el("b", "", "新手小抄"),
-        el("span", "", "先到「攤位」補食材、調班表；開門後點擊發光客人接單。每七夜可選擴店、招聘或併購，三十夜後依你的營運留下不同結局。"));
+        el("span", "", "先到「攤位」補食材、調班表；開門後點擊發光客人接單。每七夜做一次營運選擇、每三十夜查看財報；夜市不會在第一期結束，世界會持續往前。"));
       parts.push(guide);
     }
+    const alliance = allianceStatus(false);
+    if (alliance) parts.push(alliance);
+    if (state.loanPrincipal > 0 && state.phase === "prep") {
+      parts.push(el("div", "finance-note",
+        "週轉本金 " + money(state.loanPrincipal) + "・今晚利息 " + money(outlook.ledger.interest) + "；可在下次週轉決策提前還清。"));
+    }
     parts.push(eventCard(event));
+    const announcement = marketAnnouncement();
+    if (announcement) parts.push(announcement);
     parts.push(subhead(state.phase === "prep" ? "開門前損益預估" : "今晚營運帳本",
       String(outlook.guests.length).padStart(2, "0") + " 桌客流"));
 
@@ -207,6 +286,10 @@ export function createUI(runtime) {
         { label: "排班薪資", value: "−" + money(outlook.ledger.labor) },
         { label: "水電瓦斯", value: "−" + money(outlook.ledger.water + outlook.ledger.electricity + outlook.ledger.gas) },
         ...(outlook.ledger.fees ? [{ label: "活動改善費", value: "−" + money(outlook.ledger.fees) }] : []),
+        ...(outlook.ledger.marketing ? [{ label: "觀光行銷", value: "−" + money(outlook.ledger.marketing) }] : []),
+        ...(outlook.ledger.preparation ? [{ label: "衛生快清", value: "−" + money(outlook.ledger.preparation) }] : []),
+        ...(outlook.ledger.interest ? [{ label: "週轉金利息", value: "−" + money(outlook.ledger.interest) }] : []),
+        ...(outlook.ledger.subsidies ? [{ label: "市集雨天補助", value: "+" + money(outlook.ledger.subsidies), tone: "income" }] : []),
         { label: "預估食材耗用", value: "−" + money(outlook.food), tone: "outflow" },
         { label: "預估小費 / 活動 Bonus", value: "+" + money(outlook.tips + outlook.bonus), tone: "income" }
       ], { label: "預估營業淨額", value: moneyNet(outlook.net), negative: outlook.net < 0 }));
@@ -242,6 +325,7 @@ export function createUI(runtime) {
       parts.push(ledger([
         { label: "餐點營收", value: "+" + money(state.ledger.sales), tone: "income" },
         { label: "小費 / 活動", value: "+" + money(state.ledger.tips + state.ledger.bonus), tone: "income" },
+        ...(state.ledger.subsidies ? [{ label: "公告卡補助", value: "+" + money(state.ledger.subsidies), tone: "income" }] : []),
         { label: "食材耗用", value: "−" + money(state.ledger.food), tone: "outflow" },
         { label: "固定支出已扣", value: "−" + money(fixedOperatingCost(state.ledger)) }
       ]));
@@ -281,7 +365,7 @@ export function createUI(runtime) {
       choice.append(options);
       parts.push(choice);
       const next = el("div", "button-row");
-      next.append(button(state.day === CAMPAIGN_DAYS ? "完成三十夜，查看結局" : "收進手記，準備明晚", "next-night", {}, !state.reportChoice, "primary-button full-width"));
+      next.append(button("收進日記，準備明晚", "next-night", {}, !state.reportChoice, "primary-button full-width"));
       parts.push(next);
     }
     return fragment(parts);
@@ -348,7 +432,29 @@ export function createUI(runtime) {
         button(owned ? "已擁有" : money(item.cost), "buy-upgrade", { id: item.id },
           owned || state.phase !== "prep" || state.coins < item.cost, "manager-action")));
     });
-    parts.push(additions);
+    parts.push(additions, subhead("資產清冊・折舊追蹤", "逐筆記錄購置成本與帳面價值"));
+    const assets = Array.isArray(state.accounting?.assets) ? state.accounting.assets : [];
+    if (!assets.length) {
+      parts.push(helper("目前還沒有資本化資產；購買爐台、設備、改造或擴店後，會在此建立獨立資產卡並按耐用年限提列折舊。"));
+    } else {
+      const assetGrid = el("div", "asset-register");
+      assets.forEach(function(asset) {
+        const bookValue = Math.max(asset.residualValue || 0, asset.cost - asset.accumulatedDepreciation);
+        const card = el("article", "asset-row");
+        const title = el("div", "asset-row-title");
+        append(title, el("b", "", asset.name), el("span", "asset-code", asset.category === "intangible" ? "無形資產" : "設備／改良"));
+        const values = el("div", "asset-row-values");
+        append(values,
+          el("span", "", "成本 " + formatBalance(asset.cost)),
+          el("span", "", "累計折舊／攤銷 " + formatBalance(asset.accumulatedDepreciation)),
+          el("b", "", "帳面金額 " + formatBalance(bookValue)),
+          el("span", "", "耐用 " + asset.usefulLifeDays + " 夜・啟用第 " + asset.availableDay + " 夜"));
+        append(card, title, values);
+        assetGrid.append(card);
+      });
+      parts.push(assetGrid);
+    }
+    parts.push(helper("採直線法按每日累計折舊額入帳：成本減殘值後，依設定耐用年限分攤。實際資產年限與殘值可於資料設定調整。", "helper-copy accounting-note"));
     return fragment(parts);
   }
 
@@ -379,41 +485,252 @@ export function createUI(runtime) {
     return fragment(parts);
   }
 
-  function renderJournal() {
-    const completed = new Set(state.journal.map(function(entry) { return entry.day; }));
+  function accountingTable(label, headers, rows) {
+    const shell = el("div", "accounting-table-shell", null, { role: "region", "aria-label": label, tabindex: 0 });
+    const table = el("table", "accounting-table");
+    const head = el("thead");
+    const headRow = el("tr");
+    headers.forEach(function(title) { headRow.append(el("th", "", title, { scope: "col" })); });
+    head.append(headRow);
+    const body = el("tbody");
+    rows.forEach(function(values) {
+      const row = el("tr");
+      values.forEach(function(value) {
+        row.append(el("td", "", value));
+      });
+      body.append(row);
+    });
+    table.append(head, body);
+    shell.append(table);
+    return shell;
+  }
+
+  function filterSelect(label, action, items, selected) {
+    const labelNode = el("label", "accounting-filter");
+    append(labelNode, el("span", "", label));
+    const select = el("select", "", null, { "aria-label": label, dataset: { action, filter: action } });
+    items.forEach(function(item) {
+      select.append(el("option", "", item.label, { value: String(item.value), selected: String(item.value) === String(selected) }));
+    });
+    labelNode.append(select);
+    return labelNode;
+  }
+
+  function renderDailyJournal() {
+    const accounting = state.accounting || {};
+    const completedDays = Array.from(new Set((accounting.journal || [])
+      .filter((entry) => entry.day > 0 && entry.day < state.day)
+      .map((entry) => entry.day))).sort((a, b) => b - a);
+    if (!completedDays.length) {
+      return fragment(subhead("前一日・日記簿", "打烊後自動歸檔", true),
+        storyCard("還沒有已完成的營業日。", "第一晚結束並收進手記後，這裡會出現前一日的會計分錄與營運日記。"));
+    }
+    const day = completedDays.includes(Number(selectedJournalDay)) ? Number(selectedJournalDay) : completedDays[0];
+    const options = completedDays.slice(0, 90).map((value) => ({ value, label: "第 " + value + " 夜・" +
+      (accounting.journal || []).filter((entry) => entry.day === value).length + " 筆分錄" }));
+    const entries = (accounting.journal || []).filter((entry) => entry.day === day && !entry.opening);
+    const rows = [];
+    entries.forEach(function(entry) {
+      entry.lines.forEach(function(line) {
+        const account = CHART_OF_ACCOUNTS.find((item) => item.code === line.account);
+        rows.push([entry.description, line.account + " " + (account ? account.name : "未知科目"),
+          line.debit ? formatBalance(line.debit) : "—", line.credit ? formatBalance(line.credit) : "—"]);
+      });
+    });
+    const narrative = (state.journal || []).find((entry) => entry.day === day);
+    const parts = [
+      subhead("前一日・日記簿", "第 " + day + " 夜｜借貸分錄", true),
+      filterSelect("選擇營業日", "diary-day", options, day),
+      helper("每日交易以借貸相等方式記錄；存貨採買列資產，食材售出時才認列銷貨成本。", "helper-copy accounting-note"),
+      accountingTable("第 " + day + " 夜日記簿", ["交易摘要", "會計科目", "借方", "貸方"], rows)
+    ];
+    if (narrative) {
+      const story = el("article", "story-card journal-entry");
+      append(story, el("h3", "", narrative.title), el("p", "", narrative.event + "・" + narrative.choice + "・當夜營運淨額 " + moneyNet(narrative.net)));
+      if (narrative.marketCard) story.append(el("p", "", "公告卡：" + narrative.marketCard + (narrative.marketChoice ? "・" + narrative.marketChoice : "")));
+      if (narrative.guests?.length) story.append(el("p", "", "來客：" + narrative.guests.join("、")));
+      parts.push(story);
+    }
+    return fragment(parts);
+  }
+
+  function renderWeeklyWorksheet() {
+    const reports = state.accounting?.weeklyReports || [];
+    if (!reports.length) return fragment(subhead("每週工作底稿", "第七夜打烊後產生", true),
+      storyCard("第一份週底稿尚未結帳。", "完成第 7 夜後，系統會整理試算表、借貸發生額與期末餘額。"));
+    const report = reports.find((item) => item.week === Number(selectedWeek)) || reports[reports.length - 1];
+    const select = filterSelect("工作週", "week-report", reports.slice().reverse().map((item) => ({
+      value: item.week, label: "第 " + item.week + " 週・第 " + item.startDay + "–" + item.endDay + " 夜"
+    })), report.week);
+    const rows = report.rows.map((row) => [row.code + " " + row.name,
+      formatBalance(row.opening), formatBalance(row.debit), formatBalance(row.credit),
+      row.closingDebit ? formatBalance(row.closingDebit) : "—",
+      row.closingCredit ? formatBalance(row.closingCredit) : "—"]);
+    const parts = [
+      subhead("每週工作底稿", "第 " + report.week + " 週・第 " + report.startDay + "–" + report.endDay + " 夜", true),
+      select,
+      el("div", "statement-status " + (report.balanced ? "balanced" : "unbalanced"),
+        report.balanced ? "借貸試算平衡" : "借貸差額待核對"),
+      accountingTable("第 " + report.week + " 週試算表", ["會計科目", "期初餘額", "借方發生", "貸方發生", "期末借方", "期末貸方"], rows),
+      ledger([
+        { label: "期末試算借方合計", value: formatBalance(report.trialDebit) },
+        { label: "期末試算貸方合計", value: formatBalance(report.trialCredit) }
+      ])
+    ];
+    return fragment(parts);
+  }
+
+  function statementRows(report, kind) {
+    const p = report.comprehensiveIncome;
+    if (kind === "income") return [
+      ["餐飲銷貨收入", formatBalance(p.revenue["4000"] || 0)],
+      ["服務費及小費收入", formatBalance(p.revenue["4010"] || 0)],
+      ["補助及其他營業收入", formatBalance(p.revenue["4020"] || 0)],
+      ["退款及銷貨折讓", formatBalance(-p.returns)],
+      ["營業收入淨額", formatBalance(p.netRevenue)],
+      ...Object.entries(p.expenseBreakdown).map(([code, amount]) => {
+        const account = CHART_OF_ACCOUNTS.find((item) => item.code === code);
+        return [account ? account.name : code, formatBalance(-amount)];
+      }),
+      ["營業利益", formatBalance(p.operatingProfit)],
+      ["財務成本", formatBalance(-p.financeCosts)],
+      ["所得稅費用", formatBalance(-p.incomeTax)],
+      ["本期損益", formatBalance(p.profit)],
+      ["其他綜合損益（本遊戲未設定）", formatBalance(p.otherComprehensiveIncome)],
+      ["本期綜合損益總額", formatBalance(p.totalComprehensiveIncome)]
+    ];
+    if (kind === "equity") {
+      const e = report.equityChanges;
+      return [
+        ["期初業主投入資本", formatBalance(e.openingCapital)],
+        ["本期資本投入", formatBalance(e.capitalContributions)],
+        ["期初保留盈餘／累積虧損", formatBalance(e.openingRetainedEarnings)],
+        ["本期綜合損益", formatBalance(e.comprehensiveIncome)],
+        ["業主提取", formatBalance(-e.drawings)],
+        ["期末權益", formatBalance(e.closingEquity)]
+      ];
+    }
+    if (kind === "position") {
+      const f = report.financialPosition;
+      return [
+        ["資產", ""],
+        ["現金及約當現金", formatBalance(f.assets.cash)],
+        ["存貨－食材", formatBalance(f.assets.inventory)],
+        ["設備及租賃改良－成本", formatBalance(f.assets.ppeCost)],
+        ["減：累計折舊", formatBalance(-f.assets.ppeDep)],
+        ["設備及租賃改良－帳面金額", formatBalance(f.assets.ppeNet)],
+        ["攤位經營權－成本", formatBalance(f.assets.rightsCost)],
+        ["減：累計攤銷", formatBalance(-f.assets.rightsAmort)],
+        ["攤位經營權－帳面金額", formatBalance(f.assets.rightsNet)],
+        ["資產總額", formatBalance(f.assets.total)],
+        ["負債", ""],
+        ["銀行週轉借款", formatBalance(f.liabilities.bankBorrowings)],
+        ["銀行透支（負現金餘額重分類）", formatBalance(f.liabilities.bankOverdraft)],
+        ["負債總額", formatBalance(f.liabilities.total)],
+        ["權益", ""],
+        ["業主投入資本", formatBalance(f.equity.capital)],
+        ["保留盈餘及本期損益", formatBalance(f.equity.retainedEarnings + f.equity.currentProfit)],
+        ["權益總額", formatBalance(f.equity.total)],
+        ["負債及權益總額", formatBalance(f.totalLiabilitiesAndEquity)]
+      ];
+    }
+    const c = report.cashFlow;
+    return [
+      ["營業活動現金流量淨額", formatBalance(c.operating)],
+      ["投資活動現金流量淨額", formatBalance(c.investing)],
+      ["籌資活動現金流量淨額", formatBalance(c.financing)],
+      ["銀行透支變動（列入籌資活動）", formatBalance(c.overdraftChange)],
+      ["現金及約當現金淨增加／減少", formatBalance(c.netChange)],
+      ["期初現金及約當現金", formatBalance(c.openingCash)],
+      ["期末現金及約當現金", formatBalance(c.closingCash)]
+    ];
+  }
+
+  function renderMonthlyStatements() {
+    const reports = state.accounting?.monthlyReports || [];
+    if (!reports.length) return fragment(subhead("每三十夜・綜合財務報表", "第 30 夜結帳後產生", true),
+      storyCard("第一期尚未結帳。", "夜市不停業；每三十夜只完成一次財務期間結帳，接著繼續下一夜。"));
+    const report = reports.find((item) => item.period === Number(selectedReportPeriod)) || reports[reports.length - 1];
+    const select = filterSelect("財務期間", "report-period", reports.slice().reverse().map((item) => ({
+      value: item.period, label: "第 " + item.period + " 期・第 " + item.startDay + "–" + item.endDay + " 夜"
+    })), report.period);
+    const statementTabs = el("nav", "statement-tabs", null, { role: "tablist", "aria-label": "財務報表種類" });
+    [
+      ["income", "綜合損益表"],
+      ["equity", "權益變動表"],
+      ["position", "資產負債表"],
+      ["cashflow", "現金流量表"]
+    ].forEach(([id, name]) => statementTabs.append(button(name, "statement-view", { id },
+      false, "statement-tab" + (reportStatement === id ? " active" : ""))));
+    const title = { income: "綜合損益表", equity: "權益變動表", position: "資產負債表", cashflow: "現金流量表" }[reportStatement];
+    const rows = statementRows(report, reportStatement);
+    const parts = [
+      subhead(title, "第 " + report.period + " 期・第 " + report.startDay + "–" + report.endDay + " 夜", true),
+      select, statementTabs,
+      accountingTable(title + "・第 " + report.period + " 期", ["IFRS 導向報表項目", "金額"], rows)
+    ];
+    if (reportStatement === "position") parts.push(el("div", "statement-status " + (report.financialPosition.balanced ? "balanced" : "unbalanced"),
+      report.financialPosition.balanced ? "資產 = 負債 + 權益" : "財務狀況表有差額，請檢查分錄"));
+    if (reportStatement === "cashflow") parts.push(el("div", "statement-status " + (report.cashFlow.reconciles ? "balanced" : "unbalanced"),
+      report.cashFlow.reconciles ? "現金流量與期初／期末現金勾稽一致" : "現金流量尚未勾稽"));
+    if (report.outcome) parts.push(storyCard("本期故事走向｜" + report.outcome.title, report.outcome.text));
+    parts.push(helper("報表按遊戲內部 IFRS 導向科目彙整；目前其他綜合損益、所得稅及業主提取未設定，故為零。", "helper-copy accounting-note"));
+    return fragment(parts);
+  }
+
+  function renderChartOfAccounts() {
+    const categories = { asset: "資產", "contra-asset": "資產減項", liability: "負債", equity: "權益",
+      income: "收入", "contra-income": "收入減項", expense: "費用" };
+    const rows = CHART_OF_ACCOUNTS.map((account) => [account.code, account.name, categories[account.type], account.statement]);
+    return fragment(subhead("會計科目表", "遊戲內部 IFRS 導向映射", true),
+      helper("IFRS 規範財務報表的表達與揭露，但不指定通用帳號編碼。本專案科目代碼為遊戲內部設計，並非官方 IFRS 科目編號。", "helper-copy accounting-note"),
+      accountingTable("夜市會計科目表", ["科目代碼", "科目名稱", "分類", "主要報表"], rows));
+  }
+
+  function renderStoryJournal() {
+    const currentPeriodStart = Math.floor((state.day - 1) / CAMPAIGN_DAYS) * CAMPAIGN_DAYS + 1;
+    const completed = new Set((state.journal || []).filter((entry) => entry.day >= currentPeriodStart)
+      .map((entry) => campaignCycleDay(entry.day)));
+    const currentCycleDay = campaignCycleDay(state.day);
     const timeline = el("div", "timeline-list");
     CAMPAIGN_CALENDAR.forEach(function(night, index) {
       const day = index + 1;
-      const status = completed.has(day) ? "completed" : (day === state.day && state.phase !== "ending" ? "current" : "upcoming");
+      const status = completed.has(day) ? "completed" : (day === currentCycleDay ? "current" : "upcoming");
       const row = el("article", "timeline-row " + status);
-      const number = el("span", "timeline-day", String(day).padStart(2, "0"));
       const copy = el("span", "timeline-copy");
       append(copy, el("b", "", night.title), el("span", "", night.name));
       const marker = WEEKLY_DECISION_DAYS.includes(day) ? el("span", "timeline-marker", "週轉") : null;
-      append(row, number, copy, marker, el("span", "timeline-status", status === "completed" ? "已完成" : (status === "current" ? "進行中" : "待開啟")));
+      append(row, el("span", "timeline-day", String(day).padStart(2, "0")), copy, marker,
+        el("span", "timeline-status", status === "completed" ? "已完成" : (status === "current" ? "進行中" : "待開啟")));
       timeline.append(row);
-      if ([7, 14, 21, 28].includes(day)) timeline.append(el("div", "timeline-week-break", "第 " + (day / 7) + " 週結算"));
+      if ([7, 14, 21, 28].includes(day)) timeline.append(el("div", "timeline-week-break", "第 " + (day / 7) + " 週底稿"));
     });
-    const parts = [subhead("三十夜・經營時間線", "每七夜一個週轉節點", true), timeline];
-    if (!state.journal.length) {
-      parts.push(storyCard("港邊手記還是空白的。", "完成一晚營業、招待客人，並做一個打烊後的小決定，第一段故事就會留在這裡。"));
-      return fragment(parts);
-    }
-    parts.push(subhead("夜市營運手記", "已記錄 " + state.journal.length + " 夜", true));
-    state.journal.forEach(function(entry) {
+    const parts = [subhead("夜市手記・故事循環", "故事每 30 夜回環，世界與帳務持續前進", true), timeline];
+    if (!state.journal.length) parts.push(storyCard("港邊手記還是空白的。", "完成一晚營業、招待客人，並做一個打烊後的小決定，第一段故事就會留在這裡。"));
+    (state.journal || []).forEach(function(entry) {
       const item = el("article", "story-card journal-entry");
-      append(item, el("h3", "", "第 " + String(entry.day).padStart(2, "0") + " 夜 ｜ " + entry.event));
-      const text = el("p");
-      append(text, el("b", "", entry.title),
-        document.createTextNode(" "),
-        document.createElement("br"),
-        document.createTextNode(entry.choice + " ｜ 淨額 " + moneyNet(entry.net)),
-        document.createElement("br"),
-        document.createTextNode(entry.guests.join("、")));
-      item.append(text);
+      append(item, el("h3", "", "第 " + entry.day + " 夜 ｜ " + entry.event),
+        el("p", "", entry.title + "　" + entry.choice + " ｜ 淨額 " + moneyNet(entry.net)));
+      if (entry.marketCard) item.append(el("p", "", "公告卡：" + entry.marketCard + (entry.marketChoice ? "・" + entry.marketChoice : "")));
+      if (entry.guests?.length) item.append(el("p", "", entry.guests.join("、")));
       parts.push(item);
     });
     return fragment(parts);
+  }
+
+  function renderJournal() {
+    const nav = el("nav", "accounting-tabs", null, { role: "tablist", "aria-label": "帳務檢視" });
+    [["daily", "前一日日記"], ["weekly", "週工作底稿"], ["monthly", "30 夜報表"], ["chart", "科目表"], ["stories", "港邊手記"]]
+      .forEach(([id, name]) => nav.append(button(name, "journal-view", { id }, false,
+        "accounting-tab" + (journalView === id ? " active" : ""))));
+    const view = {
+      daily: renderDailyJournal,
+      weekly: renderWeeklyWorksheet,
+      monthly: renderMonthlyStatements,
+      chart: renderChartOfAccounts,
+      stories: renderStoryJournal
+    }[journalView] || renderDailyJournal;
+    return fragment(nav, view());
   }
 
   function renderStall() {
@@ -423,6 +740,10 @@ export function createUI(runtime) {
       return total + (Number(state.equipment[item.id]) || 0);
     }, 0);
     const parts = [subhead("夜嵐攤號・工作台", "第 " + String(state.day).padStart(2, "0") + " 夜", true)];
+    const alliance = allianceStatus(false);
+    if (alliance) parts.push(alliance);
+    const announcement = marketAnnouncement();
+    if (announcement) parts.push(announcement);
     const summary = el("div", "stall-summary-grid");
     [
       ["🥬", (state.stock.chicken || 0) + " / " + (state.stock.seafood || 0) + " / " + (state.stock.tea || 0), "雞湯・海味・茶點庫存"],
@@ -487,24 +808,25 @@ export function createUI(runtime) {
 
   function renderUI() {
     const event = todayEvent();
-    document.getElementById("dayValue").textContent = String(state.day).padStart(2, "0") + " / 30";
+    const period = Math.floor((state.day - 1) / CAMPAIGN_DAYS) + 1;
+    const cycleDay = campaignCycleDay(state.day);
+    document.getElementById("dayValue").textContent = "第 " + state.day + " 夜・第 " + period + " 期 " + cycleDay + " / " + CAMPAIGN_DAYS;
     document.getElementById("coinsValue").textContent = money(state.coins);
     document.getElementById("fameValue").textContent = String(state.fame);
     document.getElementById("regularValue").textContent = String(state.regulars).padStart(2, "0") + " / 24";
-    const phaseText = { prep: "準備中", service: "營業中", report: "已打烊", decision: "週轉決策", ending: "周目結局" }[state.phase] || "準備中";
+    const phaseText = { prep: "準備中", service: "營業中", report: "已打烊", decision: "週轉決策" }[state.phase] || "準備中";
     document.getElementById("phaseLabel").textContent = phaseText;
-    document.getElementById("panelPhase").textContent = { prep: "準備時段", service: "現場營業", report: "打烊結算", decision: "每週經營選擇", ending: "三十夜回顧" }[state.phase] || "準備時段";
+    document.getElementById("panelPhase").textContent = { prep: "準備時段", service: "現場營業", report: "打烊結算", decision: "每週經營選擇" }[state.phase] || "準備時段";
     document.querySelector(".world-title").textContent = state.phase === "prep" ? "潮聲近了，準備開門嗎？" :
       (state.phase === "service" ? "燈火亮起，巷口正湧進人潮。" :
-        (state.phase === "decision" ? "新的一週，要把夜市帶往哪裡？" :
-          (state.phase === "ending" ? (ENDINGS[state.endingId] || ENDINGS["soft-goodbye"]).title : "今晚的帳本，記下了你的選擇。")));
+        (state.phase === "decision" ? "新的一週，要把夜市帶往哪裡？" : "今晚的帳本，記下了你的選擇。"));
     const worldState = document.getElementById("worldState");
     worldState.classList.toggle("open", state.phase === "service");
     document.getElementById("worldStateText").textContent = state.phase === "prep" ? "備料與排班中" :
-      (state.phase === "service" ? "客人走進夜市・營業中" : (state.phase === "decision" ? "本週經營方向待選" : (state.phase === "ending" ? "三十夜故事已完成" : "這一夜已打烊")));
+      (state.phase === "service" ? "客人走進夜市・營業中" : (state.phase === "decision" ? "本週經營方向待選" : "這一夜已打烊"));
     const mainAction = document.getElementById("mainAction");
-    mainAction.textContent = state.phase === "prep" ? "掛燈迎客" : (state.phase === "service" ? "接待下一桌" : (state.phase === "report" ? (state.day === CAMPAIGN_DAYS ? "查看三十夜結局" : "收進手記，準備明晚") : (state.phase === "decision" ? "先選擇本週方向" : "周目結束")));
-    mainAction.disabled = state.phase === "decision" || state.phase === "ending";
+    mainAction.textContent = state.phase === "prep" ? "掛燈迎客" : (state.phase === "service" ? "接待下一桌" : (state.phase === "report" ? "收進手記，準備明晚" : "先選擇本週方向"));
+    mainAction.disabled = state.phase === "decision";
     mainAction.setAttribute("aria-disabled", String(mainAction.disabled));
     mainAction.dataset.action = "main-action";
     document.querySelectorAll(".panel-tab").forEach(function(tab) {
@@ -512,7 +834,7 @@ export function createUI(runtime) {
       tab.setAttribute("aria-selected", String(tab.dataset.tab === activeTab));
     });
     document.getElementById("panelContent").setAttribute("aria-labelledby", "tab-" + activeTab);
-    const titles = { ops: "今晚營運", stall: "攤位工作台", stock: "備料與菜單", equipment: "設備與改造", staff: "人員排班", journal: "港邊手記" };
+    const titles = { ops: "今晚營運", stall: "攤位工作台", stock: "備料與菜單", equipment: "設備與改造", staff: "人員排班", journal: "帳務與手記" };
     document.getElementById("panelHeading").textContent = titles[activeTab] || titles.ops;
     const renderers = { ops: renderOverview, stall: renderStall, stock: renderStock, equipment: renderEquipment, staff: renderStaff, journal: renderJournal };
     document.getElementById("panelContent").replaceChildren((renderers[activeTab] || renderOverview)());
@@ -521,11 +843,25 @@ export function createUI(runtime) {
   }
 
   function setTabAndRender(tab) { setTab(tab); renderUI(); }
+  function setJournalView(view) {
+    if (["daily", "weekly", "monthly", "chart", "stories"].includes(view)) journalView = view;
+  }
+  function setStatementView(view) {
+    if (["income", "equity", "position", "cashflow"].includes(view)) reportStatement = view;
+  }
+  function setJournalFilter(filter, value) {
+    if (filter === "diary-day") selectedJournalDay = Number(value) || null;
+    if (filter === "report-period") selectedReportPeriod = Number(value) || null;
+    if (filter === "week-report") selectedWeek = Number(value) || null;
+  }
   return {
     renderUI: renderUI,
     renderOrderChoices: renderOrderChoices,
     setTab: setTab,
     setTabAndRender: setTabAndRender,
+    setJournalView: setJournalView,
+    setStatementView: setStatementView,
+    setJournalFilter: setJournalFilter,
     getTab: function() { return activeTab; }
   };
 }

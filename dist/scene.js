@@ -71,7 +71,7 @@ export function createScene(runtime) {
         actor.path = points.slice();
       }
       function syncStaffWalkers() {
-        var needed = 1 + Math.min(3, Number(state.hiredCrew) || 0);
+        var needed = 1 + Math.min(6, Number(state.hiredCrew) || 0);
         while (staffWalkers.length < needed) {
           var index = staffWalkers.length;
           staffWalkers.push({

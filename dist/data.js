@@ -1,6 +1,13 @@
 export const DATA = Object.freeze({
   saveKey: "ye-lan-night-market-iso-v2",
   legacyKey: "ye-lan-night-game-v1",
+  accounting: {
+    equipmentUsefulLifeDays: 360,
+    equipmentResidualRate: 0.1,
+    improvementUsefulLifeDays: 720,
+    improvementResidualRate: 0.05,
+    concessionUsefulLifeDays: 1080
+  },
   economy: {
     rent: 95,
     water: 18,
@@ -29,7 +36,14 @@ export const DATA = Object.freeze({
     cookServicePenalty: 12,
     serverServicePenalty: 10,
     complaintSnackCost: 35,
-    complaintRefund: 80
+    complaintRefund: 80,
+    loanPrincipal: 800,
+    loanWeeklyRate: 0.02,
+    alliancePurchaseMultiplier: 0.9,
+    allianceExtraGuest: 1,
+    touristPromotionCost: 100,
+    hygieneQuickCleanCost: 55,
+    rainSubsidy: 60
   },
   camera: {
     defaultYaw: 0,

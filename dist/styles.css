@@ -280,6 +280,72 @@ body { font-size: var(--type-body); }
 .timeline-status { color: #96a599; background: transparent; }
 .timeline-week-break { padding: var(--space-1) var(--space-2); color: #d5bc7a; font-size: var(--type-caption); letter-spacing: .04em; }
 
+/* Market notices and capital tools borrow the existing harbor ledger palette. */
+.market-announcement { display: grid; gap: var(--space-3); padding: var(--space-3); margin-top: var(--space-3); border: 1px solid #d8be7650; border-left: 3px solid #d8be76; border-radius: 12px; background: linear-gradient(145deg,#344139,#263331); }
+.market-announcement.negative { border-color: #cb8a6c66; border-left-color: #cb8a6c; background: linear-gradient(145deg,#413631,#2c2e2c); }
+.market-announcement-head { display: flex; align-items: flex-start; gap: var(--space-3); }
+.market-announcement-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid #ffffff18; border-radius: 10px; color: #f0d38f; background: #ffffff0a; font-size: var(--type-display); }
+.market-announcement-copy { min-width: 0; }
+.market-announcement-label { color: #dfc784; font-size: var(--type-caption); font-weight: 800; }
+.market-announcement-copy h3 { margin: 3px 0 0; color: #f0e8d5; font-size: var(--type-body); }
+.market-announcement-copy p { margin: var(--space-1) 0 0; color: #c5d0c4; font-size: var(--type-caption); line-height: 1.55; }
+.market-announcement.negative .market-announcement-label { color: #e3ad91; }
+.market-announcement-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2); }
+.announcement-choice { display: grid; align-content: center; justify-items: start; gap: var(--space-1); min-width: 0; min-height: 58px; padding: var(--space-2) var(--space-3); border: 1px solid #c1d2b244; border-radius: 9px; color: #e5ead8; background: #8ba6841b; text-align: left; cursor: pointer; }
+.announcement-choice:hover:not(:disabled) { border-color: #e1ca85aa; background: #d6bb6c1c; }
+.announcement-choice:disabled { opacity: .66; cursor: not-allowed; }
+.announcement-choice-name { color: #f1e7cb; font-size: var(--type-body); font-weight: 800; }
+.announcement-choice-detail { color: #c1cdbf; font-size: var(--type-caption); line-height: 1.45; }
+.market-announcement-result { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-radius: 8px; color: #d0d9ca; background: #08141450; font-size: var(--type-caption); line-height: 1.5; }
+.market-announcement-result b { color: #f0d697; }
+.market-announcement-result.helper-copy { margin: 0; }
+.finance-panel { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); margin: var(--space-2) 0; border: 1px solid #7f9a8744; border-radius: 12px; background: linear-gradient(110deg,#233a38,#1b2e2e); }
+.finance-copy { min-width: 0; }
+.finance-kicker { color: #a9c9b4; font-size: var(--type-caption); font-weight: 800; }
+.finance-copy h3 { margin: var(--space-1) 0; color: #e6e9d9; font-size: var(--type-body); }
+.finance-copy p { margin: 0; color: #c3d0c4; font-size: var(--type-caption); line-height: 1.55; }
+.finance-action { flex: 0 0 auto; min-height: 44px; padding: var(--space-2) var(--space-3); border: 1px solid #a9cba866; border-radius: 9px; color: #e2efdd; background: #77998230; font: inherit; font-size: var(--type-caption); font-weight: 800; cursor: pointer; }
+.finance-action:hover:not(:disabled) { border-color: #b8d9bb; background: #77998255; }
+.finance-action:disabled { opacity: .64; cursor: not-allowed; }
+.alliance-status { display: grid; gap: var(--space-1); padding: var(--space-3); margin: var(--space-2) 0; border: 1px solid #d4be7944; border-radius: 10px; color: #d8d2bc; background: #c3a65e0c; font-size: var(--type-caption); line-height: 1.5; }
+.alliance-status b { color: #ead69d; font-size: var(--type-body); }
+.alliance-status.active { border-color: #8fbd9666; background: #7ea58618; }
+.alliance-status.active b { color: #c7e0bd; }
+.finance-note { padding: var(--space-2) var(--space-3); margin: var(--space-2) 0; border: 1px solid #a9cba833; border-radius: 9px; color: #c3d0c4; background: #77998216; font-size: var(--type-caption); line-height: 1.55; }
+.acquisition-targets { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2); }
+.acquisition-action { min-height: 52px; padding: var(--space-2); line-height: 1.4; }
+
+/* Ledger and statement views use compact, keyboard-scrollable tables instead
+   of squeezing accounting columns into a narrow mobile panel. */
+.accounting-tabs, .statement-tabs { display: flex; gap: var(--space-1); max-width: 100%; overflow-x: auto; padding: 0 0 var(--space-2); scrollbar-color: #758a77 #1c2826; }
+.accounting-tab, .statement-tab { flex: 0 0 auto; min-height: 44px; padding: var(--space-2) var(--space-3); border: 1px solid #8fa58a38; border-radius: 8px; color: #d3d8c8; background: #24312f; font: inherit; font-size: var(--type-caption); font-weight: 750; cursor: pointer; }
+.accounting-tab:hover, .statement-tab:hover { border-color: #d1b876; }
+.accounting-tab.active, .statement-tab.active { border-color: #d5bd79; color: #f2e6bf; background: #9c875033; }
+.accounting-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; color: #cfdbca; font-size: var(--type-caption); font-weight: 750; }
+.accounting-filter select { min-height: 44px; max-width: 100%; padding: 0 var(--space-3); border: 1px solid #93a88b55; border-radius: 8px; color: #f0ead9; background: #202d2b; font: inherit; }
+.accounting-table-shell { max-width: 100%; overflow: auto; margin: var(--space-2) 0 var(--space-3); border: 1px solid #96a38b35; border-radius: 10px; background: #182321cc; scrollbar-color: #758a77 #1c2826; }
+.accounting-table-shell:focus-visible { outline: 2px solid #e3c77d; outline-offset: 2px; }
+.accounting-table { width: 100%; min-width: 560px; border-collapse: collapse; color: #dfe3d5; font-size: var(--type-caption); line-height: 1.45; }
+.accounting-table th, .accounting-table td { padding: 10px 12px; border-bottom: 1px solid #9dac9630; text-align: left; vertical-align: top; white-space: nowrap; }
+.accounting-table th { position: sticky; top: 0; color: #ecdfb6; background: #293733; font-weight: 800; }
+.accounting-table tbody tr:last-child td { border-bottom: 0; }
+.accounting-table tbody tr:nth-child(even) { background: #ffffff04; }
+.statement-status { min-height: 44px; display: flex; align-items: center; padding: var(--space-2) var(--space-3); margin: var(--space-2) 0; border: 1px solid #a58b5344; border-radius: 8px; color: #f0d798; background: #b3923c12; font-size: var(--type-caption); font-weight: 800; }
+.statement-status.balanced { border-color: #8fbd9666; color: #cce0c1; background: #7ea58618; }
+.statement-status.unbalanced { border-color: #dc997c88; color: #ffd0b4; background: #be634522; }
+.accounting-note { line-height: 1.6; }
+.asset-register { display: grid; gap: var(--space-2); }
+.asset-row { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid #96a38b35; border-radius: 10px; background: #1a2826; }
+.asset-row-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); color: #eee4c9; }
+.asset-code { padding: 4px 8px; border: 1px solid #d0b76a44; border-radius: 99px; color: #dac98f; font-size: var(--type-caption); }
+.asset-row-values { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-1) var(--space-3); color: #c6d0c4; font-size: var(--type-caption); }
+.asset-row-values b { color: #f0d696; }
+@media (max-width: 480px) {
+  .accounting-tabs, .statement-tabs { margin-right: calc(var(--space-3) * -1); padding-right: var(--space-3); }
+  .accounting-table { min-width: 520px; }
+  .asset-row-values { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 800px) {
   .app-shell { padding: var(--space-2) var(--space-2) var(--space-4); }
   .topbar { display: flex; flex-wrap: wrap; row-gap: var(--space-2); column-gap: var(--space-2); padding: 0 0 var(--space-2); }
@@ -318,5 +384,8 @@ body { font-size: var(--type-body); }
   .manager-copy { flex: 1 1 calc(100% - 58px); }
   .manager-action { margin-left: auto; }
   .complaint-options { grid-template-columns: 1fr; }
+  .market-announcement-choices, .acquisition-targets { grid-template-columns: 1fr; }
+  .finance-panel { align-items: stretch; flex-direction: column; }
+  .finance-action { width: 100%; }
   .modal { padding: var(--space-4); }
 }

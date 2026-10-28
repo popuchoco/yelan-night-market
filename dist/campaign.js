@@ -1,5 +1,62 @@
+import { DATA } from "./data.js";
+
 export const CAMPAIGN_DAYS = 30;
 export const WEEKLY_DECISION_DAYS = Object.freeze([8, 15, 22, 29]);
+
+export function campaignCycleDay(day) {
+  const value = Math.max(1, Math.floor(Number(day) || 1));
+  return ((value - 1) % CAMPAIGN_DAYS) + 1;
+}
+
+export function isWeeklyDecisionDay(day) {
+  const value = Math.max(1, Math.floor(Number(day) || 1));
+  return value > 1 && (value - 1) % 7 === 0;
+}
+
+// Short, optional market announcements add a second strategic layer to the
+// nightly event without turning the campaign into a board-game round system.
+export const MARKET_CARDS = Object.freeze({
+  "tourist-surge": {
+    id: "tourist-surge", name: "觀光客暴增", icon: "🧳", tone: "positive",
+    description: "旅行團臨時抵港。加開接待宣傳可多帶兩桌客人，但需要先支付行銷費。",
+    choices: [
+      { id: "promote", name: "加開觀光接待", detail: "行銷 −NT$ " + DATA.economy.touristPromotionCost + "・多 2 桌客人・口碑 +1", cost: DATA.economy.touristPromotionCost },
+      { id: "pass", name: "維持原班營運", detail: "不增加成本或客流", cost: 0 }
+    ]
+  },
+  "hygiene-audit": {
+    id: "hygiene-audit", name: "衛生稽查", icon: "🧾", tone: "negative",
+    description: "市集公會今晚抽查爐台與備料區。設備完善可免整改費，也可以先委託快速清潔。",
+    choices: [
+      { id: "deep-clean", name: "委託快速清潔", detail: "清潔支出 −NT$ " + DATA.economy.hygieneQuickCleanCost + "・免本次整改費・口碑 +1", cost: DATA.economy.hygieneQuickCleanCost },
+      { id: "self-check", name: "自行整理應檢", detail: "不花錢；若設備尚未準備好，可能支出 NT$ 75 整改費", cost: 0 }
+    ]
+  },
+  "rain-subsidy": {
+    id: "rain-subsidy", name: "雨天能源補助", icon: "🌧️", tone: "positive",
+    description: "港區因雨勢提供能源補助，可申請抵銷部分水電瓦斯支出。",
+    choices: [
+      { id: "claim", name: "申請補助", detail: "市集補助收入 +NT$ " + DATA.economy.rainSubsidy, cost: 0 },
+      { id: "decline", name: "留給其他攤商", detail: "不領取補助", cost: 0 }
+    ]
+  }
+});
+
+export const MARKET_CARD_SCHEDULE = Object.freeze({
+  2: "tourist-surge",
+  4: "rain-subsidy",
+  8: "hygiene-audit",
+  11: "rain-subsidy",
+  16: "tourist-surge",
+  18: "rain-subsidy",
+  22: "hygiene-audit",
+  26: "rain-subsidy"
+});
+
+export const ACQUISITION_TYPES = Object.freeze({
+  food: { id: "food", name: "熟食同業", note: "接手魚貨、果物或小吃攤，累積餐飲聯盟。" },
+  leisure: { id: "leisure", name: "遊戲同業", note: "接手遊戲與體驗攤，累積娛樂聯盟。" }
+});
 
 // Every night has its own harbor beat. Economic event ids still map to the
 // existing simulation rules in state.js/game.js; the calendar supplies the
@@ -34,21 +91,26 @@ const ALL_CAMPAIGN_NIGHTS = [
   { eventId: "festival", name: "港灣美食投票・人氣加開", icon: "🏮", tone: "positive", description: "港灣美食投票吸引一桌食客，活動 Bonus 隨每桌入帳。", title: "有人在投票紙上寫下你的名字。", story: "那張票沒有留下名字，只寫著『那碗湯讓我等到了船』。你把它放進收銀盒最裡面。" },
   { eventId: "street-music", name: "夜市文化季・舞台壓軸", icon: "🎸", tone: "positive", description: "文化季樂團在夜市口壓軸，客人多留一會，小費增加。", title: "樂團把最後一首歌留給海。", story: "最後一個和弦落下時，熟客沒有馬上離開。你突然明白，經營的不只是一張菜單，還有一個願意停下來的地方。" },
   { eventId: "blackout", name: "老街整修・夜間電力切換", icon: "💡", tone: "negative", description: "老街電力切換增加臨時接電成本；排煙罩升級可減少基本電費。", title: "整修中的巷子暫時少了幾盞燈。", story: "工班收工後，你把門口燈籠掛低一點，讓路過的人還看得見攤位。有人說，這盞燈剛好。" },
-  { eventId: "festival", name: "第三十夜・港灣萬燈回望", icon: "🏮", tone: "positive", description: "最後一夜的萬燈活動帶來旅人與節慶 Bonus。明晚之後，夜嵐將迎來自己的結局。", title: "第三十夜，港灣仍替你留著一盞燈。", story: "第一晚的招牌已被海風磨舊。你回望三十夜裡的每次擴張、招募、合作與取捨，知道答案不只寫在帳本上。" }
+  { eventId: "festival", name: "第三十夜・港灣萬燈回望", icon: "🏮", tone: "positive", description: "本期收尾的萬燈活動帶來旅人與節慶 Bonus。打烊後封存財報與故事走向，明晚夜市照常開張。", title: "第三十夜，港灣仍替你留著一盞燈。", story: "招牌又被海風磨過一圈。你回望本期的擴張、招募、合作與取捨，知道答案不只寫在帳本上；明晚還會有新的客人。" }
 ];
 export const CAMPAIGN_CALENDAR = Object.freeze(
   ALL_CAMPAIGN_NIGHTS.slice(0, CAMPAIGN_DAYS)
 );
 
 export const WEEKLY_OPTIONS = Object.freeze({
-  expand: { id: "expand", name: "擴大店家", icon: "🪑", max: 3, baseCost: 460, stepCost: 90, recurring: 24, label: "一次性裝修費", effect: "增加一個座位與客流、舒適度 +5；每夜租金 +NT$ 24。" },
-  hire: { id: "hire", name: "招聘人手", icon: "🧑🏻‍🍳", max: 3, baseCost: 360, stepCost: 120, recurring: 90, label: "一次性招募與訓練", effect: "每夜薪資 +NT$ 90，服務小費與尖峰應對提升。" },
-  acquire: { id: "acquire", name: "併購攤販", icon: "🏮", max: 2, baseCost: 760, stepCost: 180, recurring: 38, label: "一次性併購費", effect: "接手一個鄰攤與客流、口碑 +5；每夜租金 +NT$ 38。" },
+  expand: { id: "expand", name: "擴大店家", icon: "🪑", max: 9, baseCost: 460, stepCost: 90, recurring: 24, label: "一次性裝修費", effect: "增加座位與客流、舒適度 +5；每夜租金 +NT$ 24。最多擴成九桌，會列入設備資產與折舊。" },
+  hire: { id: "hire", name: "招聘人手", icon: "🧑🏻‍🍳", max: 6, baseCost: 360, stepCost: 120, recurring: 90, label: "一次性招募與訓練", effect: "每夜薪資 +NT$ 90，服務小費與尖峰應對提升。最多六位夥伴。" },
+  acquire: { id: "acquire", name: "併購攤販", icon: "🏮", max: 4, baseCost: 760, stepCost: 180, recurring: 38, label: "一次性併購費", effect: "選擇熟食或遊戲同業；接手後增加客流、口碑 +5，每夜租金 +NT$ 38。同類攤位併購兩次並擴店，可解鎖夜市品牌聯盟。" },
   hold: { id: "hold", name: "暫不投資", icon: "🧭", max: Infinity, baseCost: 0, stepCost: 0, recurring: 0, label: "保留現金", effect: "維持現有規模，不增加固定成本；把資金留給備料與設備。" }
 });
 
+export function marketCardForDay(day) {
+  const id = MARKET_CARD_SCHEDULE[campaignCycleDay(day)];
+  return id ? MARKET_CARDS[id] : null;
+}
+
 export function campaignEntry(day) {
-  const index = Math.max(0, Math.min(CAMPAIGN_DAYS - 1, Math.floor(Number(day) || 1) - 1));
+  const index = campaignCycleDay(day) - 1;
   return CAMPAIGN_CALENDAR[index];
 }
 
@@ -62,8 +124,16 @@ export function weeklyOptionCost(state, id) {
 
 export function selectEnding(state) {
   const net = Number(state.campaignNet) || 0;
-  if (net < -250 || state.coins < 0) return "harbor-debt";
+  if (net < -250 || state.coins < 0 || (Number(state.loanPrincipal) || 0) > 0) return "harbor-debt";
   if ((state.fame < 30 || state.regulars < 8) && state.coins < 1800) return "quiet-lantern";
+  const categoryCounts = (Array.isArray(state.acquisitionTypes) ? state.acquisitionTypes : [])
+    .filter((type) => type === "food" || type === "leisure")
+    .reduce((result, type) => {
+      result[type] = (result[type] || 0) + 1;
+      return result;
+    }, {});
+  const allianceFormed = (Number(state.expansions) || 0) >= 1 && Object.values(categoryCounts).some((count) => count >= 2);
+  if (allianceFormed && net >= 250 && state.fame >= 50) return "night-market-alliance";
   if (state.acquisitions >= 2 && net >= 500 && state.coins >= 1200) return "market-keeper";
   if (state.fame >= 72 && state.regulars >= 16 && net >= 0) return "harbor-icon";
   if (state.regulars >= 14 && state.cozy >= 68 && net >= 0) return "neighborhood-table";
@@ -73,12 +143,13 @@ export function selectEnding(state) {
 }
 
 export const ENDINGS = Object.freeze({
-  "harbor-icon": { title: "港灣夜市名店", tone: "positive", text: "三十夜後，旅人開始專程為你轉進這條巷子。口碑、熟客與帳本都站得住腳；你讓夜嵐成了港邊的一盞招牌燈。" },
+  "harbor-icon": { title: "港灣夜市名店", tone: "positive", text: "本期末，旅人開始專程為你轉進這條巷子。口碑、熟客與帳本都站得住腳；夜嵐成了港邊的一盞招牌燈，下一期仍會繼續迎客。" },
   "neighborhood-table": { title: "巷口的第二張餐桌", tone: "positive", text: "你把熟客照顧成了鄰里，把小店做成可以久坐的地方。夜嵐沒有變得最大，卻成為許多人每週都會回來的地方。" },
   "market-keeper": { title: "夜市共同經營人", tone: "positive", text: "你接下鄰攤，連起供應商與街坊，也守住了營運盈餘。夜市的招牌不再只屬於一家店，而是整條巷子的共同名字。" },
+  "night-market-alliance": { title: "夜市品牌聯盟", tone: "positive", text: "你把店面、熟食同業與共同採購串成一個能互相支援的聯盟。客人記住的不只是一個招牌，而是整個夜市彼此照應的味道。" },
   "steady-lantern": { title: "穩穩亮著的小店", tone: "positive", text: "你沒有追逐一夜成名，而是讓帳本保持健康、讓每晚的燈如常亮起。對港邊來說，這份穩定就是一種成功。" },
-  "soft-goodbye": { title: "把燈留給下一個夜晚", tone: "bittersweet", text: "這三十夜有過熱鬧，也有幾次算不過來的帳。你決定先收拾步伐，把學到的經驗與那盞手繪燈一起留在港邊。" },
-  "quiet-lantern": { title: "巷口漸漸安靜", tone: "negative", text: "客流與口碑沒有接上彼此，現金也不足以撐過下一輪營運。你暫時熄下招牌，留下一本寫滿教訓與熟客名字的手記。" },
-  "harbor-debt": { title: "風浪中的停業通知", tone: "negative", text: "固定成本與幾場壞天氣壓過了收入。你選擇先停業整頓，不讓欠款繼續擴大；港邊的人仍記得你曾替他們留過一張桌。" },
-  overextended: { title: "擴張太快的長夜", tone: "negative", text: "店家、人手與攤位都長大了，現金流卻沒有跟上。你先縮回一盞燈的規模，重新學習如何讓每個承諾都能被照顧。" }
+  "soft-goodbye": { title: "把燈留給下一個夜晚", tone: "bittersweet", text: "本期有過熱鬧，也有幾次算不過來的帳。你決定在下一期收拾步伐，把學到的經驗與那盞手繪燈一起留在港邊。" },
+  "quiet-lantern": { title: "巷口漸漸安靜", tone: "negative", text: "客流與口碑還沒接上彼此，現金也偏緊。你需要調整菜單、排班與投資節奏；巷口燈光暫時收斂，夜市並未停業。" },
+  "harbor-debt": { title: "風浪中的資金警訊", tone: "negative", text: "固定成本與幾場壞天氣壓過了本期收入。先暫緩擴張、整理借款與採購，讓下期營運有機會重新站穩。" },
+  overextended: { title: "擴張太快的長夜", tone: "negative", text: "店家、人手與攤位都長大了，現金流卻沒有跟上。下一期先穩住一盞燈的節奏，讓每個承諾都能被照顧。" }
 });

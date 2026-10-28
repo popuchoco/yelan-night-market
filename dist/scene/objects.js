@@ -96,10 +96,12 @@ export function createObjectRenderer(api) {
         ctx.globalAlpha = 1;
       }
       // Expansion decisions become visible in the 2.5D map as outdoor tables.
-      const tables = Math.min(3, Number(state.expansions) || 0);
+      const tables = Math.min(9, Number(state.expansions) || 0);
       for (let table = 0; table < tables; table++) {
-        const tableX = stall.x + 18 + table * 58;
-        const tableZ = stall.z + stall.d + 43;
+        const tableColumn = table % 3;
+        const tableRow = Math.floor(table / 3);
+        const tableX = stall.x + 16 + tableColumn * 58;
+        const tableZ = stall.z + stall.d + 29 + tableRow * 36;
         drawBox(tableX, tableZ, 34, 28, 15, {
           top: "#c89a61", sideA: "#8c6242", sideB: "#694a37", stroke: "#342b2399"
         });

@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111b1d">
-  <meta name="description" content="夜嵐夜市 2.5D 俯視經營模擬：經營攤位、調度人手與備料，在港邊夜色中接待每一位客人。">
+  <meta name="description" content="夜嵐夜市是一款台灣港邊主題的 2.5D 斜視角經營模擬遊戲。管理備料、設備、排班與租金、人事、水電瓦斯等成本，面對慶典 Bonus、供應波動與客訴事件，並從每日分錄、每週工作底稿一路檢視每 30 夜的財務報表。">
   <title>夜嵐夜市 — 2.5D 港邊經營模擬</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -14,7 +14,7 @@
     <header class="topbar">
       <div class="brand"><div class="brand-mark" aria-hidden="true">燈</div><div><div class="brand-name">夜嵐夜市</div><div class="brand-sub">HARBOR NIGHT MARKET ｜ 09</div></div></div>
       <div class="header-divider"></div>
-      <div class="night-label"><span>營業進度</span><strong>第 <b id="dayValue">01 / 30</b> 個夜晚　｜　<em id="phaseLabel">準備中</em></strong></div>
+      <div class="night-label"><span>持續營業日曆</span><strong><b id="dayValue">第 1 夜・第 1 期 1 / 30</b>　｜　<em id="phaseLabel">準備中</em></strong></div>
       <div class="header-spacer"></div>
       <div class="save-indicator" aria-live="polite"><i></i><span id="saveLabel">進度已儲存</span></div>
       <div class="resource-row" aria-label="夜市資源">
@@ -60,7 +60,7 @@
           <button id="tab-stock" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="stock"><span aria-hidden="true">◈</span>備料</button>
           <button id="tab-equipment" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="equipment"><span aria-hidden="true">⚒</span>設備</button>
           <button id="tab-staff" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="staff"><span aria-hidden="true">♙</span>排班</button>
-          <button id="tab-journal" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="journal"><span aria-hidden="true">▤</span>手記</button>
+          <button id="tab-journal" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="journal"><span aria-hidden="true">▤</span>帳務</button>
         </nav>
         <div class="panel-content" id="panelContent" role="tabpanel" aria-labelledby="tab-ops" tabindex="0" aria-live="polite"></div>
       </aside>

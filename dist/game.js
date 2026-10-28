@@ -1,11 +1,17 @@
 import { DATA } from "./data.js";
-import { CAMPAIGN_DAYS, ENDINGS, WEEKLY_OPTIONS, WEEKLY_DECISION_DAYS, selectEnding, weeklyOptionCost } from "./campaign.js";
+import { ACQUISITION_TYPES, ENDINGS, WEEKLY_OPTIONS, isWeeklyDecisionDay, selectEnding, weeklyOptionCost } from "./campaign.js";
 import {
-  createLedger, getFoodCost, getPurchasePrice, getTonightGuests, ledgerIncome, ledgerNet,
-  freshState, loadState, money, saveState, staffCost, todayEvent, todayStory
+  createLedger, fixedOperatingCost, getFoodCost, getPurchasePrice, getTonightGuests, hasBrandAlliance,
+  ledgerIncome, ledgerNet, freshState, loadState, marketCardChoice, money, saveState, staffCost,
+  todayEvent, todayMarketCard, todayStory
 } from "./state.js";
 import { createScene } from "./scene.js";
 import { createUI } from "./ui.js";
+import {
+  closeDepreciation, closeMonthlyStatements, closeWeeklyWorksheet,
+  recordAssetPurchase, recordExpense, recordInventoryPurchase, recordLoanDraw,
+  recordLoanRepayment, recordOperatingClose, recordRefund, recordSale
+} from "./accounting.js";
 
 const capAt = (value, max) => Math.min(max, value);
 
@@ -16,17 +22,59 @@ export function createGameEngine(state) {
 
   function openDoors() {
     if (state.phase !== "prep") return response(false, "現在不是開門準備時段。");
+    if (todayMarketCard(state) && !marketCardChoice(state)) return response(false, "先處理今晚的市集公告卡，再掛燈迎客。", false);
     state.phase = "service";
     state.customerIndex = 0;
     state.revenue = 0;
     state.results = [];
     state.reportChoice = null;
     state.ledger = createLedger(state);
-    const fixed = state.ledger.rent + state.ledger.expansionRent + state.ledger.acquisitionRent + state.ledger.labor + state.ledger.water + state.ledger.electricity + state.ledger.gas + state.ledger.fees;
+    const fixed = fixedOperatingCost(state.ledger);
     state.coins -= fixed;
+    state.coins += state.ledger.subsidies || 0;
+    recordOperatingClose(state, state.ledger);
+    if (state.loanPrincipal > 0) state.loanNights = (Number(state.loanNights) || 0) + 1;
     if (state.ledger.fees) state.fame = Math.max(0, state.fame - 2);
     else if (event().id === "inspection") state.fame = capAt(state.fame + 1, 100);
+    if (marketCardChoice(state) === "promote" || marketCardChoice(state) === "deep-clean") state.fame = capAt(state.fame + 1, 100);
     return response(true, "租金、人事、能源與活動費用 " + money(fixed) + " 已扣。街口有人往你的燈牌走來。");
+  }
+
+  function chooseMarketCard(choiceId) {
+    if (state.phase !== "prep") return response(false, "市集公告卡只能在開門前處理。", false);
+    const card = todayMarketCard(state);
+    if (!card) return response(false, "今晚沒有新的市集公告卡。", false);
+    if (state.marketChoiceDay === state.day) return response(false, "今晚的市集公告已經選定。", false);
+    const choice = card.choices.find((item) => item.id === choiceId);
+    if (!choice) return response(false, "找不到這項公告卡選擇。", false);
+    if (choice.cost > 0 && state.coins < choice.cost) return response(false, "現金不足，無法採用這項公告卡方案。", false);
+    state.marketChoiceDay = state.day;
+    state.marketCardChoice = choice.id;
+    return response(true, "已選擇「" + choice.name + "」：" + choice.detail + "。今晚開門時會依選項入帳。");
+  }
+
+  function borrowWorkingCapital() {
+    if (state.phase !== "decision") return response(false, "週轉金只能在每週經營決策時申請。", false);
+    if (state.loanUsed || state.loanPrincipal > 0) return response(false, "本周目已使用過週轉額度，請先依計畫償還。", false);
+    const principal = DATA.economy.loanPrincipal;
+    state.loanUsed = true;
+    state.loanPrincipal = principal;
+    state.loanTakenDay = state.day;
+    state.coins += principal;
+    recordLoanDraw(state, principal);
+    return response(true, "銀行核准低利週轉金 +" + money(principal) + "。未償本金每營業夜計息，週轉決策時可提前還清。");
+  }
+
+  function repayWorkingCapital() {
+    if (state.phase !== "decision") return response(false, "請在週轉決策時償還本金。", false);
+    if (!(Number(state.loanPrincipal) > 0)) return response(false, "目前沒有待償還的週轉本金。", false);
+    if (state.loanTakenDay && state.day <= state.loanTakenDay) return response(false, "至少完成一夜營業後，才能在下一次週轉決策還款。", false);
+    if (state.coins < state.loanPrincipal) return response(false, "現金不足，無法一次還清週轉本金。", false);
+    const principal = state.loanPrincipal;
+    state.coins -= principal;
+    state.loanPrincipal = 0;
+    recordLoanRepayment(state, principal);
+    return response(true, "已償還週轉本金 " + money(principal) + "；之後不再計息。利息已按營業夜列入帳本。");
   }
 
   function serveDish(id) {
@@ -56,6 +104,7 @@ export function createGameEngine(state) {
     state.ledger.tips += tip + menuBonus;
     state.ledger.bonus += eventBonus;
     state.ledger.food += cost;
+    recordSale(state, { dishName: dish.name, price: dish.price, serviceIncome: tip + menuBonus, otherIncome: eventBonus, foodCost: cost });
 
     const score = good ? ((state.staff.cook && state.staff.server) || state.hiredCrew > 0 ? 100 : 84) : 68;
     state.fame += good ? (score >= 90 ? 2 : 1) : 1;
@@ -81,6 +130,7 @@ export function createGameEngine(state) {
     else if (choice === "snack") {
       state.coins -= economy.complaintSnackCost;
       state.ledger.compensation += economy.complaintSnackCost;
+      recordExpense(state, "5500", "客訴補償｜招待小菜", economy.complaintSnackCost);
       state.fame += 1;
       state.cozy = capAt(state.cozy + 1, 100);
       score = 92;
@@ -88,6 +138,7 @@ export function createGameEngine(state) {
     } else if (choice === "refund") {
       state.coins -= economy.complaintRefund;
       state.ledger.refunds += economy.complaintRefund;
+      recordRefund(state, economy.complaintRefund);
       score = 76;
       reaction = "退款後平和離店";
     } else return response(false, "請選擇一種客訴處理方式。", false);
@@ -114,6 +165,7 @@ export function createGameEngine(state) {
     state.stock[id] = qty + 1;
     state.coins -= price;
     state.shiftPurchases = (state.shiftPurchases || 0) + price;
+    recordInventoryPurchase(state, item.name, price);
     return response(true, item.name + "補進 1 份，採購 " + money(price) + " 已記入庫存現金流。");
   }
 
@@ -126,6 +178,12 @@ export function createGameEngine(state) {
     if (typeof price !== "number" || state.coins < price) return response(false, "現金不足，或設備已經滿級。", false);
     state.coins -= price;
     state.equipment[id] = level + 1;
+    recordAssetPurchase(state, {
+      id: "equipment-" + id + "-" + (level + 1) + "-day-" + state.day,
+      name: item.name + " Lv." + (level + 1), cost: price,
+      usefulLifeDays: DATA.accounting.equipmentUsefulLifeDays,
+      residualValue: Math.round(price * DATA.accounting.equipmentResidualRate)
+    });
     return response(true, item.name + "升至 Lv." + (level + 1) + "，模型與營運效果已更新。");
   }
 
@@ -135,6 +193,11 @@ export function createGameEngine(state) {
     if (!item || state.upgrades[id] || state.coins < item.cost) return response(false, "現金不足，或這項改造已經添置。", false);
     state.coins -= item.cost;
     state.upgrades[id] = true;
+    recordAssetPurchase(state, {
+      id: "upgrade-" + id + "-day-" + state.day,
+      name: item.name, cost: item.cost, usefulLifeDays: DATA.accounting.improvementUsefulLifeDays,
+      residualValue: Math.round(item.cost * DATA.accounting.improvementResidualRate)
+    });
     if (id === "lantern") state.cozy = capAt(state.cozy + 8, 100);
     if (id === "old-radio") state.fame += 6;
     return response(true, item.name + "已添置，夜市多了一個讓人留下來的理由。");
@@ -164,58 +227,83 @@ export function createGameEngine(state) {
       state.coins += 80;
       state.revenue += 80;
       state.ledger.storyBonus += 80;
+      recordSale(state, { dishName: "熟客心意", otherIncome: 80 });
     }
     return response(true, id === "paperboat" ? "紙船漂進港灣，手記多了一頁。" : "替熟客留了窗邊桌，收到 NT$ 80 心意。");
   }
 
-  function chooseWeeklyDecision(id) {
+  function chooseWeeklyDecision(id, targetType = "food") {
     if (state.phase !== "decision") return response(false, "目前不是本週投資決策時段。", false);
     const option = WEEKLY_OPTIONS[id];
     const cost = weeklyOptionCost(state, id);
-    if (!option || cost === null) return response(false, "這項發展已達目前規模上限，請選其他方向。", false);
-    if (state.coins < cost) return response(false, "現金不足，請選擇暫不投資或其他負擔較低的方向。", false);
+    if (!option || cost === null) return response(false, "這項發展已達目前場景容量，請選其他方向。", false);
+    if (cost > 0 && state.coins < cost) return response(false, "現金不足，請選擇暫不投資或其他負擔較低的方向。", false);
+    if (id === "acquire" && !Object.prototype.hasOwnProperty.call(ACQUISITION_TYPES, targetType)) return response(false, "請選擇要接手的攤位類型。", false);
+    const allianceBefore = hasBrandAlliance(state);
     state.coins -= cost;
     if (id === "expand") {
       state.expansions += 1;
       state.cozy = capAt(state.cozy + 5, 100);
+      recordAssetPurchase(state, { id: "expansion-" + state.expansions + "-day-" + state.day, name: "戶外桌區改建 " + state.expansions, cost,
+        usefulLifeDays: DATA.accounting.improvementUsefulLifeDays });
     } else if (id === "hire") {
       state.hiredCrew += 1;
       state.fame = capAt(state.fame + 2, 100);
+      recordExpense(state, "5110", "招募與訓練｜新增夥伴", cost);
     } else if (id === "acquire") {
       state.acquisitions += 1;
+      state.acquisitionTypes.push(targetType);
       state.fame = capAt(state.fame + 5, 100);
       state.regulars = capAt(state.regulars + 1, 24);
+      recordAssetPurchase(state, { id: "concession-" + state.acquisitions + "-day-" + state.day,
+        name: "攤位經營權｜" + ACQUISITION_TYPES[targetType].name, cost,
+        usefulLifeDays: DATA.accounting.concessionUsefulLifeDays, category: "intangible" });
     }
-    state.decisions.push({ day: state.day, id, name: option.name, cost });
+    const targetName = id === "acquire" ? ACQUISITION_TYPES[targetType].name : null;
+    const decisionName = targetName ? option.name + "・" + targetName : option.name;
+    state.decisions.push({ day: state.day, id, name: decisionName, cost, ...(targetName ? { targetType } : {}) });
     state.phase = "prep";
     state.selectedDish = (state.day - 1) % DATA.dishes.length;
-    return response(true, id === "hold" ? "保留現金，照目前規模進入新的一週。" : option.name + "已完成，往後每夜固定成本與客流效果同步更新。");
+    if (!allianceBefore && hasBrandAlliance(state)) return response(true, "夜市品牌聯盟成立：每夜多一桌聯盟來客，聯合採購享進價 9 折。");
+    return response(true, id === "hold" ? "保留現金，照目前規模進入新的一週。" : decisionName + "已完成，往後每夜固定成本與客流效果同步更新。");
   }
 
   function nextNight() {
     if (state.phase !== "report" || !state.reportChoice) return response(false, "先完成今晚的打烊選擇。", false);
     const finishedDay = state.day;
     const net = ledgerNet(state.ledger);
+    const marketCard = todayMarketCard(state);
+    const selectedMarketChoice = marketCard
+      ? marketCard.choices.find((choice) => choice.id === marketCardChoice(state))
+      : null;
     state.journal.unshift({ day: state.day, event: event().name, title: todayStory(state).title,
       choice: state.reportChoice === "paperboat" ? "把紙船放回港灣" : "替熟客留了一張窗邊桌",
+      marketCard: marketCard ? marketCard.name : null,
+      marketChoice: selectedMarketChoice ? selectedMarketChoice.name : null,
       net, guests: state.results.map((result) => result.name) });
     state.journal = state.journal.slice(0, 30);
     state.campaignNet = (Number(state.campaignNet) || 0) + net;
+    closeDepreciation(state, finishedDay);
+    const monthlyClose = finishedDay % 30 === 0 ? closeMonthlyStatements(state, finishedDay) : null;
+    if (monthlyClose) {
+      monthlyClose.outcomeId = selectEnding({ ...state, campaignNet: monthlyClose.totals.profit });
+      monthlyClose.outcome = ENDINGS[monthlyClose.outcomeId];
+    }
+    const weeklyClose = finishedDay % 7 === 0 ? closeWeeklyWorksheet(state, finishedDay) : null;
     state.customerIndex = 0;
     state.revenue = 0;
     state.results = [];
     state.reportChoice = null;
     state.ledger = null;
     state.shiftPurchases = 0;
-    if (finishedDay >= CAMPAIGN_DAYS) {
-      state.endingId = selectEnding(state);
-      state.phase = "ending";
-      return response(true, "三十夜經營告一段落：" + ENDINGS[state.endingId].title + "。你的選擇已寫進港邊的結局。");
-    }
+    state.marketChoiceDay = 0;
+    state.marketCardChoice = null;
     state.day = finishedDay + 1;
-    const weeklyDecision = WEEKLY_DECISION_DAYS.includes(state.day);
+    const weeklyDecision = isWeeklyDecisionDay(state.day);
     state.phase = weeklyDecision ? "decision" : "prep";
     state.selectedDish = (state.day - 1) % DATA.dishes.length;
+    if (monthlyClose) return response(true, "第 " + monthlyClose.period + " 期已結帳，財務報表與本期故事走向「" + monthlyClose.outcome.title + "」已歸檔。夜市持續營業，第 " + state.day + " 夜開始。" + (weeklyClose?.balanced ? " 本週試算平衡。" : ""));
+    if (weeklyClose) return response(true, "第 " + weeklyClose.week + " 週工作底稿已歸檔，試算" + (weeklyClose.balanced ? "平衡" : "待核對") + "；新的一週開始前，請選擇經營方向。");
     return response(true, weeklyDecision
       ? "第 " + (state.day - 1) + " 夜結束。新的一週開始前，選擇擴大店家、招聘人手、併購攤販，或暫時保留現金。"
       : "新的一晚開始了，港邊又亮起幾盞燈。");
@@ -225,10 +313,10 @@ export function createGameEngine(state) {
     const fresh = freshState();
     Object.keys(state).forEach((key) => delete state[key]);
     Object.assign(state, fresh);
-    return response(true, "新的三十夜經營開始了。先備料、排班，再掛燈迎客。");
+    return response(true, "新的夜市世界已開張。先備料、排班，再掛燈迎客。");
   }
 
-  return { openDoors, serveDish, resolveComplaint, buyStock, upgradeEquipment, buyUpgrade, toggleStaff, selectDish, chooseStory, chooseWeeklyDecision, nextNight, restartCampaign,
+  return { openDoors, chooseMarketCard, borrowWorkingCapital, repayWorkingCapital, serveDish, resolveComplaint, buyStock, upgradeEquipment, buyUpgrade, toggleStaff, selectDish, chooseStory, chooseWeeklyDecision, nextNight, restartCampaign,
     getEvent: event, getGuests: guests, getStaffCost: () => staffCost(state), getIncome: () => state.ledger ? ledgerIncome(state.ledger) : 0 };
 }
 
@@ -346,12 +434,14 @@ function boot() {
     if (!button) return;
     const action = button.dataset.action;
     if (action === "panel-tab") { ui.setTab(button.dataset.tab); renderUI(); }
+    if (action === "journal-view") { ui.setJournalView(button.dataset.id); renderUI(); }
+    if (action === "statement-view") { ui.setStatementView(button.dataset.id); renderUI(); }
     if (action === "main-action") {
       if (state.phase === "prep") openDoors();
       else if (state.phase === "service") openOrder(state.customerIndex);
       else if (state.reportChoice) {
         const result = engine.nextNight();
-        if (result.ok) { scene.spawnGuests([]); if (state.phase === "decision" || state.phase === "ending") ui.setTab("ops"); }
+        if (result.ok) { scene.spawnGuests([]); if (state.phase === "decision") ui.setTab("ops"); }
         showResult(result);
       }
       else { ui.setTab("ops"); renderUI(); }
@@ -368,12 +458,15 @@ function boot() {
     if (action === "buy-upgrade") showResult(engine.buyUpgrade(button.dataset.id));
     if (action === "toggle-staff") showResult(engine.toggleStaff(button.dataset.role));
     if (action === "choose-story") showResult(engine.chooseStory(button.dataset.id));
+    if (action === "choose-market-card") showResult(engine.chooseMarketCard(button.dataset.id));
     if (action === "next-night") {
       const result = engine.nextNight();
-      if (result.ok) { scene.spawnGuests([]); if (state.phase === "decision" || state.phase === "ending") ui.setTab("ops"); }
+      if (result.ok) { scene.spawnGuests([]); if (state.phase === "decision") ui.setTab("ops"); }
       showResult(result);
     }
-    if (action === "choose-weekly") showResult(engine.chooseWeeklyDecision(button.dataset.id));
+    if (action === "choose-weekly") showResult(engine.chooseWeeklyDecision(button.dataset.id, button.dataset.targetType));
+    if (action === "borrow-loan") showResult(engine.borrowWorkingCapital());
+    if (action === "repay-loan") showResult(engine.repayWorkingCapital());
     if (action === "restart-campaign") {
       ui.setTab("ops");
       const result = engine.restartCampaign();
@@ -394,6 +487,15 @@ function boot() {
       button.textContent = soundEnabled ? "♫ 音效：開" : "♫ 音效：關";
       toast(soundEnabled ? "輕柔音效已開啟。" : "音效已關閉。");
       if (soundEnabled) playTone("success");
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    const control = event.target.closest('select[data-action]');
+    if (!control) return;
+    if (control.dataset.action === "diary-day" || control.dataset.action === "report-period" || control.dataset.action === "week-report") {
+      ui.setJournalFilter(control.dataset.action, control.value);
+      renderUI();
     }
   });
 
