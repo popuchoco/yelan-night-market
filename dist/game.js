@@ -249,7 +249,7 @@ function boot() {
     document.getElementById("orderTitle").textContent = guest.icon + "　" + guest.name;
     document.getElementById("orderMeta").textContent = guest.role + " · " + guest.needLabel;
     document.getElementById("orderQuote").textContent = "「" + guest.line + "」";
-    document.getElementById("orderChoices").innerHTML = ui.renderOrderChoices(guest);
+    document.getElementById("orderChoices").replaceChildren(ui.renderOrderChoices(guest));
     document.getElementById("orderModal").hidden = false;
     document.querySelector('[data-action="close-order"]').focus();
     playTone("open");

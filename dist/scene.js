@@ -1,4 +1,6 @@
 import { DATA } from "./data.js";
+import { createObjectRenderer } from "./scene/objects.js";
+import { createEffectRenderer } from "./scene/effects.js";
 
 export function applyCameraAction(camera, action) {
   const next = { ...camera };
@@ -207,173 +209,21 @@ export function createScene(runtime) {
           ctx.fillStyle=roofColor||"#ba5a46"; ctx.fillRect(point.x-width/2+4,point.y+height/2-3*scale,width-8*scale,3*scale);
         }
       }
-      function drawStall(stall,time) {
-        var s=view.scale;
-        var shadow=[project(stall.x-18,0,stall.z-14),project(stall.x+stall.w+18,0,stall.z-14),project(stall.x+stall.w+18,0,stall.z+stall.d+20),project(stall.x-18,0,stall.z+stall.d+20)];
-        pathPolygon(shadow,"#1017174d");
-        drawBox(stall.x,stall.z,stall.w,stall.d,stall.h*.53,{top:"#73593e",sideA:"#5d4734",sideB:"#4d4033",stroke:"#312b2366"});
-        drawBox(stall.x+16,stall.z+11,stall.w-32,stall.d-52,stall.h,{top:stall.roof,sideA:"#79593e",sideB:"#5c4734",stroke:"#32292099"});
-        drawBox(stall.x+8,stall.z+stall.d-51,stall.w-16,34,48,{top:"#d1a46b",sideA:"#8f6040",sideB:"#684b37",stroke:"#342b2399"});
-        drawBox(stall.x+stall.w*.44,stall.z+stall.d-45,stall.w*.12,42,52,{top:"#845536",sideA:"#6d472f",sideB:"#543b2c"});
-        // Striped canopy fascia is a distinct depth layer, not a flat scene background.
-        var roofY=stall.h+7;
-        var a=project(stall.x-7,roofY,stall.z-8), b=project(stall.x+stall.w+7,roofY,stall.z-8);
-        var c=project(stall.x+stall.w+7,roofY,stall.z+stall.d+4), d=project(stall.x-7,roofY,stall.z+stall.d+4);
-        pathPolygon([a,b,c,d],stall.roof,"#251f1a99",1);
-        var stripes=stall.main?8:6;
-        for(var k=0;k<stripes;k++) {
-          var xx=stall.x-7+(stall.w+14)*k/stripes;
-          var x2=stall.x-7+(stall.w+14)*(k+1)/stripes;
-          if(k%2===0) {
-            pathPolygon([project(xx,roofY,stall.z+stall.d+1),project(x2,roofY,stall.z+stall.d+1),project(x2,roofY-23,stall.z+stall.d+4),project(xx,roofY-23,stall.z+stall.d+4)],stall.main?"#f0d69b":"#e4d2a0");
-          }
-        }
-        // Roof ribs, posts and counter create readable 3D volume from the overhead camera.
-        for(var post=0;post<4;post++) {
-          var px=post%2?stall.x+stall.w-8:stall.x+5;
-          var pz=post<2?stall.z+3:stall.z+stall.d-21;
-          drawBox(px,pz,7,7,stall.h+8,{top:"#dfbd82",sideA:"#765a3b",sideB:"#503f31",stroke:"#30291f"});
-        }
-        for(var rib=1;rib<4;rib++) {
-          var start=project(stall.x+stall.w*rib/4,stall.h+9,stall.z-5);
-          var end=project(stall.x+stall.w*rib/4,stall.h+9,stall.z+stall.d+5);
-          ctx.strokeStyle="#f0d59b99"; ctx.lineWidth=Math.max(1,1.3*s); ctx.beginPath(); ctx.moveTo(start.x,start.y); ctx.lineTo(end.x,end.y); ctx.stroke();
-        }
-        // Lit service window and bowls.
-        var windowP=project(stall.x+stall.w*.45,stall.h*.63,stall.z+stall.d*.43);
-        drawRoundRect(windowP.x-17*s,windowP.y-12*s,34*s,21*s,4*s,"#e8bd70","#ffe3a477");
-        ctx.fillStyle="#41564a"; ctx.fillRect(windowP.x-13*s,windowP.y-9*s,26*s,15*s);
-        if(stall.main) {
-          var grill=project(stall.x+stall.w*.68,stall.h*.55,stall.z+stall.d*.70);
-          ctx.fillStyle="#ef8d48"; ctx.beginPath(); ctx.ellipse(grill.x,grill.y,10*s,5*s,0,0,Math.PI*2); ctx.fill();
-          ctx.fillStyle="#ffdb80"; ctx.beginPath(); ctx.moveTo(grill.x,grill.y-2*s); ctx.quadraticCurveTo(grill.x-6*s,grill.y-12*s,grill.x+1*s,grill.y-15*s); ctx.quadraticCurveTo(grill.x+8*s,grill.y-10*s,grill.x+5*s,grill.y-2*s); ctx.fill();
-          for(var smoke=0;smoke<3;smoke++) {
-            var phase=(time/900+smoke*.34)%1;
-            var smokeP=project(stall.x+stall.w*.68+Math.sin(time/650+smoke)*11*phase,stall.h*.55+16+phase*70,stall.z+stall.d*.70);
-            ctx.globalAlpha=(1-phase)*.34; ctx.fillStyle="#e4e8d5";
-            ctx.beginPath(); ctx.ellipse(smokeP.x,smokeP.y,3*s+phase*6*s,4*s+phase*5*s,0,0,Math.PI*2); ctx.fill();
-            ctx.globalAlpha=1;
-          }
-        }
-        var signP=project(stall.x+stall.w/2,stall.h+31,stall.z+stall.d*.43);
-        drawBillboard(signP,stall.name,!!stall.main,stall.roof);
-        // Lantern pendulums sway independently along the awning.
-        var lanternCount=stall.main?3:2;
-        for(var l=0;l<lanternCount;l++) {
-          var lx=stall.x+stall.w*(.2+l*(.6/(lanternCount-1||1)));
-          var lz=stall.z+stall.d+6;
-          var lp=project(lx,stall.h-10,lz);
-          var sway=Math.sin(time/540+l*1.7+stall.x)*3*s;
-          ctx.strokeStyle="#413a2f"; ctx.lineWidth=Math.max(1,1.2*s); ctx.beginPath(); ctx.moveTo(lp.x,lp.y); ctx.lineTo(lp.x+sway,lp.y+10*s); ctx.stroke();
-          drawRoundRect(lp.x+sway-4*s,lp.y+9*s,8*s,12*s,3*s,stall.main?"#dd7651":"#e4b265","#f3d996");
-          ctx.fillStyle="#ffde8b"; ctx.globalAlpha=.25+(.12*Math.sin(time/300+l)); ctx.beginPath(); ctx.arc(lp.x+sway,lp.y+15*s,13*s,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
-        }
-        if(stall.main) {
-          var bounds=[project(stall.x-5,stall.h+30,stall.z-10),project(stall.x+stall.w+5,stall.h+30,stall.z-10),project(stall.x+stall.w+12,0,stall.z+stall.d+8),project(stall.x-12,0,stall.z+stall.d+8)];
-          var xs=bounds.map(function(p){return p.x;}),ys=bounds.map(function(p){return p.y;});
-          stallHitBounds={left:Math.min.apply(null,xs)-12,top:Math.min.apply(null,ys)-12,right:Math.max.apply(null,xs)+12,bottom:Math.max.apply(null,ys)+12};
-          if(state.phase==="prep") {
-            var marker=project(stall.x+stall.w*.5,stall.h+96,stall.z+stall.d*.5);
-            var bounce=Math.sin(time/260)*3*s;
-            ctx.fillStyle="#f4d588"; ctx.beginPath(); ctx.moveTo(marker.x,marker.y+bounce); ctx.lineTo(marker.x-8*s,marker.y-11*s+bounce); ctx.lineTo(marker.x+8*s,marker.y-11*s+bounce); ctx.closePath(); ctx.fill();
-            drawRoundRect(marker.x-49*s,marker.y-31*s+bounce,98*s,18*s,7*s,"#223832e8","#f3d38a88");
-            ctx.font="800 "+Math.max(7,8*s)+"px system-ui"; ctx.fillStyle="#f5dd9c"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("點攤位・管備料",marker.x,marker.y-22*s+bounce);
-          }
-        }
-      }
-      function drawHuman(actor,time,kind,index) {
-        if(actor.hidden) return;
-        var p=project(actor.x,0,actor.z);
-        var s=view.scale*(actor.scale||1);
-        var moving=(actor.path&&actor.path.length)||(actor.route&&actor.route[actor.step]);
-        var bob=moving?Math.abs(Math.sin(time/110+(actor.phase||index||0)))*2.4*s:Math.sin(time/460+(actor.phase||index||0))*1*s;
-        // Ground shadow and feet establish contact with the isometric tile plane.
-        ctx.fillStyle="#13191a70"; ctx.beginPath(); ctx.ellipse(p.x,p.y+1*s,9*s,4*s,0,0,Math.PI*2); ctx.fill();
-        var legY=p.y-2*s+bob;
-        ctx.strokeStyle=actor.pants||"#394741"; ctx.lineWidth=Math.max(2,3.5*s); ctx.lineCap="round";
-        ctx.beginPath(); ctx.moveTo(p.x-2*s,legY); ctx.lineTo(p.x-3*s,legY+8*s); ctx.moveTo(p.x+2*s,legY); ctx.lineTo(p.x+4*s,legY+8*s); ctx.stroke();
-        ctx.fillStyle=actor.outfit||"#c7795f";
-        ctx.beginPath(); ctx.moveTo(p.x-6*s,p.y-20*s+bob); ctx.quadraticCurveTo(p.x,p.y-24*s+bob,p.x+6*s,p.y-20*s+bob); ctx.lineTo(p.x+7*s,p.y-5*s+bob); ctx.lineTo(p.x-7*s,p.y-5*s+bob); ctx.closePath(); ctx.fill();
-        ctx.strokeStyle=actor.skin||"#e6b594"; ctx.lineWidth=Math.max(1.6,2.2*s);
-        ctx.beginPath(); ctx.moveTo(p.x-5*s,p.y-17*s+bob); ctx.lineTo(p.x-9*s,p.y-8*s+bob); ctx.moveTo(p.x+5*s,p.y-17*s+bob); ctx.lineTo(p.x+9*s,p.y-9*s+bob); ctx.stroke();
-        if(kind==="staff") {
-          ctx.fillStyle="#f2e6c8"; ctx.fillRect(p.x-4*s,p.y-17*s+bob,8*s,10*s);
-          ctx.fillStyle="#c49255"; ctx.fillRect(p.x-4*s,p.y-8*s+bob,8*s,3*s);
-        } else if(kind==="guest" && actor.difficult) {
-          ctx.fillStyle="#ed8e68"; ctx.font=Math.max(10,12*s)+"px system-ui"; ctx.textAlign="center"; ctx.fillText("!",p.x+8*s,p.y-29*s+bob);
-        } else if(kind==="guest" && index===state.customerIndex && state.phase==="service") {
-          ctx.fillStyle="#f0d385"; ctx.font=Math.max(9,11*s)+"px system-ui"; ctx.textAlign="center"; ctx.fillText("…",p.x+8*s,p.y-28*s+bob);
-        }
-        ctx.fillStyle=actor.skin||"#e8b999"; ctx.beginPath(); ctx.arc(p.x,p.y-27*s+bob,5.2*s,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle=actor.hair||"#3b4036"; ctx.beginPath(); ctx.arc(p.x,p.y-29*s+bob,5.5*s,Math.PI,Math.PI*2); ctx.lineTo(p.x+5*s,p.y-27*s+bob); ctx.quadraticCurveTo(p.x,p.y-24*s+bob,p.x-5*s,p.y-27*s+bob); ctx.fill();
-        if(kind==="guest"&&index===state.customerIndex&&state.phase==="service") {
-          var pulse=4+Math.sin(time/200)*1.5;
-          ctx.strokeStyle="#f2d4889a"; ctx.lineWidth=1.5;
-          ctx.beginPath(); ctx.ellipse(p.x,p.y-13*s,pulse*1.5*s,18*s,0,0,Math.PI*2); ctx.stroke();
-        }
-        if(kind==="guest"&&index===state.customerIndex&&state.phase==="service") actorHits.push({x:p.x,y:p.y-14*s,r:DATA.motion.guestClickRadius*s,index:index,kind:"guest"});
-      }
-      function drawProp(x,z,type,time) {
-        if(type==="table") {
-          drawBox(x,z,49,34,27,{top:"#b89361",sideA:"#70563b",sideB:"#594831"});
-          drawBox(x+4,z+4,7,7,0,{top:"#5c705f",sideA:"#5c705f",sideB:"#5c705f"});
-        } else if(type==="crate") {
-          drawBox(x,z,37,34,31,{top:"#b9834f",sideA:"#775338",sideB:"#64472f"});
-          var c=project(x+18,33,z+17); ctx.strokeStyle="#e0b66f"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(c.x-7*view.scale,c.y); ctx.lineTo(c.x+7*view.scale,c.y); ctx.stroke();
-        } else if(type==="plant") {
-          drawBox(x,z,27,26,17,{top:"#8e6546",sideA:"#654935",sideB:"#57442e"});
-          var p=project(x+13,17,z+13);
-          for(var i=0;i<5;i++) { var angle=(i/5)*Math.PI*2+time/1800; ctx.fillStyle=["#738d60","#607f58","#93a26e"][i%3]; ctx.beginPath(); ctx.ellipse(p.x+Math.cos(angle)*6*view.scale,p.y-7*view.scale-Math.sin(angle)*4*view.scale,5*view.scale,3.4*view.scale,angle,0,Math.PI*2); ctx.fill(); }
-        } else if(type==="bench") {
-          drawBox(x,z,58,18,14,{top:"#ad8152",sideA:"#76553a",sideB:"#5e4933"});
-          drawBox(x+6,z+4,6,6,34,{top:"#987147",sideA:"#644d35",sideB:"#56432f"});
-          drawBox(x+46,z+4,6,6,34,{top:"#987147",sideA:"#644d35",sideB:"#56432f"});
-        }
-      }
       function boundsHit(x,y,b) { return !!b&&x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom; }
-      function drawEventEffects(time) {
-        var event=todayEvent();
-        if(event.id==="festival") {
-          var center=project(mainStall.x+mainStall.w/2,mainStall.h+165,mainStall.z+mainStall.d/2);
-          for(var i=0;i<18;i++) {
-            var angle=i*2.399+time/2300;
-            var radius=(20+(i%5)*14)*view.scale;
-            var px=center.x+Math.cos(angle)*radius, py=center.y+Math.sin(angle)*radius*.58;
-            ctx.globalAlpha=.32+.52*(.5+.5*Math.sin(time/270+i));
-            ctx.fillStyle=i%3===0?"#f2d983":"#ffab70";
-            ctx.beginPath(); ctx.arc(px,py,(i%3===0?2.5:1.5)*view.scale,0,Math.PI*2); ctx.fill();
-          }
-          ctx.globalAlpha=1;
-        }
-        if(event.id==="rain") {
-          ctx.fillStyle="#a9bec31a"; ctx.fillRect(0,0,view.w,view.h);
-          ctx.strokeStyle="#c5d8dc70"; ctx.lineWidth=1;
-          for(var r=0;r<72;r++) {
-            var x=(r*97+time*.22)%view.w, y=(r*61+time*.48)%view.h;
-            ctx.globalAlpha=.2+(r%4)*.08; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-5,y+13); ctx.stroke();
-          }
-          ctx.globalAlpha=1;
-          for(var puddle=0;puddle<4;puddle++) {
-            var pp=project(220+puddle*178,1,585+(puddle%2)*88);
-            ctx.strokeStyle="#b7d9d744"; ctx.beginPath(); ctx.ellipse(pp.x,pp.y,13*view.scale+Math.sin(time/300+puddle)*3,4*view.scale,0,0,Math.PI*2); ctx.stroke();
-          }
-        }
-        if(event.id==="supplier") {
-          var cart=project(835,0,832);
-          var roll=Math.sin(time/230)*1.5*view.scale;
-          ctx.fillStyle="#463d31"; ctx.beginPath(); ctx.ellipse(cart.x,cart.y,17*view.scale,5*view.scale,0,0,Math.PI*2); ctx.fill();
-          drawBox(800,800,54,34,36,{top:"#c99a60",sideA:"#966a43",sideB:"#735438"});
-          ctx.fillStyle="#f3ddab"; ctx.font=Math.max(8,10*view.scale)+"px system-ui"; ctx.textAlign="center"; ctx.fillText("漁貨",cart.x+roll,cart.y-23*view.scale);
-        }
-        if(event.id==="complaint"&&state.phase==="service") {
-          var g=guestActors[state.customerIndex];
-          if(g) {
-            var p=project(g.x,0,g.z);
-            drawRoundRect(p.x+8*view.scale,p.y-52*view.scale,70*view.scale,22*view.scale,7*view.scale,"#fff0d8","#dc8766");
-            ctx.fillStyle="#9c553f"; ctx.font="800 "+Math.max(7,8*view.scale)+"px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("等太久了！",p.x+43*view.scale,p.y-41*view.scale);
-          }
-        }
-      }
+      const objectRenderer = createObjectRenderer({
+        ctx: ctx, view: view, project: project, pathPolygon: pathPolygon, drawBox: drawBox,
+        drawRoundRect: drawRoundRect, drawBillboard: drawBillboard, state: state, DATA: DATA,
+        onStallBounds: function(bounds) { stallHitBounds = bounds; },
+        recordActorHit: function(hit) { actorHits.push(hit); }
+      });
+      const drawStall = objectRenderer.drawStall;
+      const drawHuman = objectRenderer.drawHuman;
+      const drawProp = objectRenderer.drawProp;
+      const drawEventEffects = createEffectRenderer({
+        ctx: ctx, view: view, project: project, drawBox: drawBox, drawRoundRect: drawRoundRect,
+        todayEvent: todayEvent, state: state, mainStall: mainStall,
+        getGuestActors: function() { return guestActors; }
+      });
       function drawScene(time) {
         if(!view.w||!view.h) resizeCanvas();
         ctx.setTransform(view.dpr,0,0,view.dpr,0,0);

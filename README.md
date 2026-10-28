@@ -6,8 +6,10 @@
 
 - `dist/data.js`：料理、客人、事件、營運成本、場景路徑與相機參數。
 - `dist/state.js`：存檔遷移、localStorage、事件排程、成本帳本與損益預估。
-- `dist/scene.js`：等角投影、Canvas 場景、角色動畫、命中測試與相機。
-- `dist/ui.js`：營運面板、攤位工作台和點餐／客訴介面。
+- `dist/scene.js`：等角投影、畫面合成、命中測試與相機控制。
+- `dist/scene/objects.js`：攤位、道具、店員與客人繪製。
+- `dist/scene/effects.js`：燈節、雨勢、供應商與客訴等場景特效。
+- `dist/ui.js`：以 DOM 節點建立的營運面板、攤位工作台和點餐／客訴介面。
 - `dist/game.js`：可單元測試的遊戲規則與瀏覽器互動控制。
 - `dist/app.js`：瀏覽器入口；`dist/index.html` 與 `dist/styles.css` 為頁面和樣式。
 - `.openai/hosting.json`：既有 Sites 靜態部署設定。
