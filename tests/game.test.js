@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { DATA } from "../dist/data.js";
 import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, selectEnding } from "../dist/campaign.js";
-import { closeDepreciation, CHART_OF_ACCOUNTS } from "../dist/accounting.js";
+import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accounting.js";
 import { createGameEngine } from "../dist/game.js";
 import { applyCameraAction } from "../dist/scene.js";
 import {
@@ -147,6 +147,55 @@ test("new equipment purchases create asset records and straight-line depreciatio
   assert.equal(state.accounting.balances["1590"], -24);
   const imbalance = Object.values(state.accounting.balances).reduce((sum, value) => sum + value, 0);
   assert.equal(imbalance, 0);
+});
+
+test("invalid journal posts fail before changing balances, sequence, or journal", () => {
+  const state = freshState();
+  const before = JSON.parse(JSON.stringify(state.accounting));
+  assert.throws(() => postJournal(state, "未知科目", [
+    { account: "1000", debit: 25 },
+    { account: "9999", credit: 25 }
+  ]), /Unknown account 9999/);
+  assert.deepEqual(state.accounting, before);
+  assert.throws(() => postJournal(state, "借貸不平", [
+    { account: "1000", debit: 25 },
+    { account: "3000", credit: 24 }
+  ]), /Unbalanced journal entry/);
+  assert.deepEqual(state.accounting, before);
+  assert.throws(() => postJournal(state, "同列雙邊", [
+    { account: "1000", debit: 25, credit: 25 }
+  ]), /cannot debit and credit/);
+  assert.deepEqual(state.accounting, before);
+
+  const entry = postJournal(state, "有效分錄", [
+    { account: "1000", debit: 25 },
+    { account: "3000", credit: 25 }
+  ]);
+  assert.equal(entry.id, "je-1");
+  assert.equal(state.accounting.balances["1000"], before.balances["1000"] + 25);
+  assert.equal(state.accounting.entrySequence, before.entrySequence + 1);
+});
+
+test("cash and working-capital balances stay aligned across borrow, close, and repayment", () => {
+  const state = freshState();
+  state.phase = "decision";
+  state.day = 8;
+  const engine = createGameEngine(state);
+  assert.equal(engine.borrowWorkingCapital().ok, true);
+  assert.equal(state.accounting.balances["1000"], state.coins);
+  assert.equal(state.accounting.balances["2100"], -state.loanPrincipal);
+
+  state.phase = "prep";
+  state.day = 9;
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(state.accounting.balances["1000"], state.coins);
+  assert.equal(state.accounting.balances["2100"], -state.loanPrincipal);
+
+  state.phase = "decision";
+  state.day = 15;
+  assert.equal(engine.repayWorkingCapital().ok, true);
+  assert.equal(state.accounting.balances["1000"], state.coins);
+  assert.equal(Math.abs(state.accounting.balances["2100"]), state.loanPrincipal);
 });
 
 test("event pricing modifiers distinguish supplier shortage and market sale", () => {

@@ -125,14 +125,16 @@ export function createUI(runtime) {
     if (currentChoice) {
       const result = el("div", "market-announcement-result");
       append(result, el("b", "", "今晚已選擇：" + currentChoice.name),
-        el("span", "", currentChoice.detail + "。"));
+        el("span", "", currentChoice.detail + "。"),
+        el("span", "announcement-result-preview", marketChoicePreview(card, currentChoice)));
       panel.append(result);
     } else if (state.phase === "prep") {
       const choices = el("div", "market-announcement-choices");
       card.choices.forEach(function(choice) {
         const action = button("", "choose-market-card", { id: choice.id }, choice.cost > 0 && state.coins < choice.cost, "announcement-choice");
         append(action, el("span", "announcement-choice-name", choice.name),
-          el("span", "announcement-choice-detail", choice.detail));
+          el("span", "announcement-choice-detail", choice.detail),
+          el("span", "announcement-choice-preview", marketChoicePreview(card, choice)));
         choices.append(action);
       });
       panel.append(choices);
@@ -142,6 +144,30 @@ export function createUI(runtime) {
         : "本夜公告卡選擇已隨營業流程鎖定。", "market-announcement-result"));
     }
     return panel;
+  }
+  function marketChoicePreview(card, choice) {
+    if (card.id === "tourist-surge") {
+      return choice.id === "promote"
+        ? "帳務影響：行銷費 −" + money(DATA.economy.touristPromotionCost) + "；預計多 2 桌，營收與食材成本依實際接待入帳。"
+        : "帳務影響：今晚不新增公告卡收入或支出，客流維持原預估。";
+    }
+    if (card.id === "hygiene-audit") {
+      if (choice.id === "deep-clean") return "帳務影響：清潔支出 −" + money(DATA.economy.hygieneQuickCleanCost) + "；免本次整改費，口碑 +1。";
+      const eventNeedsCorrection = selectEvent(state).id === "inspection";
+      const equipmentReady = (Number(state.equipment.hood) || 0) > 0 || (Number(state.equipment.awning) || 0) > 0 || !!state.upgrades.lantern;
+      const fee = eventNeedsCorrection && !equipmentReady ? 75 : 0;
+      return fee
+        ? "帳務影響：目前設備未達稽查條件，今晚可能列整改費 −" + money(fee) + "；實際以開門結算為準。"
+        : (eventNeedsCorrection
+          ? "帳務影響：目前設備符合稽查條件，預估不產生整改費。"
+          : "帳務影響：今晚不執行整改稽查，不會產生稽查整改費。");
+    }
+    if (card.id === "rain-subsidy") {
+      return choice.id === "claim"
+        ? "帳務影響：市集補助收入 +" + money(DATA.economy.rainSubsidy) + "，列入今晚營運收支。"
+        : "帳務影響：不申請補助，今晚不新增公告卡收入或支出。";
+    }
+    return "帳務影響：" + choice.detail;
   }
   function storyCard(title, text, className) {
     const card = el("div", className || "story-card");
@@ -193,11 +219,15 @@ export function createUI(runtime) {
     const finance = el("section", "finance-panel");
     const debt = Number(state.loanPrincipal) || 0;
     const interest = debt ? createLedger().interest : 0;
+    const loanNights = Math.max(0, Number(state.loanNights) || 0);
+    const weeklyInterest = debt ? Math.max(0,
+      Math.round((loanNights + 7) * debt * DATA.economy.loanWeeklyRate / 7) -
+      Math.round(loanNights * debt * DATA.economy.loanWeeklyRate / 7)) : 0;
     const financeCopy = el("div", "finance-copy");
     append(financeCopy, el("span", "finance-kicker", "港邊合作金庫"),
       el("h3", "", debt ? "週轉額度使用中" : "低利週轉金"),
       el("p", "", debt
-        ? "未償本金 " + money(debt) + "・每營業夜利息 " + money(interest) + "。" +
+        ? "未償本金 " + money(debt) + "・本夜利息 " + money(interest) + "。若保留本金至下週決策前，未來 7 夜利息估算 " + money(weeklyInterest) + "（不含還款）。" +
           (state.day <= state.loanTakenDay ? "完成本夜營業後，可於下次週轉決策還款。" : "可在本次週轉決策一次還清本金。") +
           ""
         : (state.loanUsed
@@ -651,6 +681,23 @@ export function createUI(runtime) {
     if (!reports.length) return fragment(subhead("每三十夜・綜合財務報表", "第 30 夜結帳後產生", true),
       storyCard("第一期尚未結帳。", "夜市不停業；每三十夜只完成一次財務期間結帳，接著繼續下一夜。"));
     const report = reports.find((item) => item.period === Number(selectedReportPeriod)) || reports[reports.length - 1];
+    const position = report.financialPosition;
+    const profit = report.comprehensiveIncome.totalComprehensiveIncome;
+    const summary = el("section", "statement-summary", null, { "aria-label": "第 " + report.period + " 期財報摘要" });
+    summary.append(el("span", "statement-summary-heading", "本期摘要"));
+    const metrics = el("div", "statement-summary-grid");
+    [
+      ["本期綜合損益", moneyNet(profit), profit < 0 ? "negative" : "positive"],
+      ["期末現金", money(position.assets.cash), ""],
+      ["資產總額", money(position.assets.total), ""],
+      ["負債總額", money(position.liabilities.total), ""]
+    ].forEach(([label, value, tone]) => {
+      const item = el("div", "statement-metric");
+      append(item, el("span", "statement-metric-label", label),
+        el("b", "statement-metric-value" + (tone ? " " + tone : ""), value));
+      metrics.append(item);
+    });
+    summary.append(metrics);
     const select = filterSelect("財務期間", "report-period", reports.slice().reverse().map((item) => ({
       value: item.period, label: "第 " + item.period + " 期・第 " + item.startDay + "–" + item.endDay + " 夜"
     })), report.period);
@@ -666,7 +713,7 @@ export function createUI(runtime) {
     const rows = statementRows(report, reportStatement);
     const parts = [
       subhead(title, "第 " + report.period + " 期・第 " + report.startDay + "–" + report.endDay + " 夜", true),
-      select, statementTabs,
+      summary, select, statementTabs,
       accountingTable(title + "・第 " + report.period + " 期", ["IFRS 導向報表項目", "金額"], rows)
     ];
     if (reportStatement === "position") parts.push(el("div", "statement-status " + (report.financialPosition.balanced ? "balanced" : "unbalanced"),

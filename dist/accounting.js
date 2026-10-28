@@ -110,21 +110,37 @@ export function ensureAccounting(state) {
 }
 
 export function postJournal(state, description, rawLines, cashFlow = null, day = state.day) {
-  const accounting = ensureAccounting(state);
-  const lines = rawLines.map((line) => ({
-    account: String(line.account),
-    debit: round(line.debit),
-    credit: round(line.credit)
-  })).filter((line) => line.debit || line.credit);
+  if (!Array.isArray(rawLines) || !rawLines.length) throw new Error("Journal entry requires at least one line: " + description);
+  const lines = rawLines.map((line) => {
+    if (!line || typeof line !== "object") throw new Error("Invalid journal line: " + description);
+    const account = String(line.account);
+    if (!ACCOUNT[account]) throw new Error("Unknown account " + account);
+    const rawDebit = line.debit == null ? 0 : Number(line.debit);
+    const rawCredit = line.credit == null ? 0 : Number(line.credit);
+    if (!Number.isFinite(rawDebit) || !Number.isFinite(rawCredit) || rawDebit < 0 || rawCredit < 0) {
+      throw new Error("Invalid journal amount for account " + account);
+    }
+    const debit = round(rawDebit);
+    const credit = round(rawCredit);
+    if (debit && credit) throw new Error("Journal line cannot debit and credit the same account: " + account);
+    return { account, debit, credit };
+  }).filter((line) => line.debit || line.credit);
+  if (!lines.length) throw new Error("Journal entry requires a non-zero amount: " + description);
   const debit = lines.reduce((sum, line) => sum + line.debit, 0);
   const credit = lines.reduce((sum, line) => sum + line.credit, 0);
   if (Math.abs(debit - credit) > 0) throw new Error("Unbalanced journal entry: " + description + " (" + debit + " != " + credit + ")");
+  const accounting = ensureAccounting(state);
+  const nextBalances = Object.create(null);
   lines.forEach((line) => {
-    if (!ACCOUNT[line.account]) throw new Error("Unknown account " + line.account);
-    accounting.balances[line.account] += line.debit - line.credit;
+    const base = Object.prototype.hasOwnProperty.call(nextBalances, line.account)
+      ? nextBalances[line.account]
+      : accounting.balances[line.account];
+    const next = base + line.debit - line.credit;
+    if (!Number.isFinite(next)) throw new Error("Invalid resulting balance for account " + line.account);
+    nextBalances[line.account] = next;
   });
   const entry = {
-    id: "je-" + accounting.entrySequence++,
+    id: "je-" + accounting.entrySequence,
     day: Math.max(0, Math.floor(Number(day) || 0)),
     description: String(description),
     lines,
@@ -132,6 +148,8 @@ export function postJournal(state, description, rawLines, cashFlow = null, day =
       ? { category: cashFlow.category, amount: Math.round(Number(cashFlow.amount)) }
       : null
   };
+  Object.keys(nextBalances).forEach((account) => { accounting.balances[account] = nextBalances[account]; });
+  accounting.entrySequence += 1;
   accounting.journal.push(entry);
   // Keep the detailed ledger bounded for browser-local saves while balances and
   // period summaries continue to flow indefinitely.
