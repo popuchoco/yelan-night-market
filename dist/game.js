@@ -571,7 +571,10 @@ function boot() {
   const reportDialogContent = document.getElementById("reportDialogContent");
   const worldEventDialog = document.getElementById("worldEventDialog");
   const worldEventDialogContent = document.getElementById("worldEventDialogContent");
+  const storyChoiceDialog = document.getElementById("storyChoiceDialog");
+  const storyChoiceContent = document.getElementById("storyChoiceContent");
   let worldEventReturnFocus = null;
+  let storyChoiceReturnFocus = null;
   let worldEventPosition = "";
   const outletEventButtons = new Map();
   function syncWorldEventTrigger() {
@@ -684,6 +687,77 @@ function boot() {
     if (focusTarget) focusTarget.focus();
     playTone("open");
   }
+  function openStoryChoice() {
+    if (state.phase !== "report" || state.reportChoice || storyChoiceDialog.open) return;
+    storyChoiceReturnFocus = document.activeElement;
+    const story = todayStory(state);
+    const card = document.createElement("section");
+    card.className = "story-choice-card";
+    const title = document.createElement("h3");
+    title.textContent = story.title;
+    const description = document.createElement("p");
+    description.textContent = story.story;
+    card.append(title, description);
+
+    const options = document.createElement("div");
+    options.className = "story-choice-options";
+    const choices = [
+      { id: "paperboat", icon: "紙", name: "把紙船放回港灣", detail: "留下一份溫柔的心意，讓夜市口碑增加。", effect: "+2 口碑" },
+      { id: "window", icon: "桌", name: "替熟客留桌", detail: "照顧常來的熟面孔，增加熟客並收到心意金。", effect: "+NT$ 80・熟客 +1" }
+    ];
+    choices.forEach((choice) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "story-choice-option";
+      button.dataset.action = "choose-story";
+      button.dataset.id = choice.id;
+      const icon = document.createElement("span");
+      icon.className = "story-choice-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = choice.icon;
+      const copy = document.createElement("span");
+      copy.className = "story-choice-copy";
+      const name = document.createElement("span");
+      name.className = "story-choice-name";
+      name.textContent = choice.name;
+      const detail = document.createElement("span");
+      detail.className = "story-choice-detail";
+      detail.textContent = choice.detail;
+      copy.append(name, detail);
+      const effect = document.createElement("span");
+      effect.className = "story-choice-effect";
+      effect.textContent = choice.effect;
+      button.append(icon, copy, effect);
+      options.append(button);
+    });
+    const note = document.createElement("p");
+    note.className = "story-choice-note";
+    note.textContent = "選擇後會自動把本夜手記歸檔，並進入明晚；每 7 夜則會接著出現本週經營決策。";
+    storyChoiceContent.replaceChildren(card, options, note);
+    storyChoiceDialog.showModal();
+    const firstChoice = storyChoiceContent.querySelector('[data-action="choose-story"]');
+    if (firstChoice) firstChoice.focus();
+    playTone("open");
+  }
+  function advanceNight() {
+    const result = engine.nextNight();
+    if (result.ok) {
+      scene.spawnGuests([]);
+      if (state.phase === "decision") ui.setTab("ops");
+    }
+    showResult(result);
+  }
+  function chooseStoryFromDialog(id) {
+    const choiceResult = engine.chooseStory(id);
+    if (!choiceResult.ok) { showResult(choiceResult); return; }
+    const nextResult = engine.nextNight();
+    if (nextResult.ok) {
+      scene.spawnGuests([]);
+      if (state.phase === "decision") ui.setTab("ops");
+    }
+    if (storyChoiceDialog.open) storyChoiceDialog.close();
+    showResult({ ok: nextResult.ok, changed: nextResult.changed, message: choiceResult.message + " " + nextResult.message });
+  }
   function renderReportDialogContent(focusAction, focusId, resetScroll = false) {
     const previousScroll = resetScroll ? 0 : reportDialogContent.scrollTop;
     reportDialogContent.replaceChildren(ui.renderJournalReport());
@@ -726,12 +800,30 @@ function boot() {
       if (focusTarget && focusTarget.focus) focusTarget.focus();
     });
   });
+  storyChoiceDialog.addEventListener("click", (event) => {
+    if (event.target === storyChoiceDialog) storyChoiceDialog.close();
+  });
+  storyChoiceDialog.addEventListener("close", () => {
+    const fallback = document.getElementById("mainAction");
+    const target = storyChoiceReturnFocus && storyChoiceReturnFocus.isConnected ? storyChoiceReturnFocus : fallback;
+    storyChoiceReturnFocus = null;
+    if (target && target.focus) requestAnimationFrame(() => target.focus());
+  });
   document.addEventListener("scene-motion-change", syncMotionControl);
+  function syncToastPosition() {
+    const frame = document.querySelector(".world-frame");
+    const actions = document.querySelector(".world-actions");
+    if (!frame || !actions) return;
+    const actionBottom = Number.parseFloat(getComputedStyle(actions).bottom) || 0;
+    frame.style.setProperty("--world-toast-offset", Math.ceil(actions.offsetHeight + actionBottom + 10) + "px");
+  }
+  const worldActions = document.querySelector(".world-actions");
+  if (worldActions && typeof ResizeObserver !== "undefined") new ResizeObserver(syncToastPosition).observe(worldActions);
+  window.addEventListener("resize", syncToastPosition, { passive: true });
   function toast(message) {
     const el = document.getElementById("toast");
     el.textContent = message;
     el.classList.add("show");
-    scene.showToast(message);
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
   }
@@ -818,6 +910,7 @@ function boot() {
     if (!button) return;
     const action = button.dataset.action;
     if (action === "open-world-event") openWorldEvent();
+    if (action === "close-story-choice" && storyChoiceDialog.open) storyChoiceDialog.close();
     if (action === "open-outlet-event") {
       const outletId = button.dataset.outletId;
       const eventInfo = ui.getOutletWorldEvents().find((item) => item.id === button.dataset.eventId);
@@ -835,11 +928,8 @@ function boot() {
     if (action === "main-action") {
       if (state.phase === "prep") openDoors();
       else if (state.phase === "service") openOrder(state.customerIndex);
-      else if (state.reportChoice) {
-        const result = engine.nextNight();
-        if (result.ok) { scene.spawnGuests([]); if (state.phase === "decision") ui.setTab("ops"); }
-        showResult(result);
-      }
+      else if (state.phase === "report" && state.reportChoice) advanceNight();
+      else if (state.phase === "report") openStoryChoice();
       else { ui.setTab("ops"); renderUI(); }
     }
     if (action === "open-stall") { ui.setTab("stall"); renderUI(); toast("攤位工作台已開啟：備料、設備與班表都在這裡。"); }
@@ -863,16 +953,17 @@ function boot() {
     if (action === "upgrade-equipment") showResult(engine.upgradeEquipment(button.dataset.id));
     if (action === "buy-upgrade") showResult(engine.buyUpgrade(button.dataset.id));
     if (action === "toggle-staff") showResult(engine.toggleStaff(button.dataset.role));
-    if (action === "choose-story") showResult(engine.chooseStory(button.dataset.id));
+    if (action === "choose-story") {
+      if (storyChoiceDialog.open && button.closest("#storyChoiceContent")) chooseStoryFromDialog(button.dataset.id);
+      else showResult(engine.chooseStory(button.dataset.id));
+    }
     if (action === "choose-market-card") {
       const result = engine.chooseMarketCard(button.dataset.id);
       if (result.ok && worldEventDialog.open) worldEventDialog.close();
       showResult(result);
     }
     if (action === "next-night") {
-      const result = engine.nextNight();
-      if (result.ok) { scene.spawnGuests([]); if (state.phase === "decision") ui.setTab("ops"); }
-      showResult(result);
+      advanceNight();
     }
     if (action === "choose-weekly") showResult(engine.chooseWeeklyDecision(button.dataset.id, button.dataset.targetType));
     if (action === "borrow-loan") showResult(engine.borrowWorkingCapital());
@@ -970,6 +1061,7 @@ function boot() {
     soundButton.setAttribute("aria-pressed", String(soundEnabled));
     soundButton.textContent = soundEnabled ? "♫ 音效：開" : "♫ 音效：關";
   }
+  syncToastPosition();
   renderUI();
   requestAnimationFrame(frame);
 }

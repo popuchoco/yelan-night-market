@@ -53,6 +53,7 @@
           <button class="world-action" data-action="toggle-pause" aria-pressed="false">Ⅱ 暫停場景</button>
           <button class="world-action primary" id="mainAction" data-action="main-action">掛燈迎客</button>
         </div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
       </section>
       <aside class="panel">
         <div class="panel-head">
@@ -89,6 +90,17 @@
     </header>
     <div class="world-event-dialog-content" id="worldEventDialogContent"></div>
   </dialog>
+  <dialog class="story-choice-dialog" id="storyChoiceDialog" aria-modal="true" aria-labelledby="storyChoiceTitle" aria-describedby="storyChoiceDescription">
+    <header class="story-choice-header">
+      <div>
+        <div class="modal-kicker">TONIGHT'S LITTLE TURN</div>
+        <h2 class="modal-title" id="storyChoiceTitle">選一個帶去明晚的心意</h2>
+        <p class="modal-desc" id="storyChoiceDescription">選擇一項，會一併收進今晚手記並開始明晚營業。</p>
+      </div>
+      <button class="close-button" type="button" data-action="close-story-choice" aria-label="先不選，關閉手記選項">×</button>
+    </header>
+    <div class="story-choice-content" id="storyChoiceContent"></div>
+  </dialog>
   <dialog class="report-dialog" id="reportDialog" aria-modal="true" aria-labelledby="reportDialogTitle" aria-describedby="reportDialogDescription">
     <header class="report-dialog-header">
       <div class="report-dialog-heading">
@@ -100,7 +112,6 @@
     </header>
     <div class="report-dialog-content" id="reportDialogContent" tabindex="0" aria-label="報表內容"></div>
   </dialog>
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="./app.js" type="module"></script>
 </body>
 </html>

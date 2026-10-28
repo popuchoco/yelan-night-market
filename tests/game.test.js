@@ -341,6 +341,21 @@ test("night transitions keep the operating cycle valid", () => {
   assert.equal(state.journal[0].day, 3);
 });
 
+test("a night cannot be archived before choosing its story branch", () => {
+  const state = serviceState(3);
+  state.phase = "report";
+  state.results = [{ name: "阿琴" }];
+  const engine = createGameEngine(state);
+  const fame = state.fame;
+  assert.equal(engine.nextNight().ok, false);
+  assert.equal(state.day, 3);
+  assert.equal(engine.chooseStory("paperboat").ok, true);
+  assert.equal(state.fame, fame + 2);
+  assert.equal(engine.nextNight().ok, true);
+  assert.equal(state.day, 4);
+  assert.equal(state.phase, "prep");
+});
+
 test("weekly decisions change guest capacity, recurring costs, and lead into the next prep phase", () => {
   const state = serviceState(7);
   state.phase = "report";
@@ -637,6 +652,11 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(html, /id="worldEventTrigger"[^>]*data-action="open-world-event"/);
   assert.match(html, /id="outletEventTriggers"/);
   assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
+  assert.match(html, /<dialog class="story-choice-dialog" id="storyChoiceDialog"/);
+  const worldFrameStart = html.indexOf('<section class="world-frame"');
+  const mainEnd = html.indexOf("</main>", worldFrameStart);
+  const toastIndex = html.indexOf('id="toast"');
+  assert.ok(worldFrameStart >= 0 && mainEnd > worldFrameStart && toastIndex > worldFrameStart && toastIndex < mainEnd);
   const css = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
   const game = await readFile(new URL("../dist/game.js", import.meta.url), "utf8");
   assert.match(css, /prefers-reduced-motion/);
@@ -648,6 +668,10 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(game, /reportDialog\.showModal\(\)/);
   assert.match(game, /reportDialog\.addEventListener\("close"/);
   assert.match(html, /<dialog class="report-dialog" id="reportDialog"/);
+  assert.match(game, /function openStoryChoice\(/);
+  assert.match(game, /else if \(state\.phase === "report"\) openStoryChoice\(\)/);
+  assert.match(game, /storyChoiceDialog\.showModal\(\)/);
+  assert.match(css, /\.toast\s*\{[^}]*position:\s*absolute/);
   assert.match(css, /\.report-dialog\[open\]/);
   assert.match(css, /\.report-launch-grid/);
   assert.match(ui, /accounting-mobile-list/);

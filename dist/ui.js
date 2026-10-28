@@ -545,7 +545,7 @@ export function createUI(runtime) {
       choice.append(options);
       parts.push(choice);
       const next = el("div", "button-row");
-      next.append(button("收進日記，準備明晚", "next-night", {}, !state.reportChoice, "primary-button full-width"));
+      next.append(button(state.reportChoice ? "收進手記，準備明晚" : "先選一個今晚的心意", "next-night", {}, !state.reportChoice, "primary-button full-width"));
       parts.push(next);
     }
     return fragment(parts);
@@ -1146,7 +1146,7 @@ export function createUI(runtime) {
     document.getElementById("worldStateText").textContent = state.phase === "prep" ? "備料與排班中" :
       (state.phase === "service" ? "客人走進夜市・營業中" : (state.phase === "decision" ? "本週經營方向待選" : "這一夜已打烊"));
     const mainAction = document.getElementById("mainAction");
-    mainAction.textContent = state.phase === "prep" ? "掛燈迎客" : (state.phase === "service" ? "接待下一桌" : (state.phase === "report" ? "收進手記，準備明晚" : "先選擇本週方向"));
+    mainAction.textContent = state.phase === "prep" ? "掛燈迎客" : (state.phase === "service" ? "接待下一桌" : (state.phase === "report" ? (state.reportChoice ? "收進手記，準備明晚" : "選擇手記・準備明晚") : "先選擇本週方向"));
     mainAction.disabled = state.phase === "decision";
     mainAction.setAttribute("aria-disabled", String(mainAction.disabled));
     mainAction.dataset.action = "main-action";
