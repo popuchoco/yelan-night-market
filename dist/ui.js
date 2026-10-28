@@ -56,11 +56,6 @@ export function createUI(runtime) {
   function createLedger() { return createLedgerForState(state); }
 
   function getWorldEventInfo() {
-    if (state.managerEvent) {
-      return { kind: "manager", icon: "⚠️", label: "店長重大回報・待總部決定", title: state.managerEvent.title,
-        description: state.managerEvent.description, tone: "negative", pending: true,
-        anchorOutletId: state.managerEvent.outletId || "main" };
-    }
     if (state.phase === "service") {
       const guest = getTonightGuests()[state.customerIndex];
       if (guest && guest.difficult) {
@@ -82,9 +77,40 @@ export function createUI(runtime) {
       title: event.name, description: event.description, tone: event.tone, pending: false, anchorOutletId: "main", event: event };
   }
 
+  function getOutletWorldEvents() {
+    const branches = (state.outlets || []).filter(function(outlet) { return outlet && outlet.id !== "main"; });
+    const events = [];
+    if (state.managerEvent) {
+      const outlet = branches.find(function(item) { return item.id === state.managerEvent.outletId; });
+      if (outlet) events.push({ id: "manager:" + outlet.id, kind: "manager", outletId: outlet.id,
+        icon: "⚠️", label: "重大事件", title: state.managerEvent.title,
+        description: state.managerEvent.description, tone: "negative", pending: true });
+    }
+    branches.forEach(function(outlet) {
+      if (state.managerEvent && state.managerEvent.outletId === outlet.id) return;
+      if (outlet.autoPaused) {
+        events.push({ id: "stockout:" + outlet.id, kind: "stockout", outletId: outlet.id,
+          icon: "📦", label: "補貨暫停", title: "備料耗盡・營業暫停",
+          description: outlet.name + "的商品庫存已用完，分店自動暫停營業。點開可補貨並重新開店。",
+          tone: "negative", pending: true });
+      } else if (Number(outlet.efficiencyPenalty) > 0) {
+        events.push({ id: "equipment:" + outlet.id, kind: "equipment", outletId: outlet.id,
+          icon: "🛠️", label: "設備降載", title: "設備維修延後",
+          description: outlet.name + "暫以降載方式營運；可在分店設備管理中檢視狀態。",
+          tone: "caution", pending: false });
+      } else if (Number(outlet.nextNightBonus) > 0) {
+        events.push({ id: "bonus:" + outlet.id, kind: "bonus", outletId: outlet.id,
+          icon: "🎉", label: "營收加成", title: "分店慶典 Bonus",
+          description: outlet.name + "下次營業將獲得 NT$ " + Math.round(Number(outlet.nextNightBonus)) + " 慶典加成。",
+          tone: "positive", pending: false });
+      }
+    });
+    return events;
+  }
+
   function renderWorldEventContent() {
     const info = getWorldEventInfo();
-    if (info.kind === "manager") {
+    if (state.managerEvent) {
       const incident = el("section", "world-event-options");
       incident.append(el("span", "manager-event-kicker", "總部決策・選擇處理方式"));
       const choices = el("div", "manager-event-choices");
@@ -1153,6 +1179,7 @@ export function createUI(runtime) {
     renderUI: renderUI,
     renderOrderChoices: renderOrderChoices,
     getWorldEventInfo: getWorldEventInfo,
+    getOutletWorldEvents: getOutletWorldEvents,
     renderWorldEventContent: renderWorldEventContent,
     setTab: setTab,
     setOutletTarget: setOutletTarget,

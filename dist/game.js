@@ -566,13 +566,14 @@ function boot() {
     button.textContent = scene.motionReduced ? "低動態：依系統" : (scene.paused ? "▶ 恢復場景" : "Ⅱ 暫停場景");
     button.title = scene.motionReduced ? "已依作業系統減少動態效果" : "暫停或恢復夜市場景動畫";
   }
-  function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); }
+  function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
   const reportDialog = document.getElementById("reportDialog");
   const reportDialogContent = document.getElementById("reportDialogContent");
   const worldEventDialog = document.getElementById("worldEventDialog");
   const worldEventDialogContent = document.getElementById("worldEventDialogContent");
   let worldEventReturnFocus = null;
   let worldEventPosition = "";
+  const outletEventButtons = new Map();
   function syncWorldEventTrigger() {
     const trigger = document.getElementById("worldEventTrigger");
     const info = ui.getWorldEventInfo();
@@ -582,7 +583,9 @@ function boot() {
     document.getElementById("worldEventTitle").textContent = info.title;
     trigger.dataset.tone = info.tone || "positive";
     trigger.dataset.pending = String(!!info.pending);
-    trigger.setAttribute("aria-label", (info.pending ? "待處理：" : "查看：") + info.title + "。開啟夜市事件視窗");
+    trigger.dataset.outletId = info.anchorOutletId || "main";
+    trigger.setAttribute("aria-label", (info.pending ? "待處理：" : "查看：") +
+      (info.anchorOutletName ? info.anchorOutletName + "・" : "") + info.title + "。開啟夜市事件視窗");
     const point = scene.eventAnchor(info.anchorOutletId);
     const frame = document.querySelector(".world-frame");
     if (!point || !frame) return;
@@ -600,10 +603,77 @@ function boot() {
       worldEventPosition = position;
     }
   }
-  function openWorldEvent() {
-    const info = ui.getWorldEventInfo();
+  function syncOutletEventTriggers(updateCopy = false) {
+    const container = document.getElementById("outletEventTriggers");
+    if (!container) return;
+    const events = ui.getOutletWorldEvents();
+    const activeIds = new Set(events.map((item) => item.id));
+    outletEventButtons.forEach((button, id) => {
+      if (!activeIds.has(id)) { button.remove(); outletEventButtons.delete(id); }
+    });
+    const frame = document.querySelector(".world-frame");
+    if (!frame) return;
+    const frameRect = frame.getBoundingClientRect();
+    const canvasRect = scene.canvas.getBoundingClientRect();
+    const occupied = [];
+    events.forEach((info) => {
+      let button = outletEventButtons.get(info.id);
+      if (!button) {
+        button = document.createElement("button");
+        button.type = "button";
+        button.className = "outlet-event-trigger";
+        button.dataset.action = "open-outlet-event";
+        button.dataset.eventId = info.id;
+        button.dataset.outletId = info.outletId;
+        button.setAttribute("aria-haspopup", info.kind === "manager" ? "dialog" : "false");
+        button.replaceChildren();
+        const icon = document.createElement("span");
+        icon.className = "outlet-event-icon";
+        icon.setAttribute("aria-hidden", "true");
+        const label = document.createElement("span");
+        label.className = "outlet-event-copy";
+        const name = document.createElement("strong");
+        const title = document.createElement("span");
+        label.append(name, title);
+        button.append(icon, label);
+        container.append(button);
+        outletEventButtons.set(info.id, button);
+      }
+      const outletName = (state.outlets || []).find((outlet) => outlet.id === info.outletId)?.name || "分店";
+      const copyKey = [info.tone, info.kind, info.icon, info.label, info.title, info.description, outletName].join("|");
+      if (updateCopy || button.dataset.copyKey !== copyKey) {
+        button.dataset.tone = info.tone;
+        button.dataset.kind = info.kind;
+        button.dataset.copyKey = copyKey;
+        button.setAttribute("aria-label", info.label + "・" + info.title + "。" + info.description);
+        button.querySelector(".outlet-event-icon").textContent = info.icon;
+        button.querySelector(".outlet-event-copy strong").textContent = info.label + "｜" + outletName;
+        button.querySelector(".outlet-event-copy span").textContent = info.title;
+      }
+      const point = scene.eventAnchor(info.outletId);
+      const width = button.offsetWidth || 192;
+      const halfWidth = width / 2;
+      const rawX = canvasRect.left - frameRect.left + point.x;
+      const rawY = canvasRect.top - frameRect.top + point.y;
+      const left = Math.max(halfWidth + 8, Math.min(frame.clientWidth - halfWidth - 8, rawX));
+      const top = Math.max(116, Math.min(frame.clientHeight - 108, rawY));
+      let placedTop = top;
+      while (occupied.some((rect) => Math.abs(rect.left - left) < width * 0.72 && Math.abs(rect.top - placedTop) < 50) && placedTop < frame.clientHeight - 110) {
+        placedTop = Math.min(frame.clientHeight - 108, placedTop + 48);
+        if (placedTop === frame.clientHeight - 108) break;
+      }
+      occupied.push({ left, top: placedTop });
+      const leftStyle = Math.round(left) + "px";
+      const topStyle = Math.round(placedTop) + "px";
+      if (button.style.left !== leftStyle) button.style.left = leftStyle;
+      if (button.style.top !== topStyle) button.style.top = topStyle;
+    });
+  }
+  function openWorldEvent(outletId) {
+    const incident = state.managerEvent && state.managerEvent.outletId === outletId ? state.managerEvent : null;
+    const info = incident ? { kind: "manager", icon: "⚠️", label: "分店重大事件", title: incident.title, description: incident.description } : ui.getWorldEventInfo();
     if (info.kind === "complaint") { openOrder(state.customerIndex); return; }
-    worldEventReturnFocus = document.activeElement;
+    worldEventReturnFocus = (outletId && outletEventButtons.get("manager:" + outletId)) || document.activeElement;
     document.getElementById("worldEventDialogKicker").textContent = info.label;
     document.getElementById("worldEventDialogTitle").textContent = info.title;
     document.getElementById("worldEventDialogDescription").textContent = info.description;
@@ -651,7 +721,10 @@ function boot() {
     const fallback = document.getElementById("worldEventTrigger");
     const target = worldEventReturnFocus && worldEventReturnFocus.isConnected ? worldEventReturnFocus : fallback;
     worldEventReturnFocus = null;
-    if (target && target.focus) requestAnimationFrame(() => target.focus());
+    if (target && target.focus) requestAnimationFrame(() => {
+      const focusTarget = target.isConnected ? target : (fallback && fallback.isConnected ? fallback : document.getElementById("tab-stall"));
+      if (focusTarget && focusTarget.focus) focusTarget.focus();
+    });
   });
   document.addEventListener("scene-motion-change", syncMotionControl);
   function toast(message) {
@@ -713,17 +786,31 @@ function boot() {
     const rect = scene.canvas.getBoundingClientRect();
     const hit = scene.hitTest(event.clientX - rect.left, event.clientY - rect.top);
     if (hit && hit.type === "guest") { openOrder(hit.index); return; }
-    if (hit && hit.type === "stall") { ui.setTab("stall"); renderUI(); toast("攤位工作台已開啟：備料、設備與班表都在這裡。"); return; }
+    if (hit && hit.type === "outlet-event") {
+      if (hit.kind === "manager") openWorldEvent(hit.outletId);
+      else openOutletManagement(hit.outletId);
+      return;
+    }
+    if (hit && hit.type === "stall") {
+      const info = ui.getWorldEventInfo();
+      if (info.pending && info.anchorOutletId === "main") { openWorldEvent(); return; }
+      ui.setTab("stall"); renderUI(); toast("攤位工作台已開啟：備料、設備與班表都在這裡。"); return;
+    }
     if (hit && hit.type === "outlet") {
-      ui.setOutletTarget(hit.outletId);
-      ui.setTab("stall");
-      renderUI();
-      const card = document.getElementById("outlet-card-" + hit.outletId);
-      if (card) { card.focus({ preventScroll: true }); card.scrollIntoView({ block: "nearest" }); }
-      toast(hit.outletName + "管理已開啟：可在右側補貨、升級或查看店長營運。");
+      if (state.managerEvent && state.managerEvent.outletId === hit.outletId) { openWorldEvent(hit.outletId); return; }
+      openOutletManagement(hit.outletId, hit.outletName);
       return;
     }
     toast("夜市巷弄裡，還有鄰攤與往來的人潮。");
+  }
+
+  function openOutletManagement(outletId, outletName) {
+    ui.setOutletTarget(outletId);
+    ui.setTab("stall");
+    renderUI();
+    const card = document.getElementById("outlet-card-" + outletId);
+    if (card) { card.focus({ preventScroll: true }); card.scrollIntoView({ block: "nearest" }); }
+    toast((outletName || (state.outlets || []).find((item) => item.id === outletId)?.name || "分店") + "管理已開啟：可在這裡補貨、升級或查看店長營運。");
   }
 
   document.addEventListener("click", (event) => {
@@ -731,6 +818,12 @@ function boot() {
     if (!button) return;
     const action = button.dataset.action;
     if (action === "open-world-event") openWorldEvent();
+    if (action === "open-outlet-event") {
+      const outletId = button.dataset.outletId;
+      const eventInfo = ui.getOutletWorldEvents().find((item) => item.id === button.dataset.eventId);
+      if (eventInfo?.kind === "manager") openWorldEvent(outletId);
+      else openOutletManagement(outletId);
+    }
     if (action === "close-world-event" && worldEventDialog.open) worldEventDialog.close();
     if (action === "panel-tab") { ui.setTab(button.dataset.tab); renderUI(); }
     if (action === "open-report") openJournalReport(button.dataset.id);
@@ -869,7 +962,7 @@ function boot() {
   function frame(time) {
     const dt = lastFrame ? Math.min(0.05, (time - lastFrame) / 1000) : 0.016;
     lastFrame = time;
-    if (!document.hidden) { scene.update(dt); scene.draw(); syncWorldEventTrigger(); }
+    if (!document.hidden) { scene.update(dt); scene.draw(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
     requestAnimationFrame(frame);
   }
   const soundButton = document.querySelector('[data-action="toggle-sound"]');

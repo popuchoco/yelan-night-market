@@ -26,6 +26,7 @@ export function createScene(runtime) {
   var mainStall = marketStalls.find(function(stall) { return stall.main; });
   var stallHitBounds = [];
   var actorHits = [];
+  var eventHitBounds = [];
   var rainSeed = [];
   var smokeSeed = [];
   var ambientWalkers = createAmbientWalkers();
@@ -249,6 +250,7 @@ export function createScene(runtime) {
         ctx.clearRect(0,0,view.w,view.h);
         actorHits=[];
         stallHitBounds=[];
+        eventHitBounds=[];
         drawGround();
         var items=[];
         marketStalls.forEach(function(stall){items.push({depth:cameraDepth(stall.x+stall.w/2,stall.z+stall.d/2),draw:function(){drawStall(stall,time);}});});
@@ -274,11 +276,62 @@ export function createScene(runtime) {
           }
         }
         drawEventEffects(time);
+        drawOutletEventBeacons(time);
         if(performance.now()<sceneToastUntil&&lastToast) {
           var tw=Math.min(view.w-30,Math.max(170,lastToast.length*10));
           drawRoundRect((view.w-tw)/2,view.h*.19,tw,29,11,"#182727e8","#ead18c55");
           ctx.fillStyle="#f1e7c7"; ctx.font="700 9px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(lastToast,view.w/2,view.h*.19+15,tw-20);
         }
+      }
+
+      function outletAlerts() {
+        var branches = (state.outlets || []).filter(function(outlet) { return outlet && outlet.id !== "main"; });
+        var alerts = [];
+        if (state.managerEvent && state.managerEvent.outletId) {
+          alerts.push({ outletId: state.managerEvent.outletId, kind: "manager", glyph: "!", color: "#d96d52" });
+        }
+        branches.forEach(function(outlet) {
+          if (state.managerEvent && state.managerEvent.outletId === outlet.id) return;
+          if (outlet.autoPaused) alerts.push({ outletId: outlet.id, kind: "stockout", glyph: "×", color: "#d96d52" });
+          else if (Number(outlet.efficiencyPenalty) > 0) alerts.push({ outletId: outlet.id, kind: "equipment", glyph: "!", color: "#d6ad56" });
+          else if (Number(outlet.nextNightBonus) > 0) alerts.push({ outletId: outlet.id, kind: "bonus", glyph: "+", color: "#70aa82" });
+        });
+        return alerts;
+      }
+
+      function drawOutletEventBeacons(time) {
+        eventHitBounds = [];
+        outletAlerts().forEach(function(alert) {
+        var anchor = eventAnchor(alert.outletId);
+        var scale = Math.max(0.8, view.scale);
+        var x = anchor.x;
+        var y = anchor.y + 17 * scale;
+        var pulse = motionReduced ? 0 : 2 + Math.sin(time / 230) * 2;
+        ctx.save();
+        ctx.strokeStyle = alert.kind === "bonus" ? "#a8d1a9" : (alert.kind === "equipment" ? "#f1d27b" : "#f4b09a");
+        ctx.lineWidth = Math.max(1.5, 2 * scale);
+        ctx.beginPath();
+        ctx.moveTo(x, anchor.y + 2 * scale);
+        ctx.lineTo(x, y - 8 * scale);
+        ctx.stroke();
+        ctx.fillStyle = alert.color;
+        ctx.beginPath();
+        ctx.arc(x, y, (8 + pulse) * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = alert.kind === "bonus" ? "#dcf2d3" : "#ffe0bd";
+        ctx.lineWidth = Math.max(1.5, 2 * scale);
+        ctx.beginPath();
+        ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#fff5df";
+        ctx.font = "900 " + Math.max(11, 13 * scale) + "px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(alert.glyph, x, y + 0.5 * scale);
+        ctx.restore();
+        eventHitBounds.push({ left: x - 18 * scale, right: x + 18 * scale, top: y - 18 * scale, bottom: y + 18 * scale,
+          outletId: alert.outletId, kind: alert.kind });
+        });
       }
 
   function setCameraLabel() {
@@ -297,6 +350,12 @@ export function createScene(runtime) {
     for (var i = actorHits.length - 1; i >= 0; i--) {
       var hit = actorHits[i], dx = x - hit.x, dy = y - hit.y;
       if (dx * dx + dy * dy <= hit.r * hit.r) return { type: "guest", index: hit.index };
+    }
+    for (var eventIndex = eventHitBounds.length - 1; eventIndex >= 0; eventIndex--) {
+      var eventHit = eventHitBounds[eventIndex];
+      if (x >= eventHit.left && x <= eventHit.right && y >= eventHit.top && y <= eventHit.bottom) {
+        return { type: "outlet-event", outletId: eventHit.outletId, kind: eventHit.kind };
+      }
     }
     for (var j = stallHitBounds.length - 1; j >= 0; j--) {
       var stallHit = stallHitBounds[j];

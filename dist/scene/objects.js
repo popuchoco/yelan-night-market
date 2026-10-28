@@ -137,12 +137,14 @@ export function createObjectRenderer(api) {
     drawBillboard(sign, stall.name, !!stall.main, stall.roof);
     if (!stall.main) {
       if (acquiredIndex >= 0) {
-        drawRoundRect(sign.x + 27 * scale, sign.y - 15 * scale, 16 * scale, 16 * scale, 5 * scale, "#d8b665", "#fff0ba");
-        ctx.fillStyle = "#332d20";
+        const outletStatus = outlet?.autoPaused ? "補" : (outlet?.efficiencyPenalty ? "修" : (outlet?.nextNightBonus ? "+" : (outlet?.manager ? "店" : (outlet?.active ? "營" : "休"))));
+        const statusFill = outlet?.autoPaused ? "#d96d52" : (outlet?.efficiencyPenalty ? "#d6ad56" : (outlet?.nextNightBonus ? "#76a77e" : "#d8b665"));
+        drawRoundRect(sign.x + 27 * scale, sign.y - 15 * scale, 16 * scale, 16 * scale, 5 * scale, statusFill, "#fff0ba");
+        ctx.fillStyle = outletStatus === "補" || outletStatus === "修" ? "#fff5df" : "#332d20";
         ctx.font = "800 " + Math.max(8, 9 * scale) + "px system-ui";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(outlet?.manager ? "店" : (outlet?.active ? "營" : "休"), sign.x + 27 * scale, sign.y - 14 * scale);
+        ctx.fillText(outletStatus, sign.x + 27 * scale, sign.y - 14 * scale);
       }
     }
     const lanternCount = stall.main ? 3 : 2;

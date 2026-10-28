@@ -5,6 +5,7 @@ import { DATA } from "../dist/data.js";
 import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, selectEnding } from "../dist/campaign.js";
 import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accounting.js";
 import { createGameEngine } from "../dist/game.js";
+import { createUI } from "../dist/ui.js";
 import { applyCameraAction } from "../dist/scene.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
@@ -503,6 +504,30 @@ test("store managers surface weekly major decisions while keeping routine operat
   assert.equal(branch.lastResult.units, 0);
 });
 
+test("branch incidents expose their own world-map marker and follow-up state", () => {
+  const state = freshState();
+  const makeBranch = (id, name, extra = {}) => ({ id, name, type: "food", active: true, manager: false,
+    equipmentLevel: 0, stock: {}, stockCost: {}, nextNightBonus: 0, efficiencyPenalty: 0,
+    reputation: 50, autoPaused: false, lastResult: null, ...extra });
+  state.outlets.push(
+    makeBranch("acquired-1", "港口炸物・分店 1", { manager: true }),
+    makeBranch("acquired-2", "山海果物・分店 2", { active: false, autoPaused: true }),
+    makeBranch("acquired-3", "花生糖舖・分店 3", { efficiencyPenalty: 1 }),
+    makeBranch("acquired-4", "彈珠小屋・分店 4", { nextNightBonus: 130 })
+  );
+  state.managerEvent = { outletId: "acquired-1", title: "設備開始異音", description: "店長回報。", choices: [] };
+  const ui = createUI({ state, saveState() {} });
+  const events = ui.getOutletWorldEvents();
+  assert.equal(ui.getWorldEventInfo().anchorOutletId, "main", "market news stays with the main stall while branch events get their own pins");
+  assert.deepEqual(events.map((event) => [event.kind, event.outletId]), [
+    ["manager", "acquired-1"], ["stockout", "acquired-2"],
+    ["equipment", "acquired-3"], ["bonus", "acquired-4"]
+  ]);
+  assert.match(events[1].description, /重新開店/);
+  assert.match(events[2].description, /降載/);
+  assert.match(events[3].description, /130/);
+});
+
 test("legacy acquisition counts migrate into individually manageable outlets", () => {
   const migrated = normalizeState({ acquisitions: 2, acquisitionTypes: ["food", "leisure"] });
   assert.equal(migrated.outlets.length, 3);
@@ -610,6 +635,7 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(effects, /createEffectRenderer/);
   assert.match(html, /id="worldCanvas" tabindex="0"/);
   assert.match(html, /id="worldEventTrigger"[^>]*data-action="open-world-event"/);
+  assert.match(html, /id="outletEventTriggers"/);
   assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
   const css = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
   const game = await readFile(new URL("../dist/game.js", import.meta.url), "utf8");
@@ -629,9 +655,16 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(ui, /function getWorldEventInfo\(/);
   assert.match(ui, /function renderWorldEventContent\(/);
   assert.match(scene, /function eventAnchor\(/);
+  assert.match(scene, /function drawOutletEventBeacons\(/);
+  assert.match(scene, /return \{ type: "outlet-event", outletId: eventHit\.outletId, kind: eventHit\.kind \}/);
   assert.match(game, /function openWorldEvent\(/);
   assert.match(game, /scene\.eventAnchor\(info\.anchorOutletId\)/);
+  assert.match(game, /hit\.type === "outlet-event"/);
+  assert.match(game, /button\.dataset\.action = "open-outlet-event"/);
+  assert.match(ui, /function getOutletWorldEvents\(/);
   assert.match(game, /worldEventDialog\.addEventListener\("close"/);
   assert.match(css, /\.world-event-trigger:focus-visible/);
   assert.match(css, /\.world-event-trigger\[data-pending="true"\]/);
+  assert.match(css, /\.outlet-event-trigger:focus-visible/);
+  assert.match(css, /\.outlet-event-trigger[^\n]*min-height: 52px/);
 });
