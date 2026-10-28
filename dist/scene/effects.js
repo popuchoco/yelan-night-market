@@ -68,6 +68,23 @@ export function createEffectRenderer(api) {
         ctx.fillText("等太久了！", point.x + 43 * view.scale, point.y - 41 * view.scale);
       }
     }
+    if (event.id === "inspection") {
+      const x = mainStall.x + mainStall.w + 18;
+      const z = mainStall.z + mainStall.d * 0.62;
+      drawBox(x, z, 12, 10, 27, { top: "#d4b77e", sideA: "#78877a", sideB: "#596c61", stroke: "#263630" });
+      const head = project(x + 6, 37, z + 4);
+      ctx.fillStyle = "#deb597";
+      ctx.beginPath();
+      ctx.arc(head.x, head.y, Math.max(4, 5 * view.scale), 0, Math.PI * 2);
+      ctx.fill();
+      drawRoundRect(head.x + 7 * view.scale, head.y - 23 * view.scale, 74 * view.scale, 21 * view.scale,
+        7 * view.scale, "#f2e8cf", "#d8bd79");
+      ctx.fillStyle = "#465447";
+      ctx.font = "800 " + Math.max(7, 8 * view.scale) + "px system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("設備巡查", head.x + 44 * view.scale, head.y - 13 * view.scale);
+    }
   }
 
   return drawEventEffects;

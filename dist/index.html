@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- avoid-ai-design-ignore-file: I2, K7, SD4d - in-world marks are thematic; focus rings are in styles.css and metadata separators are meaningful. -->
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
@@ -11,9 +12,9 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark" aria-hidden="true">🏮</div><div><div class="brand-name">夜嵐夜市</div><div class="brand-sub">HARBOR NIGHT MARKET · 09</div></div></div>
+      <div class="brand"><div class="brand-mark" aria-hidden="true">燈</div><div><div class="brand-name">夜嵐夜市</div><div class="brand-sub">HARBOR NIGHT MARKET ｜ 09</div></div></div>
       <div class="header-divider"></div>
-      <div class="night-label"><span>營業進度</span><strong>第 <b id="dayValue">03</b> 個夜晚　·　<em id="phaseLabel">準備中</em></strong></div>
+      <div class="night-label"><span>營業進度</span><strong>第 <b id="dayValue">01 / 30</b> 個夜晚　｜　<em id="phaseLabel">準備中</em></strong></div>
       <div class="header-spacer"></div>
       <div class="save-indicator" aria-live="polite"><i></i><span id="saveLabel">進度已儲存</span></div>
       <div class="resource-row" aria-label="夜市資源">
@@ -24,14 +25,14 @@
     </header>
     <main class="game-layout">
       <section class="world-frame" aria-label="夜嵐夜市 2.5D 斜俯視經營場景">
-        <canvas id="worldCanvas" aria-label="可旋轉夜市地圖；點擊中央攤位進入管理，點擊正在接待的客人點餐"></canvas>
+        <canvas id="worldCanvas" tabindex="0" role="img" aria-describedby="sceneHelp" aria-keyshortcuts="Enter Space ArrowLeft ArrowRight + -" aria-label="可旋轉夜市地圖；鍵盤聚焦後按 Enter 或空白鍵開啟攤位工作台，左右方向鍵旋轉視角，上下方向鍵調整角度，正負鍵縮放"></canvas>
         <div class="world-top-left">
-          <span class="world-eyebrow">NORTH COAST · DISTRICT 09</span>
+          <span class="world-eyebrow">NORTH COAST ｜ DISTRICT 09</span>
           <strong class="world-title">潮聲近了，準備開門嗎？</strong>
           <span class="world-state" id="worldState"><i class="state-dot"></i><span id="worldStateText">備料與排班中</span></span>
         </div>
         <div class="camera-tools" aria-label="3D 相機控制">
-          <span class="camera-label" id="cameraLabel">斜俯視 · 北岸</span>
+          <span class="camera-label" id="cameraLabel">斜俯視 ｜ 北岸</span>
           <button class="icon-button" data-action="orbit-left" aria-label="將相機往左旋轉 45 度">⟲</button>
           <button class="icon-button" data-action="tilt-up" aria-label="相機抬高">⌃</button>
           <button class="icon-button" data-action="tilt-down" aria-label="相機降低">⌄</button>
@@ -40,12 +41,12 @@
           <button class="icon-button" data-action="camera-reset" aria-label="重設相機">◎</button>
           <button class="icon-button" data-action="orbit-right" aria-label="將相機往右旋轉 45 度">⟳</button>
         </div>
-        <div class="world-hint"><b>操作：</b>拖曳旋轉視角・滾輪縮放・點擊攤位管理・點擊客人接單</div>
+        <div class="world-hint" id="sceneHelp"><b>操作：</b>拖曳旋轉・滾輪縮放・Enter 開攤</div>
         <div class="world-actions">
           <button class="world-action" data-action="open-stall">⌂ 攤位管理</button>
           <button class="world-action" data-action="toggle-sound" aria-pressed="false">♫ 音效：關</button>
           <button class="world-action" data-action="toggle-pause" aria-pressed="false">Ⅱ 暫停場景</button>
-          <button class="world-action primary" id="mainAction" data-action="main-action">掛燈迎客　→</button>
+          <button class="world-action primary" id="mainAction" data-action="main-action">掛燈迎客</button>
         </div>
       </section>
       <aside class="panel">
@@ -53,15 +54,15 @@
           <div class="panel-kicker">HARBOR OPERATIONS</div>
           <div class="panel-title-row"><h1 class="panel-title" id="panelHeading">今晚營運</h1><span class="mini-status" id="panelPhase">準備時段</span></div>
         </div>
-        <nav class="panel-tabs" aria-label="攤位管理">
-          <button class="panel-tab active" data-action="panel-tab" data-tab="ops"><span>◷</span>營運</button>
-          <button class="panel-tab" data-action="panel-tab" data-tab="stall"><span>⌂</span>攤位</button>
-          <button class="panel-tab" data-action="panel-tab" data-tab="stock"><span>🥬</span>備料</button>
-          <button class="panel-tab" data-action="panel-tab" data-tab="equipment"><span>⚒</span>設備</button>
-          <button class="panel-tab" data-action="panel-tab" data-tab="staff"><span>♙</span>排班</button>
-          <button class="panel-tab" data-action="panel-tab" data-tab="journal"><span>▤</span>手記</button>
+        <nav class="panel-tabs" role="tablist" aria-label="攤位管理">
+          <button id="tab-ops" class="panel-tab active" role="tab" aria-selected="true" aria-controls="panelContent" data-action="panel-tab" data-tab="ops"><span aria-hidden="true">◷</span>營運</button>
+          <button id="tab-stall" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="stall"><span aria-hidden="true">⌂</span>攤位</button>
+          <button id="tab-stock" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="stock"><span aria-hidden="true">◈</span>備料</button>
+          <button id="tab-equipment" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="equipment"><span aria-hidden="true">⚒</span>設備</button>
+          <button id="tab-staff" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="staff"><span aria-hidden="true">♙</span>排班</button>
+          <button id="tab-journal" class="panel-tab" role="tab" aria-selected="false" aria-controls="panelContent" data-action="panel-tab" data-tab="journal"><span aria-hidden="true">▤</span>手記</button>
         </nav>
-        <div class="panel-content" id="panelContent"></div>
+        <div class="panel-content" id="panelContent" role="tabpanel" aria-labelledby="tab-ops" tabindex="0" aria-live="polite"></div>
       </aside>
     </main>
   </div>

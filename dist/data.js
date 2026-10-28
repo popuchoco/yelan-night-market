@@ -3,6 +3,8 @@ export const DATA = Object.freeze({
   legacyKey: "ye-lan-night-game-v1",
   economy: {
     rent: 95,
+    water: 18,
+    minWater: 8,
     electricity: 38,
     gas: 27,
     supplierMarkup: 1.25,

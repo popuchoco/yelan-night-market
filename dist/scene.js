@@ -29,17 +29,19 @@ export function createScene(runtime) {
   var rainSeed = [];
   var smokeSeed = [];
   var ambientWalkers = createAmbientWalkers();
-  var staffWalker = { x: DATA.motion.staffStart.x, z: DATA.motion.staffStart.z, target: 0, speed: DATA.motion.staffSpeed };
+  var staffWalkers = [{ x: DATA.motion.staffStart.x, z: DATA.motion.staffStart.z, target: 0, speed: DATA.motion.staffSpeed, phase: 0 }];
   var guestActors = [];
   var pointer = null;
   var lastToast = "";
   var sceneToastUntil = 0;
   var paused = false;
+  var motionQuery = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  var motionReduced = !!(motionQuery && motionQuery.matches);
   var animationTime = performance.now();
 
   function setToast(message) {
     lastToast = message;
-    sceneToastUntil = animationTime + 2600;
+    sceneToastUntil = performance.now() + 2600;
   }
 
   function spawnGuests(guests = getTonightGuests()) {
@@ -68,18 +70,35 @@ export function createScene(runtime) {
         actor.goalKey = key;
         actor.path = points.slice();
       }
+      function syncStaffWalkers() {
+        var needed = 1 + Math.min(3, Number(state.hiredCrew) || 0);
+        while (staffWalkers.length < needed) {
+          var index = staffWalkers.length;
+          staffWalkers.push({
+            x: DATA.motion.staffStart.x + 14 * index,
+            z: DATA.motion.staffStart.z + 12 * index,
+            target: index % DATA.motion.staffRoute.length,
+            speed: DATA.motion.staffSpeed * (index % 2 ? 0.92 : 1),
+            phase: index * 0.8
+          });
+        }
+        if (staffWalkers.length > needed) staffWalkers.length = needed;
+      }
       function updateActors(dt) {
         ambientWalkers.forEach(function (walker) {
           var target = walker.route[walker.step];
           if (moveToward(walker,target,walker.speed*dt)) walker.step = (walker.step+1)%walker.route.length;
         });
+        syncStaffWalkers();
         var staffPoints = DATA.motion.staffRoute;
-        if (!staffWalker.path) staffWalker.path = [];
-        if (!staffWalker.path.length) staffWalker.path = [staffPoints[staffWalker.target]];
-        if (moveToward(staffWalker,staffWalker.path[0],staffWalker.speed*dt)) {
-          staffWalker.path = [];
-          staffWalker.target = (staffWalker.target+1)%staffPoints.length;
-        }
+        staffWalkers.forEach(function(walker) {
+          if (!walker.path) walker.path = [];
+          if (!walker.path.length) walker.path = [staffPoints[walker.target]];
+          if (moveToward(walker,walker.path[0],walker.speed*dt)) {
+            walker.path = [];
+            walker.target = (walker.target+1)%staffPoints.length;
+          }
+        });
         if (state.phase === "service" || state.phase === "report") {
           guestActors.forEach(function (actor,index) {
             var key, points;
@@ -239,7 +258,10 @@ export function createScene(runtime) {
         if(state.phase==="service"||state.phase==="report") {
           guestActors.forEach(function(actor,index){items.push({depth:cameraDepth(actor.x,actor.z),draw:function(){drawHuman(actor,time,"guest",index);}});});
         }
-        items.push({depth:cameraDepth(staffWalker.x,staffWalker.z),draw:function(){drawHuman({x:staffWalker.x,z:staffWalker.z,outfit:"#dbe1cf",pants:"#394741",phase:1,scale:.9},time,"staff",0);}});
+        syncStaffWalkers();
+        staffWalkers.forEach(function(walker,index){
+          items.push({depth:cameraDepth(walker.x,walker.z),draw:function(){drawHuman({x:walker.x,z:walker.z,outfit:index?"#c4d2b7":"#dbe1cf",pants:"#394741",phase:walker.phase,scale:.9},time,"staff",index);}});
+        });
         items.sort(function(a,b){return a.depth-b.depth;});
         items.forEach(function(item){item.draw();});
         if(state.phase==="service") {
@@ -315,18 +337,27 @@ export function createScene(runtime) {
   }
 
   function update(dt) {
-    if (paused) return;
+    if (paused || motionReduced) return;
     animationTime += dt * 1000;
     updateActors(dt);
   }
 
   function draw() { drawScene(animationTime); }
   function togglePause() { paused = !paused; return paused; }
+  if (motionQuery) {
+    const onMotionChange = function(event) {
+      motionReduced = event.matches;
+      document.dispatchEvent(new Event("scene-motion-change"));
+    };
+    if (motionQuery.addEventListener) motionQuery.addEventListener("change", onMotionChange);
+    else if (motionQuery.addListener) motionQuery.addListener(onMotionChange);
+  }
 
   bindPointerControls();
   setCameraLabel();
   resizeCanvas();
   return { canvas: canvas, update: update, draw: draw, spawnGuests: spawnGuests, cameraAction: cameraAction,
     setCameraLabel: setCameraLabel, hitTest: hitTest, showToast: setToast, togglePause: togglePause,
-    get paused() { return paused; } };
+    get paused() { return paused; }, get motionReduced() { return motionReduced; },
+    get motionSuppressed() { return paused || motionReduced; } };
 }

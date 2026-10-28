@@ -95,10 +95,36 @@ export function createObjectRenderer(api) {
         ctx.fill();
         ctx.globalAlpha = 1;
       }
+      // Expansion decisions become visible in the 2.5D map as outdoor tables.
+      const tables = Math.min(3, Number(state.expansions) || 0);
+      for (let table = 0; table < tables; table++) {
+        const tableX = stall.x + 18 + table * 58;
+        const tableZ = stall.z + stall.d + 43;
+        drawBox(tableX, tableZ, 34, 28, 15, {
+          top: "#c89a61", sideA: "#8c6242", sideB: "#694a37", stroke: "#342b2399"
+        });
+        drawBox(tableX + 3, tableZ + 3, 5, 5, 22, {
+          top: "#e2bd82", sideA: "#806040", sideB: "#644b37"
+        });
+        drawBox(tableX + 26, tableZ + 3, 5, 5, 22, {
+          top: "#e2bd82", sideA: "#806040", sideB: "#644b37"
+        });
+      }
     }
 
     const sign = project(stall.x + stall.w / 2, stall.h + 31, stall.z + stall.d * 0.43);
     drawBillboard(sign, stall.name, !!stall.main, stall.roof);
+    if (!stall.main) {
+      const acquiredStalls = DATA.stalls.filter(function(item) { return !item.main; }).slice(0, Number(state.acquisitions) || 0);
+      if (acquiredStalls.some(function(item) { return item.id === stall.id; })) {
+        drawRoundRect(sign.x + 27 * scale, sign.y - 15 * scale, 16 * scale, 16 * scale, 5 * scale, "#d8b665", "#fff0ba");
+        ctx.fillStyle = "#332d20";
+        ctx.font = "800 " + Math.max(8, 9 * scale) + "px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("合", sign.x + 27 * scale, sign.y - 14 * scale);
+      }
+    }
     const lanternCount = stall.main ? 3 : 2;
     for (let lantern = 0; lantern < lanternCount; lantern++) {
       const x = stall.x + stall.w * (0.2 + lantern * (0.6 / (lanternCount - 1 || 1)));
