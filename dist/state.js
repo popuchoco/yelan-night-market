@@ -237,6 +237,25 @@ export function normalizeState(data) {
   return fresh;
 }
 
+/** @param {GameState} state @returns {string} */
+export function captureStateSnapshot(state) {
+  return JSON.stringify(state);
+}
+
+/**
+ * Restore the stable root object so engine and scene closures keep their
+ * reference while every nested mutable record returns to the saved snapshot.
+ * @param {GameState} state
+ * @param {string} snapshot
+ * @returns {GameState}
+ */
+export function restoreStateSnapshot(state, snapshot) {
+  const restored = JSON.parse(snapshot);
+  Object.keys(state).forEach((key) => delete state[key]);
+  Object.assign(state, restored);
+  return state;
+}
+
 /** @typedef {{ state: ReturnType<typeof freshState>, status: "empty"|"loaded"|"migrated"|"corrupt"|"unavailable"|"unsupported-version", sourceVersion?: number }} SaveLoadResult */
 
 /**

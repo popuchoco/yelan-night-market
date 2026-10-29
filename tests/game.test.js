@@ -10,7 +10,8 @@ import { applyCameraAction } from "../dist/scene.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
-  loadState, loadStateResult, normalizeState, saveState, saveStateResult, SAVE_SCHEMA_VERSION,
+  captureStateSnapshot, loadState, loadStateResult, normalizeState, restoreStateSnapshot,
+  saveState, saveStateResult, SAVE_SCHEMA_VERSION,
   todayEvent, todayMarketCard, ledgerIncome, ledgerNet
 } from "../dist/state.js";
 
@@ -119,6 +120,19 @@ test("save status reports migration, quota errors, and future versions without o
     state: freshState(), status: "unsupported-version", sourceVersion: SAVE_SCHEMA_VERSION + 1
   });
   assert.equal(values.get(DATA.saveKey), futureSave);
+});
+
+test("mutable game actions can restore the same state object after an exception", () => {
+  const state = freshState();
+  const stateReference = state;
+  const before = JSON.parse(JSON.stringify(state));
+  const snapshot = captureStateSnapshot(state);
+  state.coins = 0;
+  state.accounting.balances["1000"] = -1200;
+  state.outlets[0].active = false;
+  restoreStateSnapshot(state, snapshot);
+  assert.equal(state, stateReference);
+  assert.deepEqual(state, before);
 });
 
 test("extreme or oversized legacy progress normalizes to bounded outlet and event collections", () => {

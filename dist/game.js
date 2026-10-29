@@ -1,4 +1,4 @@
-import { getTonightGuests, loadStateResult, saveState, saveStateResult, todayEvent, todayStory } from "./state.js";
+import { captureStateSnapshot, getTonightGuests, loadStateResult, restoreStateSnapshot, saveState, saveStateResult, todayEvent, todayStory } from "./state.js";
 import { createScene } from "./scene.js";
 import { createUI } from "./ui.js";
 import { createGameEngine } from "./engine.js";
@@ -424,19 +424,13 @@ export function boot() {
     "buy-upgrade", "toggle-staff", "choose-story", "choose-market-card", "next-night", "choose-weekly",
     "borrow-loan", "repay-loan", "restart-campaign"
   ]);
-  function restoreState(snapshot) {
-    const restored = JSON.parse(snapshot);
-    Object.keys(state).forEach((key) => delete state[key]);
-    Object.assign(state, restored);
-  }
-
   document.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
     const action = button.dataset.action;
     let snapshot = null;
     try {
-      if (transactionalActions.has(action)) snapshot = JSON.stringify(state);
+      if (transactionalActions.has(action)) snapshot = captureStateSnapshot(state);
     } catch (error) {
       console.error("Unable to snapshot game state before action", action, error);
       toast("夜市資料暫時無法安全操作，請重新整理後再試。");
@@ -560,7 +554,7 @@ export function boot() {
       console.error("Game action failed", action, error);
       if (snapshot) {
         try {
-          restoreState(snapshot);
+          restoreStateSnapshot(state, snapshot);
           persistStateDetailed(state);
           renderUI();
         } catch (rollbackError) {
