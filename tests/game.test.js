@@ -7,6 +7,7 @@ import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accou
 import { boot, createGameEngine } from "../dist/game.js";
 import { createUI } from "../dist/ui.js";
 import { applyCameraAction } from "../dist/scene.js";
+import { getStallVisualProfile } from "../dist/scene/objects.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
@@ -382,6 +383,37 @@ test("camera operations clamp tilt and zoom and support reset", () => {
   for (let i = 0; i < 20; i++) zoomed = applyCameraAction(zoomed, "zoom-in");
   assert.equal(zoomed.zoom, DATA.camera.maxZoom);
   assert.deepEqual(applyCameraAction(zoomed, "camera-reset"), initial);
+});
+
+test("main stall visual profile reflects tier and expansion growth without saving scene coordinates", () => {
+  const mainStall = DATA.stalls.find((stall) => stall.main);
+  const state = freshState();
+  const mobile = getStallVisualProfile(mainStall, state);
+  assert.equal(mobile.w, mainStall.w);
+  assert.equal(mobile.h, mainStall.h);
+
+  state.outlets[0].tier = "fixed";
+  const fixed = getStallVisualProfile(mainStall, state);
+  assert.ok(fixed.w > mobile.w);
+  assert.ok(fixed.h > mobile.h);
+  assert.equal(fixed.lanternCount, mobile.lanternCount + 2);
+
+  state.outlets[0].tier = "dapaidang";
+  state.expansions = 3;
+  const large = getStallVisualProfile(mainStall, state);
+  assert.ok(large.w > fixed.w);
+  assert.ok(large.d > fixed.d);
+  assert.ok(large.h > fixed.h);
+  assert.equal(large.expansions, 3);
+  assert.equal(large.lanternCount, 7);
+  assert.equal(large.smokeCount, 6);
+  assert.equal(large.x + large.w / 2, mainStall.x + mainStall.w / 2);
+  assert.equal(large.z + large.d / 2, mainStall.z + mainStall.d / 2);
+
+  state.expansions = 99;
+  assert.equal(getStallVisualProfile(mainStall, state).expansions, 9);
+  const neighbor = DATA.stalls.find((stall) => !stall.main);
+  assert.equal(getStallVisualProfile(neighbor, state).w, neighbor.w);
 });
 
 test("night transitions keep the operating cycle valid", () => {
