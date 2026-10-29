@@ -23,6 +23,7 @@ export const CHART_OF_ACCOUNTS = Object.freeze([
   { code: "4010", name: "服務費及小費收入", type: "income", normal: "credit", statement: "綜合損益" },
   { code: "4020", name: "補助及其他營業收入", type: "income", normal: "credit", statement: "綜合損益" },
   { code: "4030", name: "保險理賠收入", type: "income", normal: "credit", statement: "綜合損益" },
+  { code: "4040", name: "現金短溢收益", type: "income", normal: "credit", statement: "綜合損益" },
   { code: "4090", name: "退款及銷貨折讓", type: "contra-income", normal: "debit", statement: "綜合損益" },
   { code: "5000", name: "銷貨成本－食材", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5100", name: "薪資及人事費", type: "expense", normal: "debit", statement: "綜合損益" },
@@ -37,6 +38,7 @@ export const CHART_OF_ACCOUNTS = Object.freeze([
   { code: "5480", name: "公共意外責任保險費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5410", name: "行銷及宣傳費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5500", name: "客訴招待及營業雜支", type: "expense", normal: "debit", statement: "綜合損益" },
+  { code: "5510", name: "現金短溢損失", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5520", name: "職業災害照護與補償費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5530", name: "顧客意外照護與補償費", type: "expense", normal: "debit", statement: "綜合損益" },
   { code: "5540", name: "食品安全處理與顧客補償費", type: "expense", normal: "debit", statement: "綜合損益" },
@@ -264,6 +266,22 @@ export function recordExpense(state, account, description, amount, cashFlowCateg
   if (value) postJournal(state, description, [{ account, debit: value }, { account: "1000", credit: value }], { category: cashFlowCategory, amount: -value });
 }
 
+export function recordCashVariance(state, kind, description, amount, day = state.day) {
+  const value = round(amount);
+  if (!value) return null;
+  if (kind === "short") {
+    return postJournal(state, "現金短溢｜" + description,
+      [{ account: "5510", debit: value }, { account: "1000", credit: value }],
+      { category: "operating", amount: -value }, day);
+  }
+  if (kind === "over") {
+    return postJournal(state, "現金短溢｜" + description,
+      [{ account: "1000", debit: value }, { account: "4040", credit: value }],
+      { category: "operating", amount: value }, day);
+  }
+  throw new Error("Unknown cash variance kind: " + kind);
+}
+
 export function recordRefund(state, amount) {
   const value = round(amount);
   if (value) postJournal(state, "客訴退款／銷貨折讓", [{ account: "4090", debit: value }, { account: "1000", credit: value }], { category: "operating", amount: -value });
@@ -398,7 +416,8 @@ export function closeWeeklyWorksheet(state, endDay, { periodEnd = false, insuran
 }
 
 function profitAndLoss(accounting) {
-  const revenue = Object.fromEntries(["4000", "4010", "4020", "4030"].map((code) => [code, normalAmount(amountOn(accounting, code), "credit")]));
+  const revenue = Object.fromEntries(CHART_OF_ACCOUNTS.filter((account) => account.type === "income")
+    .map(({ code }) => [code, normalAmount(amountOn(accounting, code), "credit")]));
   const contra = Math.max(0, amountOn(accounting, "4090"));
   const expenses = Object.fromEntries(CHART_OF_ACCOUNTS.filter((account) => account.type === "expense").map((account) => [account.code, Math.max(0, amountOn(accounting, account.code))]));
   const totalRevenue = Object.values(revenue).reduce((sum, value) => sum + value, 0);

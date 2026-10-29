@@ -36,12 +36,12 @@ dist/index.html + dist/styles.css
 | 模組 | 主要責任 | 不應承擔的責任 |
 | --- | --- | --- |
 | `dist/data.js` | 菜單、原料、顧客、事件、攤位座標、價格、成本、相機與動畫參數 | 操作 DOM、存檔、結算分錄 |
-| `dist/campaign.js` | 30 夜敘事週期、跨週節點、市集公告卡、週決策選項、結局判定 | 場景繪圖、localStorage 存取 |
+| `dist/campaign.js` | 30 夜敘事週期、跨週節點、市集公告卡與宣傳合作排程、週決策選項、結局判定 | 場景繪圖、localStorage 存取 |
 | `dist/achievements.js` | 成就目錄、存檔正規化、依既有營運狀態判定首次里程碑；不提供經濟獎勵 | DOM 呈現或阻塞式互動 |
 | `dist/state.js` | 新遊戲狀態、存檔正規化、存取結果、當晚顧客／事件、成本與帳本試算 | Canvas 繪製、DOM 面板 |
 | `dist/safety.js` | 攤型階段、安全設備條件、容量、保險費與有效保障判定 | 實際法規或保險契約解讀 |
-| `dist/accounting.js` | 內部科目表、借貸分錄、資產清冊、折舊／攤銷、週工作底稿與週期報表 | 遊戲畫面與營運選單 |
-| `dist/engine.js` | 對遊戲動作套用規則並更新共用 state；回傳動作結果 | 瀏覽器事件綁定、Canvas 呈現 |
+| `dist/accounting.js` | 內部科目表、借貸分錄、現金短溢調整、資產清冊、折舊／攤銷、週工作底稿與週期報表 | 遊戲畫面與營運選單 |
+| `dist/engine.js` | 對遊戲動作套用規則並更新共用 state；結算隨機宣傳、收銀、秘密客與衛生稽查結果 | 瀏覽器事件綁定、Canvas 呈現 |
 | `dist/game.js` | 建立 state、引擎、UI、場景；管理對話框、鍵盤／指標操作、提示、存檔與動畫循環 | 細部會計科目計算、物件幾何繪製 |
 | `dist/ui.js` | 營運、備料、設備、人事、攤位與安全管理面板 | 規則計算、財務分錄 |
 | `dist/ui/reports.js` | 日記簿、週底稿、期末工作底稿、報表與科目表 DOM | 修改引擎或帳務規則 |
@@ -62,7 +62,7 @@ dist/index.html + dist/styles.css
 3. 若規則回傳 `{ ok, changed, message }`，依結果更新畫面與存檔。
 4. 若操作過程發生例外，使用快照還原同一個 root state、重新渲染並提示錯誤，避免半套狀態寫入。
 
-快照目前以 JSON 序列化 plain data。若未來加入函式、Symbol、循環參照或非 enumerable 欄位，需重新評估快照策略。
+快照目前以 JSON 序列化 plain data。若未來加入函式、Symbol、循環參照或非 enumerable 欄位，需重新評估快照策略。引擎的機率結果經 `random` 注入，可固定種子驗證；打烊現金差異及稽查結果會在推進夜次前落帳並寫入日記。
 
 ## 4. 場景架構
 

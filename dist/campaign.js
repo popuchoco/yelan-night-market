@@ -39,6 +39,31 @@ export const MARKET_CARDS = Object.freeze({
       { id: "claim", name: "申請補助", detail: "市集補助收入 +NT$ " + DATA.economy.rainSubsidy, cost: 0 },
       { id: "decline", name: "留給其他攤商", detail: "不領取補助", cost: 0 }
     ]
+  },
+  "media-interview": {
+    id: "media-interview", name: "地方節目採訪邀約", icon: "🎥", tone: "positive",
+    description: "節目組想聊聊港邊攤商的日常；接受採訪不收費，但播出反應與後續客流不一定。",
+    choices: [
+      { id: "accept-interview", name: "接受節目採訪", detail: "不收費；播出效果隨機，可能帶來口碑與來客，也可能被剪輯成意外焦點。", cost: DATA.economy.interviewPromotionCost },
+      { id: "decline-interview", name: "婉拒邀約", detail: "不支出、不改變今晚客流。", cost: 0 }
+    ]
+  },
+  "celebrity-visit": {
+    id: "celebrity-visit", name: "名人探訪・港邊打卡", icon: "📸", tone: "positive",
+    description: "一位人氣主持人傳訊想來吃宵夜；可以先整理座位迎接，也可能臨時改行程。",
+    choices: [
+      { id: "host-visit", name: "預留座位・準備接待", detail: "接待費 −NT$ " + DATA.economy.celebrityVisitCost + "；名人可能到訪帶動熱潮，也可能臨時取消。", cost: DATA.economy.celebrityVisitCost },
+      { id: "pass-visit", name: "照常營業", detail: "不支出、不等待名人行程。", cost: 0 }
+    ]
+  },
+  "paid-promotion": {
+    id: "paid-promotion", name: "宣傳合作報價", icon: "📣", tone: "caution",
+    description: "媒體送來廣告與節目置入報價；曝光成效隨機，先看今晚現金與備料再決定。",
+    choices: [
+      { id: "buy-ad", name: "購買短影音廣告", detail: "行銷費 −NT$ " + DATA.economy.paidAdCost + "；曝光轉換可能普通、亮眼或不如預期。", cost: DATA.economy.paidAdCost },
+      { id: "buy-placement", name: "購買節目置入", detail: "行銷費 −NT$ " + DATA.economy.productPlacementCost + "；可能帶來較多新客，也可能只換到有限曝光。", cost: DATA.economy.productPlacementCost },
+      { id: "pass-promotion", name: "暫不投放", detail: "不新增行銷費，保留現金與備料彈性。", cost: 0 }
+    ]
   }
 });
 
@@ -50,7 +75,10 @@ export const MARKET_CARD_SCHEDULE = Object.freeze({
   16: "tourist-surge",
   18: "rain-subsidy",
   22: "hygiene-audit",
-  26: "rain-subsidy"
+  26: "rain-subsidy",
+  6: "media-interview",
+  17: "celebrity-visit",
+  27: "paid-promotion"
 });
 
 export const ACQUISITION_TYPES = Object.freeze(Object.fromEntries(

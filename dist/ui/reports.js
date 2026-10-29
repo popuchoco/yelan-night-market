@@ -80,6 +80,8 @@ export function createReportRenderer(runtime) {
       const story = el("article", "story-card journal-entry");
       append(story, el("h3", "", narrative.title), el("p", "", narrative.event + "・" + narrative.choice + "・當夜營運淨額 " + moneyNet(narrative.net)));
       if (narrative.marketCard) story.append(el("p", "", "公告卡：" + narrative.marketCard + (narrative.marketChoice ? "・" + narrative.marketChoice : "")));
+      if (narrative.promotionOutcome) story.append(el("p", "", "宣傳結果：" + narrative.promotionOutcome));
+      if (narrative.closingEvents?.length) narrative.closingEvents.forEach((event) => story.append(el("p", "", "打烊事件：" + event.message)));
       if (narrative.safetyIncident) {
         const incident = narrative.safetyIncident;
         story.append(el("p", "", "安全事件：" + incident.title + "・處置 " + money(incident.expense) +
@@ -277,6 +279,8 @@ export function createReportRenderer(runtime) {
       append(item, el("h3", "", "第 " + entry.day + " 夜 ｜ " + entry.event),
         el("p", "", entry.title + "　" + entry.choice + " ｜ 淨額 " + moneyNet(entry.net)));
       if (entry.marketCard) item.append(el("p", "", "公告卡：" + entry.marketCard + (entry.marketChoice ? "・" + entry.marketChoice : "")));
+      if (entry.promotionOutcome) item.append(el("p", "", "宣傳結果：" + entry.promotionOutcome));
+      if (entry.closingEvents?.length) entry.closingEvents.forEach((event) => item.append(el("p", "", "打烊事件：" + event.message)));
       if (entry.safetyIncident) item.append(el("p", "", "安全事件：" + entry.safetyIncident.title + "・處置 " +
         money(entry.safetyIncident.expense) + (entry.safetyIncident.claim ? "・理賠應收 " + money(entry.safetyIncident.claim) : "・店家自行負擔")));
       if (entry.recipesUnlocked?.length) {

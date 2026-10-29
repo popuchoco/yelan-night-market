@@ -5,7 +5,7 @@ import { getMonthlyInsurance, getOutletCapacity, getOutletTier, getTierDailyUtil
 import { createAchievementState, normalizeAchievementState } from "./achievements.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
 
 function resolveStorage(storage) {
   if (storage !== undefined) return storage;
@@ -58,6 +58,7 @@ export function freshState() {
     achievements: createAchievementState(),
     marketChoiceDay: 0,
     marketCardChoice: null,
+    marketCardOutcome: null,
     decisions: [],
     campaignNet: 0,
     endingId: null
@@ -165,6 +166,18 @@ export function normalizeState(data) {
       !currentMarketCard.choices.some((choice) => choice.id === fresh.marketCardChoice)) {
     fresh.marketChoiceDay = 0;
     fresh.marketCardChoice = null;
+    fresh.marketCardOutcome = null;
+  } else if (data.marketCardOutcome && Number(data.marketCardOutcome.day) === Number(fresh.day) &&
+      data.marketCardOutcome.cardId === currentMarketCard.id && typeof data.marketCardOutcome.summary === "string") {
+    fresh.marketCardOutcome = {
+      day: fresh.day,
+      cardId: String(data.marketCardOutcome.cardId || "").slice(0, 40),
+      summary: data.marketCardOutcome.summary.slice(0, 220),
+      guestBonus: Math.max(0, Math.min(3, Math.floor(Number(data.marketCardOutcome.guestBonus) || 0))),
+      fameChange: Math.max(-5, Math.min(5, Math.round(Number(data.marketCardOutcome.fameChange) || 0)))
+    };
+  } else {
+    fresh.marketCardOutcome = null;
   }
   fresh.decisions = Array.isArray(data.decisions)
     ? data.decisions.filter((decision) => decision && typeof decision === "object" && !Array.isArray(decision)).slice(-104) : [];
@@ -406,6 +419,11 @@ export function getTonightGuests(state) {
     guests.push({ ...deck[offset % deck.length], name: "觀光客・小滿", role: "港區觀光旅人" });
     guests.push({ ...deck[(offset + 1) % deck.length], name: "觀光客・阿拓", role: "港區觀光旅人" });
   }
+  const exposureGuests = state.marketCardOutcome && Number(state.marketCardOutcome.day) === Number(state.day)
+    ? Math.max(0, Math.min(3, Math.floor(Number(state.marketCardOutcome.guestBonus) || 0))) : 0;
+  for (let index = 0; index < exposureGuests; index += 1) {
+    guests.push({ ...deck[(offset + index) % deck.length], name: "宣傳來客・" + deck[(offset + index) % deck.length].name, role: "夜市宣傳來客" });
+  }
   const eventId = todayEvent(state).id;
   if (eventId === "festival") guests.push(DATA.festivalGuest);
   if (eventId === "complaint") guests.push(DATA.difficultGuest);
@@ -450,6 +468,7 @@ export function createLedger(state) {
   const event = todayEvent(state);
   const card = todayMarketCard(state);
   const choice = marketCardChoice(state);
+  const selectedChoice = card?.choices.find((item) => item.id === choice);
   const hood = Number(state.equipment.hood) || 0;
   const awning = Number(state.equipment.awning) || 0;
   const rainElectricity = Math.max(0, DATA.economy.rainElectricity - awning * DATA.economy.awningElectricitySavings);
@@ -477,7 +496,7 @@ export function createLedger(state) {
     electricity: Math.max(DATA.economy.minElectricity, DATA.economy.electricity - hood * DATA.economy.hoodElectricitySavings) + (event.id === "rain" ? rainElectricity : 0) + blackout,
     gas: Math.max(DATA.economy.minGas, DATA.economy.gas - hood * DATA.economy.hoodGasSavings) + (event.id === "rain" ? rainGas : 0),
     fees: fee,
-    marketing: card?.id === "tourist-surge" && choice === "promote" ? DATA.economy.touristPromotionCost : 0,
+    marketing: ["tourist-surge", "paid-promotion", "celebrity-visit"].includes(card?.id) ? Math.max(0, Math.round(Number(selectedChoice?.cost) || 0)) : 0,
     preparation: card?.id === "hygiene-audit" && choice === "deep-clean" ? DATA.economy.hygieneQuickCleanCost : 0,
     subsidies: card?.id === "rain-subsidy" && choice === "claim" ? DATA.economy.rainSubsidy : 0,
     interest: (Number(state.loanPrincipal) || 0) > 0
@@ -495,12 +514,14 @@ export function createLedger(state) {
     insuranceClaimReceipts: 0,
     safetyCosts: 0,
     compensation: 0,
-    refunds: 0
+    refunds: 0,
+    cashShort: 0,
+    cashOver: 0
   };
 }
 
 export function ledgerIncome(ledger) {
-  return ledger.sales + ledger.tips + ledger.bonus + ledger.storyBonus + (ledger.subsidies || 0) + (ledger.insuranceClaimRevenue || 0);
+  return ledger.sales + ledger.tips + ledger.bonus + ledger.storyBonus + (ledger.subsidies || 0) + (ledger.insuranceClaimRevenue || 0) + (ledger.cashOver || 0);
 }
 
 export function fixedOperatingCost(ledger) {
@@ -513,7 +534,7 @@ export function fixedOperatingCost(ledger) {
 }
 
 export function ledgerCosts(ledger) {
-  return ledger.food + fixedOperatingCost(ledger) + ledger.compensation + ledger.refunds + (ledger.safetyCosts || 0);
+  return ledger.food + fixedOperatingCost(ledger) + ledger.compensation + ledger.refunds + (ledger.safetyCosts || 0) + (ledger.cashShort || 0);
 }
 
 export function ledgerNet(ledger) {

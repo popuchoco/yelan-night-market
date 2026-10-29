@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { DATA, getOutletSpecialty, outletRetailPrice } from "../dist/data.js";
-import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, selectEnding } from "../dist/campaign.js";
+import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, MARKET_CARDS, MARKET_CARD_SCHEDULE, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, marketCardForDay, selectEnding } from "../dist/campaign.js";
 import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accounting.js";
 import { boot, createGameEngine } from "../dist/game.js";
 import { createUI } from "../dist/ui.js";
@@ -371,6 +371,132 @@ test("rain subsidy is recorded as income while hygiene choice can avoid an inspe
   assert.equal(createLedger(audited).preparation, DATA.economy.hygieneQuickCleanCost);
   assert.equal(createLedger(audited).fees, 0);
   assert.equal(auditEngine.openDoors().ok, true);
+});
+
+test("marketing announcements charge the selected placement and apply a seeded outcome", () => {
+  assert.equal(marketCardForDay(6).id, "media-interview");
+  assert.equal(marketCardForDay(17).id, "celebrity-visit");
+  assert.equal(marketCardForDay(27).id, "paid-promotion");
+  assert.equal(MARKET_CARDS["paid-promotion"].choices.find((choice) => choice.id === "buy-placement").cost,
+    DATA.economy.productPlacementCost);
+  assert.deepEqual([MARKET_CARD_SCHEDULE[6], MARKET_CARD_SCHEDULE[17], MARKET_CARD_SCHEDULE[27]],
+    ["media-interview", "celebrity-visit", "paid-promotion"]);
+
+  const state = freshState();
+  state.day = 27;
+  const rolls = [0.9, 0.99, 0.99, 0.99];
+  const engine = createGameEngine(state, { random: () => rolls.shift() ?? 0.99 });
+  const cashBefore = state.coins;
+  assert.equal(engine.chooseMarketCard("buy-placement").ok, true);
+  assert.equal(engine.openDoors().ok, true);
+  assert.equal(state.coins, cashBefore - fixedOperatingCost(state.ledger));
+  assert.equal(state.ledger.marketing, DATA.economy.productPlacementCost);
+  assert.equal(state.accounting.journal.some((entry) =>
+    entry.lines.some((line) => line.account === "5410" && line.debit === DATA.economy.productPlacementCost)), true);
+  assert.equal(state.marketCardOutcome.cardId, "paid-promotion");
+  assert.equal(state.marketCardOutcome.guestBonus, 3);
+  assert.equal(state.marketCardOutcome.fameChange, 4);
+  assert.equal(getTonightGuests(state).length, 7);
+});
+
+test("counterfeit and undercharged add-ons become cash shortfall losses", () => {
+  for (const scenario of [
+    { chance: 0.01, amount: 80, kind: "counterfeit", account: "5510" },
+    { chance: 0.06, amount: 35, kind: "undercharge", account: "5510" }
+  ]) {
+    const state = freshState();
+    state.phase = "report";
+    state.reportChoice = "paperboat";
+    state.ledger = createLedger(state);
+    const rolls = [scenario.chance, 0.01, 0.99, 0.99];
+    const engine = createGameEngine(state, { random: () => rolls.shift() ?? 0.99 });
+    const cashBefore = state.coins;
+    assert.equal(engine.nextNight().ok, true);
+    assert.equal(state.coins, cashBefore - scenario.amount);
+    assert.equal(state.journal[0].closingEvents[0].kind, scenario.kind);
+    assert.equal(state.ledger, null);
+    const variance = state.accounting.journal.find((entry) => entry.description.startsWith("現金短溢｜"));
+    assert.ok(variance);
+    assert.equal(variance.lines.some((line) => line.account === scenario.account && line.debit === scenario.amount), true);
+    assert.equal(variance.lines.some((line) => line.account === "1000" && line.credit === scenario.amount), true);
+  }
+});
+
+test("unidentified cash overage is income; identifiable customer overcharge is refunded as a sales allowance", () => {
+  const overage = freshState();
+  overage.phase = "report";
+  overage.reportChoice = "paperboat";
+  overage.ledger = createLedger(overage);
+  const overageRolls = [0.10, 0.01, 0.99, 0.99];
+  const overageEngine = createGameEngine(overage, { random: () => overageRolls.shift() ?? 0.99 });
+  const cashBefore = overage.coins;
+  assert.equal(overageEngine.nextNight().ok, true);
+  assert.equal(overage.coins, cashBefore + 20);
+  assert.equal(overage.journal[0].closingEvents[0].kind, "cash-over");
+  const gain = overage.accounting.journal.find((entry) => entry.description.includes("未能辨認來源的溢收"));
+  assert.equal(gain.lines.some((line) => line.account === "4040" && line.credit === 20), true);
+
+  const refund = freshState();
+  refund.phase = "report";
+  refund.reportChoice = "paperboat";
+  refund.ledger = createLedger(refund);
+  const refundRolls = [0.12, 0.01, 0.99, 0.99];
+  const refundEngine = createGameEngine(refund, { random: () => refundRolls.shift() ?? 0.99 });
+  const refundCashBefore = refund.coins;
+  assert.equal(refundEngine.nextNight().ok, true);
+  assert.equal(refund.coins, refundCashBefore);
+  assert.equal(refund.journal[0].closingEvents[0].kind, "customer-overcharge");
+  assert.equal(refund.accounting.journal.some((entry) => entry.description === "客訴退款／銷貨折讓" &&
+    entry.lines.some((line) => line.account === "4090" && line.debit === 40)), true);
+});
+
+test("secret shopper and hygiene inspection produce balanced reputation and accounting outcomes", () => {
+  const shopper = freshState();
+  shopper.phase = "report";
+  shopper.reportChoice = "paperboat";
+  shopper.ledger = createLedger(shopper);
+  const shopperRolls = [0.5, 0.01, 0.01, 0.99];
+  assert.equal(createGameEngine(shopper, { random: () => shopperRolls.shift() ?? 0.99 }).nextNight().ok, true);
+  assert.equal(shopper.journal[0].closingEvents.some((event) => event.kind === "secret-shopper" && event.outcome === "positive"), true);
+  assert.equal(shopper.fame, 41);
+
+  const inspector = freshState();
+  inspector.phase = "report";
+  inspector.reportChoice = "paperboat";
+  inspector.ledger = createLedger(inspector);
+  const inspectionRolls = [0.5, 0.99, 0.01, 0.01];
+  const inspectorEngine = createGameEngine(inspector, { random: () => inspectionRolls.shift() ?? 0.99 });
+  const cashBefore = inspector.coins;
+  assert.equal(inspectorEngine.nextNight().ok, true);
+  assert.equal(inspector.coins, cashBefore + 50);
+  assert.equal(inspector.journal[0].closingEvents.some((event) => event.kind === "secret-inspection" && event.outcome === "pass"), true);
+  assert.equal(inspector.accounting.journal.some((entry) => entry.description === "秘密衛生稽查通過獎勵" &&
+    entry.lines.some((line) => line.account === "4020" && line.credit === 50)), true);
+});
+
+test("negative secret shopper and failed hygiene inspection apply their distinct adjustments", () => {
+  const shopper = freshState();
+  shopper.phase = "report";
+  shopper.reportChoice = "paperboat";
+  shopper.ledger = createLedger(shopper);
+  const shopperRolls = [0.5, 0.01, 0.99, 0.99];
+  assert.equal(createGameEngine(shopper, { random: () => shopperRolls.shift() ?? 0.99 }).nextNight().ok, true);
+  assert.equal(shopper.journal[0].closingEvents.some((event) => event.kind === "secret-shopper" && event.outcome === "negative"), true);
+  assert.equal(shopper.fame, 36);
+
+  const inspector = freshState();
+  inspector.phase = "report";
+  inspector.reportChoice = "paperboat";
+  inspector.ledger = createLedger(inspector);
+  const inspectionRolls = [0.5, 0.99, 0.01, 0.99];
+  const engine = createGameEngine(inspector, { random: () => inspectionRolls.shift() ?? 0.99 });
+  const cashBefore = inspector.coins;
+  assert.equal(engine.nextNight().ok, true);
+  assert.equal(inspector.coins, cashBefore - 85);
+  assert.equal(inspector.fame, 36);
+  assert.equal(inspector.journal[0].closingEvents.some((event) => event.kind === "secret-inspection" && event.outcome === "fail"), true);
+  assert.equal(inspector.accounting.journal.some((entry) => entry.description.includes("整改罰款") &&
+    entry.lines.some((line) => line.account === "5400" && line.debit === 85)), true);
 });
 
 test("working capital is one-time, accrues nightly interest, and can be repaid at a weekly turn", () => {
@@ -748,7 +874,8 @@ test("the world continues across many 30-night periods and produces weekly and m
   assert.ok(CHART_OF_ACCOUNTS.some((account) => account.name === "租金及攤位使用費"));
   assert.ok(state.accounting.journal.every((entry) =>
     entry.lines.reduce((sum, line) => sum + line.debit, 0) === entry.lines.reduce((sum, line) => sum + line.credit, 0)));
-  assert.equal(state.accounting.balances["4000"], 0);
+  assert.equal(state.accounting.balances["4000"] + state.accounting.balances["4090"], 0,
+    "a discovered overcharge is fully offset by its sales allowance until period close");
 });
 
 test("ending rules represent successful and adverse business outcomes", () => {
@@ -806,7 +933,8 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(html, /data-action="toggle-pause"[^>]*aria-label="暫停場景動畫"/);
   assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
   assert.match(html, /<dialog class="story-choice-dialog" id="storyChoiceDialog"/);
-  assert.match(html, /<span class="guide-index">08｜重啟<\/span>/);
+  assert.match(html, /<span class="guide-index">08｜收銀與宣傳事件<\/span>/);
+  assert.match(html, /<span class="guide-index">09｜重啟<\/span>/);
   assert.match(html, /data-action="request-restart-campaign">重新開始遊戲<\/button>/);
   assert.match(html, /<dialog class="restart-confirm-dialog" id="restartConfirmDialog"/);
   assert.match(html, /data-action="confirm-restart-campaign">清空進度並重啟<\/button>/);

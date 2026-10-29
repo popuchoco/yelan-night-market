@@ -99,7 +99,8 @@ export function createUI(runtime) {
       const choice = choiceId && card.choices.find(function(item) { return item.id === choiceId; });
       const pending = state.phase === "prep" && !choice;
       return { kind: "market-card", icon: card.icon, label: pending ? "市集公告・待選方案" : "市集公告・今晚消息",
-        title: card.name, description: choice ? choice.detail : card.description,
+        title: card.name, description: state.marketCardOutcome?.cardId === card.id && Number(state.marketCardOutcome.day) === Number(state.day)
+          ? state.marketCardOutcome.summary : (choice ? choice.detail : card.description),
         tone: card.tone, pending: pending, anchorOutletId: "main", card: card, choice: choice };
     }
     const event = todayEvent();
@@ -307,6 +308,9 @@ export function createUI(runtime) {
     return panel;
   }
   function marketChoicePreview(card, choice) {
+    if (state.marketCardOutcome?.cardId === card.id && Number(state.marketCardOutcome.day) === Number(state.day)) {
+      return "隨機成效：" + state.marketCardOutcome.summary;
+    }
     if (card.id === "tourist-surge") {
       return choice.id === "promote"
         ? "帳務影響：行銷費 −" + money(DATA.economy.touristPromotionCost) + "；預計多 2 桌，營收與食材成本依實際接待入帳。"
@@ -327,6 +331,17 @@ export function createUI(runtime) {
       return choice.id === "claim"
         ? "帳務影響：市集補助收入 +" + money(DATA.economy.rainSubsidy) + "，列入今晚營運收支。"
         : "帳務影響：不申請補助，今晚不新增公告卡收入或支出。";
+    }
+    if (card.id === "media-interview") return choice.id === "accept-interview"
+      ? "帳務影響：無行銷費；播出效果隨機，可能口碑 −2～+4、增加 0～2 桌來客。"
+      : "帳務影響：不支出、不改變今晚客流。";
+    if (card.id === "celebrity-visit") return choice.id === "host-visit"
+      ? "帳務影響：接待行銷費 −" + money(DATA.economy.celebrityVisitCost) + "；到訪或臨時改期隨機，成功可增加來客與口碑。"
+      : "帳務影響：不支出、不等待名人行程。";
+    if (card.id === "paid-promotion") {
+      if (choice.id === "buy-ad") return "帳務影響：行銷費 −" + money(DATA.economy.paidAdCost) + "，借記 5410 行銷及宣傳費；效果隨機，可能口碑 −1～+3、增加 0～2 桌。";
+      if (choice.id === "buy-placement") return "帳務影響：行銷費 −" + money(DATA.economy.productPlacementCost) + "，借記 5410 行銷及宣傳費；效果隨機，可能口碑 −2～+4、增加 0～3 桌。";
+      return "帳務影響：不新增行銷費，保留現金與備料彈性。";
     }
     return "帳務影響：" + choice.detail;
   }
