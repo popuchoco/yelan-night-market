@@ -4,13 +4,14 @@ import { readFile } from "node:fs/promises";
 import { DATA, getOutletSpecialty, outletRetailPrice } from "../dist/data.js";
 import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, selectEnding } from "../dist/campaign.js";
 import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accounting.js";
-import { createGameEngine } from "../dist/game.js";
+import { boot, createGameEngine } from "../dist/game.js";
 import { createUI } from "../dist/ui.js";
 import { applyCameraAction } from "../dist/scene.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
-  loadState, normalizeState, saveState, todayEvent, todayMarketCard, ledgerIncome, ledgerNet
+  loadState, loadStateResult, normalizeState, saveState, saveStateResult, SAVE_SCHEMA_VERSION,
+  todayEvent, todayMarketCard, ledgerIncome, ledgerNet
 } from "../dist/state.js";
 
 function serviceState(day = 3) {
@@ -93,9 +94,49 @@ test("save and load round-trip progress, while invalid saves fall back safely", 
   state.equipment.hood = 2;
   assert.equal(saveState(state, storage), true);
   assert.deepEqual(loadState(storage), state);
+  assert.equal(JSON.parse(values.get(DATA.saveKey)).schemaVersion, SAVE_SCHEMA_VERSION);
 
   values.set(DATA.saveKey, "not-json");
   assert.equal(loadState(storage).phase, "prep");
+  assert.equal(values.get(DATA.saveKey + ".corrupt-backup"), "not-json");
+});
+
+test("save status reports migration, quota errors, and future versions without overwriting them", () => {
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  values.set(DATA.saveKey, JSON.stringify({ day: 9, coins: 700 }));
+  const migrated = loadStateResult(storage);
+  assert.equal(migrated.status, "migrated");
+  assert.equal(migrated.state.day, 9);
+  assert.equal(migrated.state.schemaVersion, SAVE_SCHEMA_VERSION);
+
+  const fullStorage = { getItem: () => null, setItem() { const error = new Error("full"); error.name = "QuotaExceededError"; throw error; } };
+  assert.deepEqual(saveStateResult(freshState(), fullStorage), { ok: false, reason: "quota" });
+
+  const futureSave = JSON.stringify({ schemaVersion: SAVE_SCHEMA_VERSION + 1, day: 74, coins: 1200 });
+  values.set(DATA.saveKey, futureSave);
+  assert.deepEqual(loadStateResult(storage), {
+    state: freshState(), status: "unsupported-version", sourceVersion: SAVE_SCHEMA_VERSION + 1
+  });
+  assert.equal(values.get(DATA.saveKey), futureSave);
+});
+
+test("extreme or oversized legacy progress normalizes to bounded outlet and event collections", () => {
+  const migrated = normalizeState({
+    day: -4, coins: -800, acquisitions: 999, expansions: 999,
+    outlets: Array.from({ length: 200 }, (_, index) => ({ id: "branch-" + index, type: "food", active: true })),
+    journal: Array.from({ length: 9000 }, (_, day) => ({ day, event: "legacy" }))
+  });
+  assert.equal(migrated.day, 1);
+  assert.equal(migrated.coins, -800);
+  assert.equal(migrated.acquisitions, 4);
+  assert.equal(migrated.expansions, 9);
+  assert.equal(migrated.outlets.length, 5);
+  assert.equal(migrated.journal.length, 8000);
+});
+
+test("browser boot is an explicit export for future startup integration tests", () => {
+  assert.equal(typeof boot, "function");
 });
 
 test("legacy saves keep progress and receive the first unresolved weekly decision", () => {
@@ -633,16 +674,20 @@ test("ending rules represent successful and adverse business outcomes", () => {
 });
 
 test("DOM helpers and split scene renderers remain in place without HTML injection", async () => {
-  const [ui, scene, objects, effects, html] = await Promise.all([
+  const [ui, reports, scene, objects, effects, html, app] = await Promise.all([
     readFile(new URL("../dist/ui.js", import.meta.url), "utf8"),
+    readFile(new URL("../dist/ui/reports.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene/objects.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene/effects.js", import.meta.url), "utf8"),
-    readFile(new URL("../dist/index.html", import.meta.url), "utf8")
+    readFile(new URL("../dist/index.html", import.meta.url), "utf8"),
+    readFile(new URL("../dist/app.js", import.meta.url), "utf8")
   ]);
   assert.match(ui, /function el\(/);
   assert.match(ui, /function append\(/);
   assert.match(ui, /function fragment\(/);
+  assert.match(app, /import \{ boot \} from "\.\/game\.js"/);
+  assert.match(app, /boot\(\)/);
   assert.match(ui, /replaceChildren\(/);
   assert.doesNotMatch(ui, /\.innerHTML\s*=/);
   assert.match(scene, /createObjectRenderer/);
@@ -676,8 +721,8 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(game, /button\.querySelector\("#pauseIcon"\)/);
   assert.match(game, /orderModal\.addEventListener\("keydown"/);
   assert.match(game, /orderReturnFocus/);
-  assert.match(ui, /function renderJournalReport\(/);
-  assert.match(ui, /button\("", "open-report"/);
+  assert.match(reports, /function renderJournalReport\(/);
+  assert.match(reports, /button\("", "open-report"/);
   assert.match(game, /reportDialog\.showModal\(\)/);
   assert.match(game, /reportDialog\.addEventListener\("close"/);
   assert.match(html, /<dialog class="report-dialog" id="reportDialog"/);
@@ -687,7 +732,7 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(css, /\.toast\s*\{[^}]*position:\s*absolute/);
   assert.match(css, /\.report-dialog\[open\]/);
   assert.match(css, /\.report-launch-grid/);
-  assert.match(ui, /accounting-mobile-list/);
+  assert.match(reports, /accounting-mobile-list/);
   assert.match(css, /\.accounting-mobile-record/);
   assert.match(ui, /function getWorldEventInfo\(/);
   assert.match(ui, /function renderWorldEventContent\(/);
@@ -704,6 +749,30 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(css, /\.world-event-trigger\[data-pending="true"\]/);
   assert.match(css, /\.outlet-event-trigger:focus-visible/);
   assert.match(css, /\.outlet-event-trigger[^\n]*min-height: 52px/);
+});
+
+test("extracted journal renderer builds DOM nodes for daily and monthly views", () => {
+  const priorDocument = globalThis.document;
+  const makeNode = (tagName) => ({
+    tagName, children: [], dataset: {}, attributes: {},
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  });
+  globalThis.document = {
+    createElement: makeNode,
+    createDocumentFragment: () => makeNode("#fragment")
+  };
+  try {
+    const ui = createUI({ state: freshState(), saveState() { return true; } });
+    const daily = ui.renderJournalReport();
+    assert.equal(daily.children[0].children[0].textContent, "前一日・日記簿");
+    ui.setJournalView("monthly");
+    const monthly = ui.renderJournalReport();
+    assert.equal(monthly.children[0].children[0].textContent, "每三十夜・綜合財務報表");
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
 });
 
 test("insurance premiums are charged only on the first night of each 30-night period", () => {

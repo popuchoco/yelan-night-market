@@ -1,6 +1,11 @@
 // IFRS-oriented educational bookkeeping for the night-market simulation.
 // IFRS does not prescribe a universal account-number chart; these are the game's
 // stable internal codes, grouped to map cleanly to its financial statements.
+// Posting map: sales/tips 1000↔4000/4010; stock purchases 1100↔1000;
+// service COGS 5000↔1100; payroll/rent/utilities 5100/5200/5300↔1000;
+// premiums 5450-5480↔1000; workplace/customer/product claims 1210↔4030;
+// claim care and compensation use 5520-5540↔1000; asset purchase 1500/1600↔1000;
+// depreciation/amortization 5600/5610↔1590/1690; borrowing/interest 1000↔2100/5700.
 export const CHART_OF_ACCOUNTS = Object.freeze([
   { code: "1000", name: "現金及約當現金", type: "asset", normal: "debit", statement: "財務狀況" },
   { code: "1100", name: "存貨－食材", type: "asset", normal: "debit", statement: "財務狀況" },

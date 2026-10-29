@@ -4,9 +4,16 @@ import { createAccountingState, ensureAccounting } from "./accounting.js";
 import { getMonthlyInsurance, getOutletCapacity, getOutletTier, getTierDailyUtilities, getTierReadiness, isInsuranceBillingDay, monthlyInsuranceTotals } from "./safety.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+export const SAVE_SCHEMA_VERSION = 3;
+
+function resolveStorage(storage) {
+  if (storage !== undefined) return storage;
+  try { return globalThis.localStorage; } catch { return null; }
+}
 
 export function freshState() {
   const state = {
+    schemaVersion: SAVE_SCHEMA_VERSION,
     day: 1,
     coins: 1480,
     fame: 38,
@@ -58,12 +65,18 @@ export function freshState() {
   return state;
 }
 
+/** @typedef {ReturnType<typeof freshState>} GameState */
+
+/** @param {unknown} data @returns {GameState} */
 export function normalizeState(data) {
   const fresh = freshState();
   if (!data || typeof data !== "object" || Array.isArray(data)) return fresh;
   Object.keys(fresh).forEach((key) => {
     if (hasOwn(data, key)) fresh[key] = data[key];
   });
+  // Older saves are migrated in place to the current known shape. The version
+  // is written back on the next successful save.
+  fresh.schemaVersion = SAVE_SCHEMA_VERSION;
   fresh.staff = Object.assign({ cook: true, server: true }, fresh.staff || {});
   const validRecipeIds = new Set(DATA.dishes.map((dish) => dish.id));
   fresh.unlockedRecipes = Array.from(new Set([
@@ -137,7 +150,8 @@ export function normalizeState(data) {
   }
   fresh.managerEvent = data.managerEvent && typeof data.managerEvent === "object" ? data.managerEvent : null;
   fresh.insuranceSnapshot = data.insuranceSnapshot && typeof data.insuranceSnapshot === "object" ? data.insuranceSnapshot : null;
-  fresh.orphanPolicies = Array.isArray(data.orphanPolicies) ? data.orphanPolicies.filter((policy) => policy && typeof policy === "object") : [];
+  fresh.orphanPolicies = Array.isArray(data.orphanPolicies)
+    ? data.orphanPolicies.filter((policy) => policy && typeof policy === "object" && !Array.isArray(policy)).slice(-100) : [];
   fresh.loanPrincipal = Math.max(0, Math.round(Number(fresh.loanPrincipal) || 0));
   fresh.loanUsed = !!fresh.loanUsed || fresh.loanPrincipal > 0;
   fresh.loanTakenDay = Math.max(0, Math.floor(Number(fresh.loanTakenDay) || 0));
@@ -149,8 +163,10 @@ export function normalizeState(data) {
     fresh.marketChoiceDay = 0;
     fresh.marketCardChoice = null;
   }
-  if (!Array.isArray(fresh.decisions)) fresh.decisions = [];
-  if (!Array.isArray(fresh.journal)) fresh.journal = [];
+  fresh.decisions = Array.isArray(data.decisions)
+    ? data.decisions.filter((decision) => decision && typeof decision === "object" && !Array.isArray(decision)).slice(-104) : [];
+  fresh.journal = Array.isArray(data.journal)
+    ? data.journal.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).slice(-8000) : [];
   if (!Number.isFinite(Number(fresh.campaignNet))) fresh.campaignNet = 0;
   fresh.day = Math.max(1, Math.floor(Number(fresh.day) || 1));
   if (!fresh.unlockedRecipes.includes(DATA.dishes[fresh.selectedDish]?.id)) {
@@ -169,7 +185,6 @@ export function normalizeState(data) {
     fresh.phase = "decision";
   }
   if (!Array.isArray(fresh.results)) fresh.results = [];
-  if (!Array.isArray(fresh.journal)) fresh.journal = [];
   if (!fresh.upgrades || typeof fresh.upgrades !== "object") fresh.upgrades = {};
   if (!Number.isFinite(Number(fresh.shiftPurchases))) fresh.shiftPurchases = 0;
   if (fresh.ledger && typeof fresh.ledger === "object") {
@@ -222,25 +237,88 @@ export function normalizeState(data) {
   return fresh;
 }
 
-export function loadState(storage = globalThis.localStorage) {
+/** @typedef {{ state: ReturnType<typeof freshState>, status: "empty"|"loaded"|"migrated"|"corrupt"|"unavailable"|"unsupported-version", sourceVersion?: number }} SaveLoadResult */
+
+/**
+ * Read and normalize a save without hiding whether recovery or migration was
+ * needed. Mutable state stays plain JSON so existing save files remain portable.
+ * @param {Storage|undefined|null} [storage]
+ * @returns {SaveLoadResult}
+ */
+export function loadStateResult(storage) {
   const fresh = freshState();
-  if (!storage) return fresh;
+  storage = resolveStorage(storage);
+  if (!storage) return { state: fresh, status: "unavailable" };
+
+  let raw;
+  let source = "current";
   try {
-    const raw = storage.getItem(DATA.saveKey) || storage.getItem(DATA.legacyKey);
-    return raw ? normalizeState(JSON.parse(raw)) : fresh;
+    raw = storage.getItem(DATA.saveKey);
+    if (!raw) {
+      raw = storage.getItem(DATA.legacyKey);
+      source = "legacy";
+    }
   } catch {
-    return fresh;
+    return { state: fresh, status: "unavailable" };
+  }
+  if (!raw) return { state: fresh, status: "empty" };
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new TypeError("Invalid save root");
+  } catch {
+    // Keep a recovery copy before the next normal save replaces the damaged
+    // primary key. Storage quota may prevent the copy, so this is best-effort.
+    try { storage.setItem(DATA.saveKey + ".corrupt-backup", raw); } catch {}
+    return { state: fresh, status: "corrupt" };
+  }
+
+  const sourceVersion = Number(parsed.schemaVersion) || 0;
+  if (sourceVersion > SAVE_SCHEMA_VERSION) {
+    // Do not overwrite a save created by a newer build with a fresh state.
+    return { state: fresh, status: "unsupported-version", sourceVersion };
+  }
+  try {
+    return {
+      state: normalizeState(parsed),
+      status: sourceVersion < SAVE_SCHEMA_VERSION || source === "legacy" ? "migrated" : "loaded",
+      sourceVersion
+    };
+  } catch {
+    try { storage.setItem(DATA.saveKey + ".corrupt-backup", raw); } catch {}
+    return { state: fresh, status: "corrupt", sourceVersion };
   }
 }
 
-export function saveState(state, storage = globalThis.localStorage) {
+export function loadState(storage) {
+  return loadStateResult(storage).state;
+}
+
+/** @typedef {{ ok: boolean, reason: "saved"|"unavailable"|"quota"|"failed" }} SaveResult */
+
+/**
+ * Persist a versioned snapshot. The simulation itself intentionally remains
+ * mutable; JSON serialization is the save boundary and includes only plain data.
+ * @param {ReturnType<typeof freshState>} state
+ * @param {Storage|undefined|null} [storage]
+ * @returns {SaveResult}
+ */
+export function saveStateResult(state, storage) {
+  storage = resolveStorage(storage);
+  if (!storage) return { ok: false, reason: "unavailable" };
   try {
-    if (!storage) return false;
+    state.schemaVersion = SAVE_SCHEMA_VERSION;
     storage.setItem(DATA.saveKey, JSON.stringify(state));
-    return true;
-  } catch {
-    return false;
+    return { ok: true, reason: "saved" };
+  } catch (error) {
+    const quotaExceeded = error?.name === "QuotaExceededError" || error?.name === "NS_ERROR_DOM_QUOTA_REACHED" || error?.code === 22 || error?.code === 1014;
+    return { ok: false, reason: quotaExceeded ? "quota" : "failed" };
   }
+}
+
+export function saveState(state, storage) {
+  return saveStateResult(state, storage).ok;
 }
 
 export function money(value) {
