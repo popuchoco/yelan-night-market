@@ -514,7 +514,7 @@ test("negative secret shopper and failed hygiene inspection apply their distinct
   assert.equal(inspector.coins, cashBefore - 85);
   assert.equal(inspector.fame, 36);
   assert.equal(inspector.journal[0].closingEvents.some((event) => event.kind === "secret-inspection" && event.outcome === "fail"), true);
-  assert.equal(inspector.accounting.journal.some((entry) => entry.description.includes("整改罰款") &&
+  assert.equal(inspector.accounting.journal.some((entry) => entry.description.includes("限期改善罰款") &&
     entry.lines.some((line) => line.account === "5400" && line.debit === 85)), true);
 });
 
@@ -1154,7 +1154,7 @@ test("stall tier progression is gated by safety equipment and capitalizes the im
   state.equipment.cooler = 1;
   assert.equal(engine.upgradeStallTier("main").ok, true);
   assert.equal(state.outlets[0].tier, "fixed");
-  assert.equal(state.accounting.assets.at(-1).name, "夜嵐攤號｜固定攤販改建");
+  assert.equal(state.accounting.assets.at(-1).name, "夜嵐攤號｜固定攤販整修");
 
   state.equipment.fire = 2;
   state.equipment.hood = 2;
@@ -1164,7 +1164,7 @@ test("stall tier progression is gated by safety equipment and capitalizes the im
   state.hiredCrew = 1;
   assert.equal(engine.upgradeStallTier("main").ok, true);
   assert.equal(state.outlets[0].tier, "dapaidang");
-  assert.ok(state.accounting.assets.some((asset) => asset.name === "夜嵐攤號｜大排檔改建"));
+  assert.ok(state.accounting.assets.some((asset) => asset.name === "夜嵐攤號｜大排檔整修"));
 });
 
 test("employee departure records an orphan-policy receivable adjustment at period end and collects it next period", () => {

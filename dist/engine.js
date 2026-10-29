@@ -228,10 +228,10 @@ export function createGameEngine(state, { random = Math.random } = {}) {
         const fine = 85;
         state.coins -= fine;
         state.ledger.fees += fine;
-        recordExpense(state, "5400", "秘密衛生稽查・臨時整改罰款", fine);
+        recordExpense(state, "5400", "秘密衛生稽查・限期改善罰款", fine);
         state.fame = Math.max(0, Number(state.fame) - 2);
         resolved.push({ kind: "secret-inspection", outcome: "fail", amount: fine,
-          message: "秘密衛生稽查發現備料標示／工作檯整理未達標，整改罰款 " + money(fine) + "、口碑 −2。" });
+          message: "秘密衛生稽查發現備料標示／工作檯整理未達標，限期改善罰款 " + money(fine) + "、口碑 −2。" });
       }
     }
     return resolved;
@@ -467,9 +467,9 @@ export function createGameEngine(state, { random = Math.random } = {}) {
   }
 
   function buyUpgrade(id) {
-    if (state.phase !== "prep") return response(false, "開門後不能改造。", false);
+    if (state.phase !== "prep") return response(false, "開門後不能進行設備升級。", false);
     const item = DATA.upgrades.find((upgrade) => upgrade.id === id);
-    if (!item || state.upgrades[id] || state.coins < item.cost) return response(false, "現金不足，或這項改造已經添置。", false);
+    if (!item || state.upgrades[id] || state.coins < item.cost) return response(false, "現金不足，或這項設備已經添置。", false);
     state.coins -= item.cost;
     state.upgrades[id] = true;
     recordAssetPurchase(state, {
@@ -589,11 +589,11 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     if (!nextTier) return response(false, "這間店已達最高攤型：大排檔。", false);
     const readiness = getTierReadiness(state, outlet, nextTier.id);
     if (!readiness.ready) return response(false, "升級條件尚未達成：「" + readiness.missing.join("、") + "」。", false);
-    if (state.coins < nextTier.buildCost) return response(false, "現金不足，無法支付攤型改建費 " + money(nextTier.buildCost) + "。", false);
+    if (state.coins < nextTier.buildCost) return response(false, "現金不足，無法支付攤型整修費 " + money(nextTier.buildCost) + "。", false);
     outlet.tier = nextTier.id;
     state.coins -= nextTier.buildCost;
     recordAssetPurchase(state, { id: outlet.id + "-stall-tier-" + nextTier.id + "-day-" + state.day,
-      name: outlet.name + "｜" + nextTier.name + "改建", cost: nextTier.buildCost,
+      name: outlet.name + "｜" + nextTier.name + "整修", cost: nextTier.buildCost,
       usefulLifeDays: DATA.accounting.improvementUsefulLifeDays,
       residualValue: Math.round(nextTier.buildCost * DATA.accounting.improvementResidualRate) });
     const unlocked = outlet.id === "main" ? DATA.dishes.find((dish) => dish.unlockTier === nextTier.id && dish.unlockOutlet === "main") : null;
@@ -678,7 +678,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
       const cost = 85;
       if (state.coins < cost) return response(false, "現金不足；可選擇讓分店先以降載方式營業。", false);
       state.coins -= cost;
-      recordExpense(state, "5400", "設備維護｜" + outlet.name, cost);
+      recordExpense(state, "5400", "設備維修｜" + outlet.name, cost);
       outlet.efficiencyPenalty = 0;
     } else if (incident.type === "equipment" && choice === "defer") {
       outlet.efficiencyPenalty = 1;
@@ -800,7 +800,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     if (id === "expand") {
       state.expansions += 1;
       state.cozy = capAt(state.cozy + 5, 100);
-      recordAssetPurchase(state, { id: "expansion-" + state.expansions + "-day-" + state.day, name: "戶外桌區改建 " + state.expansions, cost,
+      recordAssetPurchase(state, { id: "expansion-" + state.expansions + "-day-" + state.day, name: "戶外桌區裝修 " + state.expansions, cost,
         usefulLifeDays: DATA.accounting.improvementUsefulLifeDays });
     } else if (id === "hire") {
       state.hiredCrew += 1;
@@ -883,7 +883,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
       const outlet = managerBranches[Math.floor((state.day / 7) % managerBranches.length)];
       const type = ["equipment", "complaint", "festival"][Math.floor((state.day - 8) / 7) % 3];
       const incidents = {
-        equipment: { title: "設備開始異音", description: outlet.name + "回報營運設備運轉不穩。要安排打烊後維修，或讓店長下週先降載營運？", choices: [{ id: "repair", name: "安排維修・NT$ 85" }, { id: "defer", name: "暫緩處理・下週少接一單" }] },
+        equipment: { title: "設備故障，待維修", description: outlet.name + "回報營運設備運轉不穩。要安排打烊後維修，或先讓店長下週降載營運？", choices: [{ id: "repair", name: "安排維修・NT$ 85" }, { id: "defer", name: "暫緩處理・下週少接一單" }] },
         complaint: { title: "分店客訴升級", description: outlet.name + "遇到一位不滿排隊安排的客人。由總部核准補償，或請店長當面說明？", choices: [{ id: "compensate", name: "核准補償・NT$ 55・口碑回升" }, { id: "explain", name: "由店長說明・不支出" }] },
         festival: { title: "收到慶典合作邀約", description: outlet.name + "獲邀參與下週夜市慶典；可以投入宣傳換取營收 Bonus，或維持日常節奏。", choices: [{ id: "promote", name: "接受邀約・NT$ 70・下夜 Bonus +NT$ 130" }, { id: "decline", name: "婉拒邀約・不增加成本" }] }
       };

@@ -239,7 +239,7 @@ export function normalizeState(data) {
         usefulLifeDays: DATA.accounting.improvementUsefulLifeDays, residualValue: 0, availableDay: fresh.day });
     });
     for (let index = 0; index < fresh.expansions; index++) assets.push({
-      id: "legacy-expansion-" + (index + 1), name: "戶外桌區改建 " + (index + 1),
+      id: "legacy-expansion-" + (index + 1), name: "戶外桌區裝修 " + (index + 1),
       cost: 460 + 90 * index, usefulLifeDays: DATA.accounting.improvementUsefulLifeDays, residualValue: 0, availableDay: fresh.day
     });
     for (let index = 0; index < fresh.acquisitions; index++) assets.push({

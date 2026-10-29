@@ -14,7 +14,7 @@ export const ACHIEVEMENT_CATEGORIES = Object.freeze([
 
 export const ACHIEVEMENTS = Object.freeze([
   { id: "first_open", category: "growth", icon: "🏮", title: "第一夜掛燈", description: "第一次把攤燈點亮，迎接港邊的客人。", hint: "先完成一夜營業。" },
-  { id: "tier_fixed", category: "growth", icon: "🪵", title: "從流動到固定", description: "主店改建為固定攤販，替常來的人留下一處熟悉的座位。", hint: "按順序完成主店攤型改建。" },
+  { id: "tier_fixed", category: "growth", icon: "🪵", title: "從流動到固定", description: "主店整修升級為固定攤販，替常來的人留下一處熟悉的座位。", hint: "按順序完成主店攤型整修升級。" },
   { id: "tier_dapaidang", category: "growth", icon: "🛖", title: "大排檔燈火", description: "主店成為大排檔，夜裡多了一排能坐下來的桌。", hint: "把主店安全升級至大排檔。" },
   { id: "expand_once", category: "growth", icon: "🪑", title: "多擺一張桌", description: "第一次擴出桌區，讓巷口也有地方慢慢吃飯。", hint: "在週決策擴大店家一次。" },
   { id: "expand_thrice", category: "growth", icon: "🧭", title: "巷口也認得你的燈", description: "完成三次擴店，夜市的熟悉範圍又往外延伸。", hint: "逐步擴店，留意後續固定成本。" },

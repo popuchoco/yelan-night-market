@@ -317,15 +317,15 @@ export function createUI(runtime) {
         : "帳務影響：今晚不新增公告卡收入或支出，客流維持原預估。";
     }
     if (card.id === "hygiene-audit") {
-      if (choice.id === "deep-clean") return "帳務影響：清潔支出 −" + money(DATA.economy.hygieneQuickCleanCost) + "；免本次整改費，口碑 +1。";
+      if (choice.id === "deep-clean") return "帳務影響：清潔支出 −" + money(DATA.economy.hygieneQuickCleanCost) + "；免本次限期改善費，口碑 +1。";
       const eventNeedsCorrection = selectEvent(state).id === "inspection";
       const equipmentReady = (Number(state.equipment.hood) || 0) > 0 || (Number(state.equipment.awning) || 0) > 0 || !!state.upgrades.lantern;
       const fee = eventNeedsCorrection && !equipmentReady ? 75 : 0;
       return fee
-        ? "帳務影響：目前設備未達稽查條件，今晚可能列整改費 −" + money(fee) + "；實際以開門結算為準。"
+        ? "帳務影響：目前設備未達稽查條件，今晚可能列限期改善費 −" + money(fee) + "；實際以開門結算為準。"
         : (eventNeedsCorrection
-          ? "帳務影響：目前設備符合稽查條件，預估不產生整改費。"
-          : "帳務影響：今晚不執行整改稽查，不會產生稽查整改費。");
+          ? "帳務影響：目前設備符合稽查條件，預估不產生限期改善費。"
+          : "帳務影響：今晚不執行衛生稽查，不會產生限期改善費。");
     }
     if (card.id === "rain-subsidy") {
       return choice.id === "claim"
@@ -649,7 +649,7 @@ export function createUI(runtime) {
   function renderTierPlanning() {
     const section = el("section", "tier-planning");
     section.append(subhead("攤型發展規劃", "流動攤販 → 固定攤販 → 大排檔", true));
-    section.append(helper("逐級改建，不可跳級。安全設備、經營規模與人手都達標後才可施工；改建列為資產並按日折舊。", "helper-copy manager-intro"));
+    section.append(helper("店面依序整修升級，不可跳級。安全設備、經營規模與人手都達標後才能施工；裝修支出列為資產並按日提列折舊。", "helper-copy manager-intro"));
     const outlets = (Array.isArray(state.outlets) ? state.outlets : []);
     outlets.forEach((outlet) => {
       const current = getOutletTier(outlet);
@@ -676,10 +676,10 @@ export function createUI(runtime) {
         readiness.requirements.forEach((requirement) => {
           requirements.append(el("li", requirement.ready ? "ready" : "missing", (requirement.ready ? "✓ " : "○ ") + requirement.label));
         });
-        card.append(el("p", "tier-plan-next", "下一階段：" + next.name + "・改建資本支出 " + money(next.buildCost) + "・能源 +" + money(next.dailyUtilities) + "/夜"));
+        card.append(el("p", "tier-plan-next", "下一階段：" + next.name + "・整修資本支出 " + money(next.buildCost) + "・能源 +" + money(next.dailyUtilities) + "/夜"));
         card.append(requirements);
         card.append(el("p", "tier-plan-meta", "目前每期保費 " + money(currentInsurance.total) + " → 升級後預估 " + money(preview.total) + "（" + insuranceDueLabel() + "）"));
-        card.append(button(readiness.ready ? "改建為「" + next.name + "」" : "先補齊升級條件", "upgrade-stall-tier", { outletId: outlet.id },
+        card.append(button(readiness.ready ? "整修升級為「" + next.name + "」" : "先補齊升級條件", "upgrade-stall-tier", { outletId: outlet.id },
           state.phase !== "prep" || !readiness.ready || state.coins < next.buildCost, "manager-action tier-upgrade-action"));
       }
       section.append(card);
@@ -791,7 +791,7 @@ export function createUI(runtime) {
     parts.push(grid, renderTierPlanning());
     const branchSafety = renderBranchSafety();
     if (branchSafety) parts.push(branchSafety);
-    parts.push(subhead("夜市改造", "打造熟客的理由"));
+    parts.push(subhead("夜市設備升級", "打造熟客的理由"));
     const additions = el("div", "manager-grid");
     upgrades.forEach(function(item) {
       const owned = !!state.upgrades[item.id];
@@ -802,7 +802,7 @@ export function createUI(runtime) {
     parts.push(additions, subhead("資產清冊・折舊追蹤", "逐筆記錄購置成本與帳面價值"));
     const assets = Array.isArray(state.accounting?.assets) ? state.accounting.assets : [];
     if (!assets.length) {
-      parts.push(helper("目前還沒有資本化資產；購買爐台、設備、改造或擴店後，會在此建立獨立資產卡並按耐用年限提列折舊。"));
+      parts.push(helper("目前還沒有資本化資產；購買爐台／設備、店面裝修或擴店後，會在此建立獨立資產卡並按耐用年限提列折舊。"));
     } else {
       const assetGrid = el("div", "asset-register");
       assets.forEach(function(asset) {
@@ -1060,7 +1060,7 @@ export function createUI(runtime) {
       tab.setAttribute("aria-selected", String(tab.dataset.tab === activeTab));
     });
     document.getElementById("panelContent").setAttribute("aria-labelledby", "tab-" + activeTab);
-    const titles = { ops: "今晚營運", stall: "攤位工作台", stock: "備料與菜單", equipment: "設備與改造", staff: "人員排班", journal: "帳務與手記" };
+    const titles = { ops: "今晚營運", stall: "攤位工作台", stock: "備料與菜單", equipment: "設備與升級", staff: "人員排班", journal: "帳務與手記" };
     document.getElementById("panelHeading").textContent = titles[activeTab] || titles.ops;
     const renderers = { ops: renderOverview, stall: renderStall, stock: renderStock, equipment: renderEquipment, staff: renderStaff, journal: renderJournal };
     document.getElementById("panelContent").replaceChildren((renderers[activeTab] || renderOverview)());

@@ -26,10 +26,10 @@ export const MARKET_CARDS = Object.freeze({
   },
   "hygiene-audit": {
     id: "hygiene-audit", name: "衛生稽查", icon: "🧾", tone: "negative",
-    description: "市集公會今晚抽查爐台與備料區。設備完善可免整改費，也可以先委託快速清潔。",
+    description: "市集公會今晚抽查爐台與備料區。設備完善可免限期改善費，也可以先委託快速清潔。",
     choices: [
-      { id: "deep-clean", name: "委託快速清潔", detail: "清潔支出 −NT$ " + DATA.economy.hygieneQuickCleanCost + "・免本次整改費・口碑 +1", cost: DATA.economy.hygieneQuickCleanCost },
-      { id: "self-check", name: "自行整理應檢", detail: "不花錢；若設備尚未準備好，可能支出 NT$ 75 整改費", cost: 0 }
+      { id: "deep-clean", name: "委託快速清潔", detail: "清潔支出 −NT$ " + DATA.economy.hygieneQuickCleanCost + "・免本次限期改善費・口碑 +1", cost: DATA.economy.hygieneQuickCleanCost },
+      { id: "self-check", name: "自行清潔備檢", detail: "不花錢；若設備尚未準備好，可能支出 NT$ 75 限期改善費", cost: 0 }
     ]
   },
   "rain-subsidy": {
@@ -116,14 +116,14 @@ const ALL_CAMPAIGN_NIGHTS = [
   { eventId: "street-music", name: "巷口手風琴・熟客留步", icon: "🎸", tone: "positive", description: "街頭樂手演奏港邊老歌，客人願意多坐一會，小費增加。", title: "有人在巷口吹起老歌。", story: "旋律把晚餐時間拉長了。小青認出其中一段，是她小時候跟著父親搭船時常聽見的曲子。" },
   { eventId: "supplier", name: "冷鏈延誤・漁貨行情上揚", icon: "🐟", tone: "negative", description: "冷鏈貨車晚到，批發食材價格上漲；控制採購量能降低現金壓力。", title: "今天的海味比昨天更貴。", story: "漁販說風浪讓船晚了一班。你重新算過菜單，決定把每一份新鮮都交代清楚。" },
   { eventId: "festival", name: "七夜小燈會・首週回饋", icon: "🏮", tone: "positive", description: "首週收尾迎來小燈會，多一桌旅人並獲得節慶 Bonus。打烊後可決定下一週方向。", title: "第一週，巷口多了幾張熟面孔。", story: "藍姨把一盞手作小燈送給你。她說，下一週不必急著變大，先想想你想讓這條巷子變成什麼樣子。" },
-  { eventId: "inspection", name: "市集評鑑・設備安全巡查", icon: "🧾", tone: "negative", description: "巡查爐台與排煙設備；已有排煙罩、帆布棚或手繪燈牌改造可免臨時改善費。", title: "巡查員把檢查表翻到最後一頁。", story: "他注意到你收好食材、擦亮爐台，提醒你：擴大生意時，安全與照顧客人一樣重要。" },
+  { eventId: "inspection", name: "市集評鑑・設備安全巡查", icon: "🧾", tone: "negative", description: "巡查爐台與排煙設備；已有排煙罩、帆布棚或手繪招牌完成整修可免臨時處理費。", title: "巡查員把檢查表翻到最後一頁。", story: "他注意到你收好食材、擦亮爐台，提醒你：擴大生意時，安全與照顧客人一樣重要。" },
   { eventId: "market-sale", name: "港邊聯採・冷藏箱共享", icon: "🧺", tone: "positive", description: "鄰攤共享冷藏運送，今晚進貨折扣。若已拓展攤位，還能串起更多供應管道。", title: "果攤和魚販一起搬來一只大冰箱。", story: "你把多買的香草分給隔壁，隔壁又回送一小袋漁獲。夜市的生意，原來可以互相照應。" },
   { eventId: "blackout", name: "巷區跳電・臨時接電", icon: "💡", tone: "negative", description: "巷區短暫停電，臨時接電增加成本；排煙罩可降低基本電費。", title: "燈暗下來的那幾秒，大家都停了手。", story: "小青點亮備用燈，客人接著聊起各自遇過的停電夜。夜市又慢慢亮了回來。" },
   { eventId: "rain", name: "海霧轉雨・潮氣入巷", icon: "🌧️", tone: "negative", description: "濕冷天氣讓能源支出增加；帆布棚升級能降低雨夜額外成本。", title: "霧沿著防波堤一路走進夜市。", story: "阿慕叔把外套搭在椅背上，說這樣的天氣最適合一碗熱湯。今晚的客人少了些，坐得卻更久。" },
   { eventId: "street-music", name: "漁火音樂會・港口小舞台", icon: "🎸", tone: "positive", description: "巷口臨時搭起小舞台，街頭演奏讓每桌小費增加。", title: "港口小舞台試唱了第一首歌。", story: "花店學徒把沒賣完的小白花放在舞台邊。你把桌子往外挪了一點，讓晚風和音樂都能進來。" },
   { eventId: "supplier", name: "供應商調價・冰鮮貨減少", icon: "🐟", tone: "negative", description: "海象影響當日漁獲，進貨成本上升；先檢查庫存再補貨。", title: "冰箱裡剩下的食材不多不少。", story: "你和阿滿一起盤點，才發現備料的節奏也是一門手藝。少一些浪費，就多留一些餘裕。" },
   { eventId: "festival", name: "海岸守望日・遊客順道來訪", icon: "🏮", tone: "positive", description: "海岸守望活動帶來一桌遊客，每位客人另有節慶 Bonus。", title: "燈塔今晚比平常亮得早。", story: "巡守員阿嶼帶著同伴來吃宵夜。他說海面平靜，港口的燈一盞一盞看起來像回家的路。" },
-  { eventId: "inspection", name: "攤商公會・營運與衛生抽查", icon: "🧾", tone: "negative", description: "公會抽查爐台與排煙；完成設備改善可免改善費，否則需支付臨時整改成本。", title: "一張檢查表換來一段長談。", story: "巡查員提醒，招牌越亮，越要讓人看見你怎麼照顧食材與夥伴。你把這句話記進手記。" },
+  { eventId: "inspection", name: "攤商公會・營運與衛生抽查", icon: "🧾", tone: "negative", description: "公會抽查爐台與排煙；完成設備整修可免部分限期改善費，未達標時需支付限期改善費。", title: "一張檢查表換來一段長談。", story: "巡查員提醒，招牌越亮，越要讓人看見你怎麼照顧食材與夥伴。你把這句話記進手記。" },
   { eventId: "complaint", name: "渡船加班・排隊客訴", icon: "😤", tone: "negative", description: "加班船班集中抵港，排隊時間拉長；排班人手能讓服務更從容。", title: "今晚的隊伍排到了巷口。", story: "陳先生等得不耐煩。你看見小青正在努力照顧每一桌，也更清楚多一雙手代表多少差別。" },
   { eventId: "market-sale", name: "海味週・漁販聯合優惠", icon: "🧺", tone: "positive", description: "漁販推出聯合優惠，補貨折扣；併購鄰攤後可接觸更多供應商。", title: "魚販教你辨認潮汐留下的銀光。", story: "今天的貨便宜了一些。阿慕叔教你挑魚，你才知道好味道從端上桌之前就開始了。" },
   { eventId: "rain", name: "颱風外圍環流・雨勢增強", icon: "🌧️", tone: "negative", description: "颱風外圍風雨提高能源支出；帆布棚可降低雨夜額外成本。", title: "氣象台的紅色訊息亮了起來。", story: "大家提早收好招牌與紙燈。你選擇按部就班，不讓一個壞天氣變成整個夜市的壞記憶。" },
@@ -131,7 +131,7 @@ const ALL_CAMPAIGN_NIGHTS = [
   { eventId: "blackout", name: "港區電纜維修・短暫停電", icon: "💡", tone: "negative", description: "電纜維修造成短暫跳電，臨時供電增加成本；排煙罩能省下部分基本電費。", title: "停電時，隔壁攤的燈先亮了。", story: "鄰攤拿來備用電池。你們互相照看爐火，等電力回來後，決定把這晚叫作互助夜。" },
   { eventId: "festival", name: "第二週燈海・熟客帶朋友", icon: "🏮", tone: "positive", description: "港邊燈海活動帶來一桌新客，每桌節慶 Bonus；打烊後迎來第二次經營決策。", title: "熟客帶來了第一批朋友。", story: "小北和星星把朋友介紹到窗邊。你看見熟悉的桌子坐滿了新面孔，夜市正在長出自己的故事。" },
   { eventId: "supplier", name: "新漁季上岸・批發價波動", icon: "🐟", tone: "negative", description: "新漁季首批貨量不穩，食材進價上揚；庫存足夠時可少量採購。", title: "新漁季的第一批貨剛剛上岸。", story: "阿慕叔說，海不會每天都給同樣的答案。你把菜單留一點彈性，讓生意也能跟著潮水呼吸。" },
-  { eventId: "inspection", name: "消防安全週・爐台覆核", icon: "🧾", tone: "negative", description: "消防人員覆核瓦斯與排煙；有排煙罩、帆布棚或燈牌改造即可免改善費。", title: "火焰安靜地映在銅鍋邊。", story: "巡查員確認管線安全，也誇你的工作檯收拾得乾淨。你開始想像，若多一個攤位，還能不能保持這份細心。" },
+  { eventId: "inspection", name: "消防安全週・爐台覆核", icon: "🧾", tone: "negative", description: "消防人員覆核瓦斯與排煙；有排煙罩、帆布棚或招牌完成整修即可免臨時處理費。", title: "火焰安靜地映在銅鍋邊。", story: "巡查員確認管線安全，也誇你的工作檯收拾得乾淨。你開始想像，若多一個攤位，還能不能保持這份細心。" },
   { eventId: "market-sale", name: "社區共煮・食材市集折扣", icon: "🧺", tone: "positive", description: "社區共煮活動帶動攤商合購，今晚補貨折扣；雇用人手可讓服務更順。", title: "小朋友畫了一張港邊餐桌。", story: "社區共煮的孩子把畫貼在你的冰箱上。桌邊的位置不多，但每個人都說下次還想來。" },
   { eventId: "complaint", name: "遊客團抵港・尖峰客訴", icon: "😤", tone: "negative", description: "遊客團集中抵港，等待時間增長；招待、退款或耐心說明都會改變口碑。", title: "今晚的忙碌不是每個人都等得住。", story: "陳先生又皺起眉。你已經知道怎麼回應，但也開始思考，是否該讓新夥伴一起分擔尖峰。" },
   { eventId: "rain", name: "潮汐大雨・港邊積水", icon: "🌧️", tone: "negative", description: "大雨增加能源支出；防風帆布棚降低雨夜成本，鄰攤也可互相支援。", title: "雨水讓巷子變成一面鏡子。", story: "你和鄰攤把木箱墊高。傍晚的燈倒映在水面上，像夜市忽然多了一條平行街道。" },

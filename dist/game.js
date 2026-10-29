@@ -323,7 +323,7 @@ export function boot() {
         scene.showRevenueNotice(-value, "昨夜・顧客退款／銷貨折讓");
       } else if (item.kind === "secret-inspection") {
         scene.showRevenueNotice(item.outcome === "pass" ? value : -value,
-          item.outcome === "pass" ? "昨夜・衛生稽查獎勵（其他收入）" : "昨夜・衛生整改費");
+          item.outcome === "pass" ? "昨夜・衛生稽查獎勵（其他收入）" : "昨夜・衛生稽查限期改善費");
       }
     });
   }
