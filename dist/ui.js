@@ -384,7 +384,7 @@ export function createUI(runtime) {
     const decision = el("section", "weekly-decision");
     append(decision,
       subhead("新的一週・經營方向", "第 " + state.day + " 夜開始前", true),
-      helper("每完成七夜結算一次週轉工作底稿；下一週可擴店、招聘、併購、培養分店店長或保留現金。店長接手日常營運，總部只需決定重大事件。", "helper-copy manager-intro"));
+      helper("每完成七夜結算一次週轉工作底稿；下一週可擴店、招募人手、併購、培養分店店長或保留現金。店長接手日常營運，總部只需決定重大事件。", "helper-copy manager-intro"));
     const summary = el("div", "decision-summary");
     append(summary, el("span", "", "可用現金"), el("b", "", money(state.coins)),
       el("span", "", "目前每夜固定營運成本"), el("b", "", money(fixedOperatingCost(createLedger()))));
@@ -441,7 +441,7 @@ export function createUI(runtime) {
       el("span", "", activeLocations + " 間營業中・店長薪資 " + money(DATA.economy.managerWage) + " / 夜"));
     managerPanel.append(managerHeading);
     if (!branches.length) {
-      managerPanel.append(helper("先併購一間鄰攤並替它備料、開門；夜嵐主店 + 1 間分店達到兩店規模後，就能招聘店長。", "helper-copy"));
+      managerPanel.append(helper("先併購一間鄰攤並替它備料、開門；夜嵐主店 + 1 間分店達到兩店規模後，就能招募店長。", "helper-copy"));
     } else if (activeLocations < 2) {
       managerPanel.append(helper("至少兩間店同時營業，才會開放店長職缺。到「攤位」管理分店，先補備料並開門。", "helper-copy"));
     } else if (!availableManagers.length) {
@@ -1073,7 +1073,7 @@ export function createUI(runtime) {
       unavailable: "瀏覽器儲存不可用",
       "unsupported-version": "新版存檔已保留・不覆寫",
       failed: "儲存失敗・請檢查瀏覽器空間"
-    }[saveStatus.reason] || "瀏覽器未保存進度");
+    }[saveStatus.reason] || "進度尚未儲存");
     return event;
   }
 

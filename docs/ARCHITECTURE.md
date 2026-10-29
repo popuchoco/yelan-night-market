@@ -5,7 +5,7 @@
 
 ## 1. 系統概觀
 
-本專案是以原生 HTML、CSS、JavaScript ES modules 與 Canvas 2D 建立的靜態網頁遊戲。部署內容由 `.openai/hosting.json` 指定的 `dist/` 提供；沒有必需的前端框架、打包步驟或伺服器端遊戲狀態。遊戲資料由瀏覽器 `localStorage` 保存。
+本專案是以原生 HTML、CSS、JavaScript ES modules 與 Canvas 2D 建立的靜態網頁遊戲。部署內容由 `.openai/hosting.json` 指定的 `dist/` 提供；沒有必需的前端框架、打包步驟或伺服器端遊戲狀態。遊戲資料由瀏覽器 `localStorage` 儲存。
 
 ```text
 dist/index.html + dist/styles.css
@@ -47,11 +47,11 @@ dist/index.html + dist/styles.css
 | `dist/game.js` | 建立 state、引擎、UI、場景；管理對話框、鍵盤／指標操作、提示、存檔與動畫循環 | 細部會計科目計算、物件幾何繪製 |
 | `dist/ui.js` | 營運、備料、設備、人事、攤位與安全管理面板 | 規則計算、財務分錄 |
 | `dist/ui/reports.js` | 日記簿、週底稿、期末工作底稿、報表與科目表 DOM | 修改引擎或帳務規則 |
-| `dist/ui/achievements.js` | 篩選成就分類、顯示解鎖紀錄與灰階未解鎖項目 | 改變遊戲經濟或保存額外進度計數 |
+| `dist/ui/achievements.js` | 篩選成就分類、顯示解鎖紀錄與灰階未解鎖項目 | 改變遊戲經濟或儲存額外進度計數 |
 | `dist/scene.js` | 相機、投影、Canvas 尺寸、角色路徑／更新、場景合成、命中測試 | 攤位商業規則、會計計算 |
-| `dist/scene/objects.js` | 攤位、桌椅、招牌、燈籠等場景物件繪製 | 保存場景座標或決定營運結果 |
+| `dist/scene/objects.js` | 攤位、桌椅、招牌、燈籠等場景物件繪製 | 將場景座標寫入存檔或決定營運結果 |
 | `dist/scene/effects.js` | 雨、煙、節慶、事件視覺效果 | 產生經濟事件或收支 |
-| `dist/scene/revenue.js` | 從當夜 ledger 派生收入分類、計數器動畫、主店／分店浮動交易提示；暫態效果不保存 | 修改帳本、現金、會計分錄或存檔 |
+| `dist/scene/revenue.js` | 從當夜 ledger 派生收入分類、計數器動畫、主店／分店浮動交易提示；暫態效果不寫入存檔 | 修改帳本、現金、會計分錄或存檔 |
 | `dist/app.js` | 呼叫並匯出 `boot()` 啟動入口 | 遊戲規則 |
 
 ## 3. 執行與狀態邊界
@@ -69,7 +69,7 @@ dist/index.html + dist/styles.css
 
 ## 4. 場景架構
 
-場景使用 Canvas 2D 程序化繪製與斜視投影。相機狀態包含 yaw、elevation、zoom、panX、panY；互動包含滑鼠／觸控拖曳、縮放、旋轉、角度調整與重置。固定場景資料目前包含一個主店與四個鄰攤，遊客、店員與環境行人於場景座標中移動。
+場景使用 Canvas 2D 程式化繪製與斜視投影。相機狀態包含 yaw、elevation、zoom、panX、panY；互動包含滑鼠／觸控拖曳、縮放、旋轉、角度調整與重置。固定場景資料目前包含一個主店與四個鄰攤，遊客、店員與環境行人於場景座標中移動。
 
 攤位視覺資料以既有營運 state 推導，而非另存座標：主店依攤型與擴店次數改變幾何、桌椅、燈籠與煙霧；被接手的鄰攤提升可見度並顯示所屬狀態。這是固定場景內的成長回饋，不代表地圖已能無限生成或自由探索。
 

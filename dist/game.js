@@ -719,7 +719,7 @@ export function boot() {
       if (preserveNewerSave) {
         toast("記憶中的夜市已重啟；較新版本存檔仍保留且未覆寫。");
       } else if (!clearResult?.ok || document.getElementById("saveLabel").textContent !== "進度已儲存") {
-        toast("夜市已重啟，但本機進度或舊備份未能完整清除／保存。");
+        toast("夜市已重啟，但本機進度或舊備份未能完整清除／儲存。");
       } else {
         toast("新世界已開張");
       }
@@ -843,7 +843,7 @@ export function boot() {
   } else if (loadedSave.status === "unsupported-version") {
     toast("這份存檔由較新版建立；目前先保留原檔，不會覆寫。");
   } else if (loadedSave.status === "unavailable") {
-    toast("瀏覽器本機儲存目前不可用，這次進度無法保存。");
+    toast("瀏覽器目前無法使用本機儲存，這次進度無法存檔。");
   }
   requestAnimationFrame(frame);
 }

@@ -650,7 +650,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
   }
 
   function hireOutletManager(outletId) {
-    if (state.phase !== "decision") return response(false, "店長招聘安排在每週經營決策時處理。", false);
+    if (state.phase !== "decision") return response(false, "店長招募安排在每週經營決策時處理。", false);
     if (state.managerEvent) return response(false, "先決定如何處理店長回報的重大事件。", false);
     const outlet = findOutlet(outletId);
     if (!outlet) return response(false, "找不到這間分店。", false);
@@ -894,7 +894,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     if (monthlyClose) return response(true, closingMessage + "第 " + monthlyClose.period + " 期已結帳，財務報表與本期故事走向「" + monthlyClose.outcome.title + "」已歸檔。夜市持續營業，第 " + state.day + " 夜開始。" + (weeklyClose?.balanced ? " 本週試算平衡。" : ""));
     if (weeklyClose) return response(true, closingMessage + "第 " + weeklyClose.week + " 週工作底稿已歸檔，試算" + (weeklyClose.balanced ? "平衡" : "待核對") + "；新的一週開始前，請選擇經營方向。");
     return response(true, closingMessage + (weeklyDecision
-      ? "第 " + (state.day - 1) + " 夜結束。新的一週開始前，選擇擴大店家、招聘人手、併購攤販，或暫時保留現金。"
+      ? "第 " + (state.day - 1) + " 夜結束。新的一週開始前，選擇擴大店家、招募人手、併購攤販，或暫時保留現金。"
       : "新的一晚開始了，港邊又亮起幾盞燈。"));
   }
 

@@ -71,7 +71,7 @@ export function getTierReadiness(state, outlet, targetId = getNextStallTier(outl
     ];
     if (outlet.id === "main" && isPromotion) {
       requirements.push(requirement("店面規模至少擴充 2 次", Number(state.expansions) >= 2));
-      requirements.push(requirement("已招聘至少 1 位全職夥伴", Number(state.hiredCrew) >= 1));
+      requirements.push(requirement("已招募至少 1 位全職夥伴", Number(state.hiredCrew) >= 1));
       if (isFood) requirements.push(requirement("食材冷藏設備 Lv.2", getOutletSafetyLevel(state, outlet, "coldStorage") >= 2));
     } else if (outlet.id !== "main" && isPromotion) {
       requirements.push(requirement("已聘任店長負責日常營運", !!outlet.manager));
