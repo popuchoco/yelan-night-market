@@ -2,6 +2,7 @@ import { captureStateSnapshot, clearSavedProgress, getTonightGuests, loadStateRe
 import { createScene } from "./scene.js";
 import { createUI } from "./ui.js";
 import { createGameEngine } from "./engine.js";
+import { getDailyCashbookSummary } from "./accounting.js";
 import { ACHIEVEMENTS, evaluateAchievements } from "./achievements.js";
 import { createAchievementsRenderer } from "./ui/achievements.js";
 export { createGameEngine } from "./engine.js";
@@ -30,35 +31,36 @@ export function boot() {
     close: document.getElementById("revenueClose"),
     night: document.getElementById("revenueNight"),
     total: document.getElementById("revenueTotal"),
-    sales: document.getElementById("revenueSales"),
-    tips: document.getElementById("revenueTips"),
-    activity: document.getElementById("revenueActivity"),
-    otherRow: document.getElementById("revenueOtherRow"),
-    other: document.getElementById("revenueOther"),
-    adjustmentsRow: document.getElementById("revenueAdjustmentsRow"),
-    adjustments: document.getElementById("revenueAdjustments"),
+    income: document.getElementById("revenueIncome"),
+    expenses: document.getElementById("revenueExpenses"),
+    empty: document.getElementById("revenueEmpty"),
     live: document.getElementById("revenueLive")
   };
   let revenueDismissedDay = null;
   const formatNTD = (value) => "NT$ " + Math.max(0, Math.round(Number(value) || 0)).toLocaleString("zh-TW");
-  function syncRevenueHud() {
-    const summary = scene.getRevenueDisplay();
+  const formatSignedNTD = (value) => {
+    const amount = Math.round(Number(value) || 0);
+    return amount > 0 ? "+" + formatNTD(amount) : (amount < 0 ? "−" + formatNTD(Math.abs(amount)) : formatNTD(0));
+  };
+  function syncCashbookHud() {
     if (!revenueHud.plaque) return;
     if (revenueDismissedDay !== null && revenueDismissedDay !== state.day) revenueDismissedDay = null;
     revenueHud.plaque.hidden = state.phase !== "prep" || revenueDismissedDay === state.day;
     revenueHud.plaque.dataset.phase = state.phase;
-    revenueHud.night.textContent = "第 " + summary.day + " 夜";
-    const values = [
-      [revenueHud.total, formatNTD(summary.total)],
-      [revenueHud.sales, formatNTD(summary.sales)],
-      [revenueHud.tips, formatNTD(summary.tips)],
-      [revenueHud.activity, formatNTD(summary.activity)]
+    const summary = getDailyCashbookSummary(state, Number(state.day) - 1);
+    revenueHud.night.textContent = summary.day > 0 ? "第 " + summary.day + " 夜" : "尚無前夜";
+    const values = summary.available ? [
+      [revenueHud.total, formatSignedNTD(summary.net)],
+      [revenueHud.income, formatNTD(summary.income)],
+      [revenueHud.expenses, formatNTD(summary.expenses)]
+    ] : [
+      [revenueHud.total, "—"],
+      [revenueHud.income, "—"],
+      [revenueHud.expenses, "—"]
     ];
     values.forEach(([node, value]) => { if (node && node.textContent !== value) node.textContent = value; });
-    revenueHud.otherRow.hidden = summary.other <= 0;
-    revenueHud.other.textContent = "+" + formatNTD(summary.other);
-    revenueHud.adjustmentsRow.hidden = summary.adjustments <= 0;
-    revenueHud.adjustments.textContent = "−" + formatNTD(summary.adjustments);
+    revenueHud.empty.hidden = summary.available;
+    revenueHud.total.dataset.tone = summary.net > 0 ? "positive" : (summary.net < 0 ? "negative" : "neutral");
     const announcements = scene.drainRevenueAnnouncements();
     if (announcements.length && revenueHud.live) revenueHud.live.textContent = announcements.join(" ");
   }
@@ -820,7 +822,7 @@ export function boot() {
   function frame(time) {
     const dt = lastFrame ? Math.min(0.05, (time - lastFrame) / 1000) : 0.016;
     lastFrame = time;
-    if (!document.hidden) { scene.update(dt); scene.draw(); syncRevenueHud(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
+    if (!document.hidden) { scene.update(dt); scene.draw(); syncCashbookHud(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
     requestAnimationFrame(frame);
   }
   const soundButton = document.querySelector('[data-action="toggle-sound"]');
@@ -832,7 +834,7 @@ export function boot() {
   }
   syncToastPosition();
   renderUI();
-  syncRevenueHud();
+  syncCashbookHud();
   if (loadedSave.status === "corrupt") {
     document.getElementById("saveLabel").textContent = "存檔異常・已保留備份";
     toast("原存檔無法讀取；已保留備份並以新進度開啟夜市。");

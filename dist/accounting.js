@@ -180,6 +180,23 @@ export function postJournal(state, description, rawLines, cashFlow = null, day =
   return entry;
 }
 
+/** Summarize the prior day's actual cash receipts and payments for the compact cashbook HUD. */
+export function getDailyCashbookSummary(state, day) {
+  const targetDay = Math.max(0, Math.floor(Number(day) || 0));
+  const entries = (Array.isArray(state?.accounting?.journal) ? state.accounting.journal : [])
+    .filter((entry) => entry && !entry.opening && Number(entry.day) === targetDay);
+  let income = 0;
+  let expenses = 0;
+  entries.forEach((entry) => {
+    (Array.isArray(entry.lines) ? entry.lines : []).forEach((line) => {
+      if (line?.account !== "1000") return;
+      income += Math.max(0, Math.round(Number(line.debit) || 0));
+      expenses += Math.max(0, Math.round(Number(line.credit) || 0));
+    });
+  });
+  return { day: targetDay, income, expenses, net: income - expenses, available: entries.length > 0, entryCount: entries.length };
+}
+
 export function recordOperatingClose(state, ledger) {
   const expenseLines = [
     ["5200", ledger.rent + (ledger.expansionRent || 0) + (ledger.acquisitionRent || 0)],

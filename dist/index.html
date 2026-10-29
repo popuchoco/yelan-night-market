@@ -36,16 +36,15 @@
           <span class="world-event-copy"><span id="worldEventLabel">今晚事件</span><strong id="worldEventTitle">查看夜市消息</strong></span>
         </button>
         <div class="outlet-event-triggers" id="outletEventTriggers" aria-label="分店現場事件"></div>
-        <section class="revenue-plaque" id="revenuePlaque" aria-label="今晚營業收入摘要" data-phase="prep">
-          <div class="revenue-plaque-heading"><span class="revenue-spark" aria-hidden="true">✦</span><span>今晚營業收入</span><small id="revenueNight">第 1 夜</small><button class="revenue-close" id="revenueClose" type="button" aria-label="關閉摘要，下一夜會再次顯示" title="隱藏至下一夜">×</button></div>
-          <strong class="revenue-total" id="revenueTotal">NT$ 0</strong>
-          <div class="revenue-breakdown">
-            <span>商品 <b id="revenueSales">NT$ 0</b></span>
-            <span>小費 <b id="revenueTips">NT$ 0</b></span>
-            <span>活動／手記 <b id="revenueActivity">NT$ 0</b></span>
+        <section class="revenue-plaque cashbook-plaque" id="revenuePlaque" aria-label="昨夜現金簿摘要" data-phase="prep">
+          <div class="revenue-plaque-heading"><span class="revenue-spark" aria-hidden="true">✦</span><span>昨夜現金簿</span><small id="revenueNight">尚無前夜</small><button class="revenue-close" id="revenueClose" type="button" aria-label="關閉昨夜現金簿，下一夜會再次顯示" title="隱藏至下一夜">×</button></div>
+          <div class="cashbook-net"><span>淨現金變動</span><strong class="revenue-total" id="revenueTotal">—</strong></div>
+          <div class="revenue-breakdown cashbook-breakdown">
+            <span>現金收入 <b id="revenueIncome">—</b></span>
+            <span>現金支出 <b id="revenueExpenses">—</b></span>
           </div>
-          <div class="revenue-extra-row" id="revenueOtherRow" hidden><span>其他收入・補助／理賠／盤盈</span><b id="revenueOther">NT$ 0</b></div>
-          <div class="revenue-extra-row adjustment" id="revenueAdjustmentsRow" hidden><span>收銀短溢／退款另計</span><b id="revenueAdjustments">NT$ 0</b></div>
+          <p class="cashbook-note" id="revenueEmpty" hidden>尚無前一夜的結帳紀錄，開張後會在下一夜顯示。</p>
+          <p class="cashbook-note">依實際現金收付彙總，不等於損益表淨利。</p>
         </section>
         <span class="sr-only" id="revenueLive" role="status" aria-live="polite" aria-atomic="true"></span>
         <div class="world-tools" aria-label="場景工具">

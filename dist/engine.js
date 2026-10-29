@@ -509,8 +509,9 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     outlet.stock[stockId] = quantity + 1;
     state.coins -= price;
     state.shiftPurchases = (state.shiftPurchases || 0) + price;
-    recordInventoryPurchase(state, outlet.name + "｜" + item.name, price);
-    return response(true, outlet.name + "補進 1 份" + item.name + "，已列入存貨與現金流。");
+    const itemName = item.name || item.productName || item.storeName || "備料";
+    recordInventoryPurchase(state, outlet.name + "｜" + itemName, price);
+    return response(true, outlet.name + "補進 1 份" + itemName + "，已列入存貨與現金流。");
   }
 
   function toggleOutlet(outletId) {

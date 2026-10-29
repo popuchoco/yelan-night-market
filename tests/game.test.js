@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { DATA, getOutletSpecialty, outletRetailPrice } from "../dist/data.js";
 import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, MARKET_CARDS, MARKET_CARD_SCHEDULE, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, marketCardForDay, selectEnding } from "../dist/campaign.js";
-import { closeDepreciation, CHART_OF_ACCOUNTS, postJournal } from "../dist/accounting.js";
+import { closeDepreciation, CHART_OF_ACCOUNTS, getDailyCashbookSummary, postJournal } from "../dist/accounting.js";
 import { boot, createGameEngine } from "../dist/game.js";
 import { createUI } from "../dist/ui.js";
 import { applyCameraAction } from "../dist/scene.js";
@@ -288,6 +288,24 @@ test("invalid journal posts fail before changing balances, sequence, or journal"
   assert.equal(entry.id, "je-1");
   assert.equal(state.accounting.balances["1000"], before.balances["1000"] + 25);
   assert.equal(state.accounting.entrySequence, before.entrySequence + 1);
+});
+
+test("daily cashbook summarizes the previous day's actual cash receipts and payments", () => {
+  const state = freshState();
+  postJournal(state, "Opening balance", [{ account: "1000", debit: 900 }, { account: "3000", credit: 900 }], null, 0);
+  postJournal(state, "Night sales", [{ account: "1000", debit: 420 }, { account: "4000", credit: 420 }], { category: "operating", amount: 420 }, 6);
+  postJournal(state, "Night expense", [{ account: "5400", debit: 90 }, { account: "1000", credit: 90 }], { category: "operating", amount: -90 }, 6);
+  postJournal(state, "Combined subsidy and operating close", [
+    { account: "1000", debit: 60 }, { account: "4020", credit: 60 },
+    { account: "5200", debit: 140 }, { account: "1000", credit: 140 }
+  ], { category: "operating", amount: -80 }, 6);
+
+  assert.deepEqual(getDailyCashbookSummary(state, 6), {
+    day: 6, income: 480, expenses: 230, net: 250, available: true, entryCount: 3
+  });
+  assert.deepEqual(getDailyCashbookSummary(state, 5), {
+    day: 5, income: 0, expenses: 0, net: 0, available: false, entryCount: 0
+  });
 });
 
 test("cash and working-capital balances stay aligned across borrow, close, and repayment", () => {
@@ -787,7 +805,11 @@ test("each acquired storefront sells its trade-specific product with its own pri
     assert.equal(branch.stock[product.stockId], 0);
     const wrongStockId = product.stockId === "fish" ? "fruit" : "fish";
     assert.equal(engine.buyOutletStock(branch.id, wrongStockId).ok, false);
-    assert.equal(engine.buyOutletStock(branch.id, product.stockId).ok, true);
+    const stocking = engine.buyOutletStock(branch.id, product.stockId);
+    assert.equal(stocking.ok, true);
+    assert.match(stocking.message, new RegExp(product.productName));
+    assert.doesNotMatch(stocking.message, /undefined/i);
+    assert.equal(state.accounting.journal.at(-1).description.includes(product.productName), true);
     assert.equal(engine.toggleOutlet(branch.id).ok, true);
     assert.equal(forecast(state).outletSales, product.price);
     assert.equal(engine.chooseMarketCard("self-check").ok, true);
@@ -989,8 +1011,11 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(revenue, /getRevenueBreakdown/);
   assert.match(revenue, /eventAnchor\(pulse\.outletId\)/);
   assert.match(html, /id="worldCanvas" tabindex="0"/);
-  assert.match(html, /class="revenue-plaque" id="revenuePlaque"/);
-  assert.match(html, /id="revenueClose"[^>]*aria-label="關閉摘要，下一夜會再次顯示"/);
+  assert.match(html, /class="revenue-plaque cashbook-plaque" id="revenuePlaque"/);
+  assert.match(html, /昨夜現金簿/);
+  assert.match(html, /現金收入 <b id="revenueIncome">/);
+  assert.match(html, /現金支出 <b id="revenueExpenses">/);
+  assert.match(html, /id="revenueClose"[^>]*aria-label="關閉昨夜現金簿，下一夜會再次顯示"/);
   assert.match(html, /id="revenueLive" role="status" aria-live="polite"/);
   assert.match(html, /id="worldEventTrigger"[^>]*data-action="open-world-event"/);
   assert.match(html, /id="outletEventTriggers"/);
@@ -1018,7 +1043,8 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(css, /\.revenue-plaque/);
   assert.match(css, /\.revenue-plaque\[hidden\]\s*\{\s*display:\s*none\s*!important/);
   assert.match(css, /\.revenue-close[^\n]*width:\s*44px/);
-  assert.match(game, /scene\.getRevenueDisplay\(\)/);
+  assert.match(game, /getDailyCashbookSummary\(state, Number\(state\.day\) - 1\)/);
+  assert.match(game, /function syncCashbookHud\(/);
   assert.match(game, /state\.phase !== "prep" \|\| revenueDismissedDay === state\.day/);
   assert.match(game, /scene\.showRevenueNotice/);
   assert.match(css, /\.world-frame\.camera-collapsed \.camera-tools\s*\{\s*display:\s*none/);
