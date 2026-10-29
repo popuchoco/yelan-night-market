@@ -12,6 +12,7 @@ import {
   recordLoanRepayment, recordOperatingClose, recordRefund, recordSale,
   recordInsuranceClaimAccrual, collectInsuranceClaims
 } from "./accounting.js";
+import { evaluateAchievements, normalizeAchievementState } from "./achievements.js";
 
 const capAt = (value, max) => Math.min(max, value);
 
@@ -44,7 +45,37 @@ function createInsuranceCoverageSnapshot(state) {
 export function createGameEngine(state, { random = Math.random } = {}) {
   const guests = () => getTonightGuests(state);
   const event = () => todayEvent(state);
-  const response = (ok, message, changed = ok) => ({ ok, changed, message });
+  const pendingAchievementAwards = [];
+  const response = (ok, message, changed = ok) => {
+    if (ok) pendingAchievementAwards.push(...evaluateAchievements(state));
+    return { ok, changed, message };
+  };
+
+  function markJournalViewed() {
+    state.achievements = normalizeAchievementState(state.achievements);
+    if (state.achievements.viewedJournal) return response(true, "", false);
+    state.achievements.viewedJournal = true;
+    return response(true, "", true);
+  }
+
+  function markStatementViewed(statementId) {
+    const validStatements = ["income", "equity", "position", "cashflow"];
+    if (!validStatements.includes(statementId)) return response(false, "找不到這份財務報表。", false);
+    if (!(state.accounting?.monthlyReports || []).length) return response(false, "第一期結帳後才能查閱財務報表。", false);
+    state.achievements = normalizeAchievementState(state.achievements);
+    if (state.achievements.viewedStatements.includes(statementId)) return response(true, "", false);
+    state.achievements.viewedStatements.push(statementId);
+    return response(true, "", true);
+  }
+
+  function markAchievementListSeen() {
+    state.achievements = normalizeAchievementState(state.achievements);
+    state.achievements.pending = [];
+  }
+
+  function drainAchievementAwards() {
+    return Array.from(new Set(pendingAchievementAwards.splice(0, pendingAchievementAwards.length)));
+  }
 
   function randomUnit() {
     const value = Number(random());
@@ -753,6 +784,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
 
   function restartCampaign() {
     const fresh = freshState();
+    pendingAchievementAwards.length = 0;
     Object.keys(state).forEach((key) => delete state[key]);
     Object.assign(state, fresh);
     return response(true, "新的夜市世界已開張。先備料、排班，再掛燈迎客。");
@@ -761,6 +793,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
   return { openDoors, chooseMarketCard, borrowWorkingCapital, repayWorkingCapital, serveDish, resolveComplaint, resolveSafetyIncident, buyStock, upgradeEquipment, buyUpgrade, toggleStaff, selectDish, chooseStory, chooseWeeklyDecision, nextNight, restartCampaign,
     buyOutletStock, toggleOutlet, upgradeOutletEquipment, upgradeOutletSafety, upgradeStallTier, toggleAccidentCoverage, hireOutletManager, dismissOutletManager, resolveManagerEvent,
     releaseCrewMember,
+    markJournalViewed, markStatementViewed, markAchievementListSeen, drainAchievementAwards,
     getEvent: event, getGuests: guests, getStaffCost: () => staffCost(state), getIncome: () => state.ledger ? ledgerIncome(state.ledger) : 0 };
 }
 

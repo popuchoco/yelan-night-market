@@ -64,6 +64,13 @@
           <button class="world-action primary" id="mainAction" data-action="main-action">掛燈迎客</button>
         </div>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
+        <div class="achievement-toast" id="achievementToast" hidden aria-label="里程碑解鎖提示">
+          <span class="achievement-toast-mark" aria-hidden="true">✦</span>
+          <span class="achievement-toast-copy"><small>港邊里程碑</small><strong id="achievementToastTitle"></strong></span>
+          <button class="achievement-toast-view" type="button" data-action="open-achievements">查看</button>
+          <button class="achievement-toast-dismiss" type="button" data-action="dismiss-achievement-toast" aria-label="關閉里程碑提示">×</button>
+        </div>
+        <span class="sr-only" id="achievementLive" role="status" aria-live="polite" aria-atomic="true"></span>
       </section>
       <aside class="panel">
         <div class="panel-head">
@@ -82,7 +89,10 @@
       </aside>
     </main>
     <footer class="game-footer">
-      <span>想了解夜市的營運規則與帳務？</span>
+      <span>想回看夜市足跡或營運規則？</span>
+      <button class="achievement-trigger" id="achievementTrigger" type="button" data-action="open-achievements" aria-haspopup="dialog" aria-controls="achievementsDialog" aria-label="港邊里程碑，查看成就一覽">
+        <span aria-hidden="true">✦</span>港邊里程碑<span class="achievement-new-badge" id="achievementNewBadge" hidden aria-hidden="true">新</span>
+      </button>
       <button class="game-guide-trigger" type="button" data-action="open-game-guide" aria-haspopup="dialog">遊戲說明 <span aria-hidden="true">↗</span></button>
     </footer>
   </div>
@@ -199,6 +209,17 @@
       <button class="secondary-button" type="button" data-action="close-restart-confirm">先不要</button>
       <button class="danger-button" type="button" data-action="confirm-restart-campaign">清空進度並重啟</button>
     </div>
+  </dialog>
+  <dialog class="achievement-dialog" id="achievementsDialog" aria-modal="true" aria-labelledby="achievementsTitle" aria-describedby="achievementsDescription">
+    <header class="achievement-dialog-header">
+      <div>
+        <div class="modal-kicker">HARBOR MILESTONES / NIGHT MARKET NOTES</div>
+        <h2 class="modal-title" id="achievementsTitle">港邊里程碑</h2>
+        <p class="modal-desc" id="achievementsDescription">把經營留下的足跡收進手記。這些記錄不會提供現金或改變營運數值。</p>
+      </div>
+      <button class="close-button" type="button" data-action="close-achievements" aria-label="關閉里程碑一覽">×</button>
+    </header>
+    <div class="achievement-dialog-content" id="achievementsContent" tabindex="0" aria-label="成就清單與分類篩選"></div>
   </dialog>
   <script src="./app.js" type="module"></script>
 </body>

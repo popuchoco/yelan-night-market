@@ -2,23 +2,28 @@ import { captureStateSnapshot, clearSavedProgress, getTonightGuests, loadStateRe
 import { createScene } from "./scene.js";
 import { createUI } from "./ui.js";
 import { createGameEngine } from "./engine.js";
+import { ACHIEVEMENTS, evaluateAchievements } from "./achievements.js";
+import { createAchievementsRenderer } from "./ui/achievements.js";
 export { createGameEngine } from "./engine.js";
 
 export function boot() {
   const loadedSave = loadStateResult();
   const state = loadedSave.state;
   const preserveNewerSave = loadedSave.status === "unsupported-version";
+  evaluateAchievements(state, { silent: true });
   const persistState = (value) => preserveNewerSave ? false : saveState(value);
   const persistStateDetailed = (value) => preserveNewerSave
     ? { ok: false, reason: "unsupported-version" }
     : saveStateResult(value);
   const engine = createGameEngine(state);
   let toastTimer = 0;
+  let achievementToastTimer = 0;
   let lastFrame = 0;
   let audioContext = null;
   let soundEnabled = false;
   try { soundEnabled = localStorage.getItem("yelan-sound-enabled") === "true"; } catch {}
   const ui = createUI({ state, saveState: persistState, saveStateDetailed: persistStateDetailed });
+  const achievementsRenderer = createAchievementsRenderer();
   const scene = createScene({ state, todayEvent: () => todayEvent(state), getTonightGuests: () => getTonightGuests(state) });
   let orderReturnFocus = null;
   let reportReturnFocus = null;
@@ -57,7 +62,22 @@ export function boot() {
     button.title = scene.motionReduced ? "已依作業系統減少動態效果" : label;
     button.querySelector("#pauseIcon").textContent = scene.paused ? "▶" : "Ⅱ";
   }
-  function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
+  function syncAchievementTrigger() {
+    const trigger = document.getElementById("achievementTrigger");
+    const badge = document.getElementById("achievementNewBadge");
+    if (!trigger || !badge) return;
+    const pending = Array.isArray(state.achievements?.pending) ? state.achievements.pending.length : 0;
+    badge.hidden = pending === 0;
+    trigger.setAttribute("aria-label", pending ? "港邊里程碑，有新成就待查看" : "港邊里程碑，查看成就一覽");
+  }
+  function renderAchievementList(focusCategory = null) {
+    achievementsContent.replaceChildren(achievementsRenderer.render(state));
+    if (focusCategory) {
+      const target = achievementsContent.querySelector('[data-action="achievement-filter"][data-category="' + focusCategory + '"]');
+      if (target) target.focus();
+    }
+  }
+  function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); syncOutletEventTriggers(); syncAchievementTrigger(); }
   const reportDialog = document.getElementById("reportDialog");
   const reportDialogContent = document.getElementById("reportDialogContent");
   const worldEventDialog = document.getElementById("worldEventDialog");
@@ -66,8 +86,11 @@ export function boot() {
   const storyChoiceContent = document.getElementById("storyChoiceContent");
   const gameGuideDialog = document.getElementById("gameGuideDialog");
   const restartConfirmDialog = document.getElementById("restartConfirmDialog");
+  const achievementsDialog = document.getElementById("achievementsDialog");
+  const achievementsContent = document.getElementById("achievementsContent");
   let gameGuideReturnFocus = null;
   let restartReturnFocus = null;
+  let achievementsReturnFocus = null;
   let worldEventReturnFocus = null;
   let storyChoiceReturnFocus = null;
   let worldEventPosition = "";
@@ -273,13 +296,22 @@ export function boot() {
   }
   function openJournalReport(id) {
     reportReturnFocus = document.activeElement;
+    const journalWasViewed = state.achievements.viewedJournal;
+    engine.markJournalViewed();
+    const unlockedAchievements = engine.drainAchievementAwards();
     ui.setJournalView(id);
+    if (id === "monthly" && (state.accounting?.monthlyReports || []).length) {
+      engine.markStatementViewed("income");
+      unlockedAchievements.push(...engine.drainAchievementAwards());
+    }
     const report = ui.getJournalReportInfo();
     document.getElementById("reportDialogTitle").textContent = report.title;
     document.getElementById("reportDialogDescription").textContent = report.description;
     renderReportDialogContent();
     if (!reportDialog.open) reportDialog.showModal();
     reportDialog.querySelector('[data-action="close-report"]').focus();
+    if (!journalWasViewed || unlockedAchievements.length) renderUI();
+    if (unlockedAchievements.length) showAchievementToast(unlockedAchievements);
     playTone("open");
   }
   reportDialog.addEventListener("click", (event) => {
@@ -331,6 +363,24 @@ export function boot() {
     restartReturnFocus = null;
     if (target && target.focus && gameGuideDialog.open) requestAnimationFrame(() => target.focus());
   });
+  achievementsDialog.addEventListener("click", (event) => {
+    if (event.target === achievementsDialog) achievementsDialog.close();
+  });
+  achievementsDialog.addEventListener("close", () => {
+    const fallback = document.getElementById("achievementTrigger");
+    const target = achievementsReturnFocus && achievementsReturnFocus.isConnected ? achievementsReturnFocus : fallback;
+    achievementsReturnFocus = null;
+    if (target && target.focus) requestAnimationFrame(() => target.focus());
+  });
+  function openAchievements(trigger) {
+    achievementsReturnFocus = trigger && trigger.isConnected ? trigger : document.getElementById("achievementTrigger");
+    renderAchievementList();
+    if (!achievementsDialog.open) achievementsDialog.showModal();
+    engine.markAchievementListSeen();
+    renderUI();
+    achievementsDialog.querySelector('[data-action="close-achievements"]').focus();
+    playTone("open");
+  }
   document.addEventListener("scene-motion-change", syncMotionControl);
   function syncToastPosition() {
     const frame = document.querySelector(".world-frame");
@@ -349,10 +399,30 @@ export function boot() {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
   }
+  function showAchievementToast(ids) {
+    const id = Array.isArray(ids) ? ids[0] : ids;
+    const achievement = ACHIEVEMENTS.find((item) => item.id === id);
+    if (!achievement) return;
+    const popup = document.getElementById("achievementToast");
+    document.getElementById("achievementToastTitle").textContent = achievement.title;
+    document.getElementById("achievementLive").textContent = "里程碑解鎖：" + achievement.title;
+    popup.hidden = false;
+    requestAnimationFrame(() => popup.classList.add("show"));
+    clearTimeout(achievementToastTimer);
+    achievementToastTimer = setTimeout(() => {
+      popup.classList.remove("show");
+      achievementToastTimer = setTimeout(() => { popup.hidden = true; }, 240);
+    }, 3800);
+  }
   function showResult(result, refresh = true) {
+    const unlockedAchievements = engine.drainAchievementAwards();
     if (result.changed && refresh) renderUI();
     if (result.message) toast(result.message);
     if (result.ok) playTone("success");
+    if (unlockedAchievements.length) {
+      syncAchievementTrigger();
+      showAchievementToast(unlockedAchievements);
+    }
   }
   function openDoors() {
     const result = engine.openDoors();
@@ -466,6 +536,18 @@ export function boot() {
       }
     }
     if (action === "close-restart-confirm" && restartConfirmDialog.open) restartConfirmDialog.close();
+    if (action === "open-achievements") openAchievements(button);
+    if (action === "close-achievements" && achievementsDialog.open) achievementsDialog.close();
+    if (action === "achievement-filter") {
+      achievementsRenderer.setCategory(button.dataset.category);
+      renderAchievementList(button.dataset.category);
+    }
+    if (action === "dismiss-achievement-toast") {
+      const popup = document.getElementById("achievementToast");
+      popup.classList.remove("show");
+      clearTimeout(achievementToastTimer);
+      achievementToastTimer = setTimeout(() => { popup.hidden = true; }, 240);
+    }
     if (action === "toggle-camera-tools") {
       const expanded = button.getAttribute("aria-expanded") !== "true";
       setCameraToolsExpanded(expanded);
@@ -488,12 +570,23 @@ export function boot() {
       else openOutletManagement(outletId);
     }
     if (action === "close-world-event" && worldEventDialog.open) worldEventDialog.close();
-    if (action === "panel-tab") { ui.setTab(button.dataset.tab); renderUI(); }
+    if (action === "panel-tab") {
+      ui.setTab(button.dataset.tab);
+      if (button.dataset.tab === "journal") engine.markJournalViewed();
+      const unlockedAchievements = engine.drainAchievementAwards();
+      renderUI();
+      if (unlockedAchievements.length) showAchievementToast(unlockedAchievements);
+    }
     if (action === "open-report") openJournalReport(button.dataset.id);
     if (action === "close-report" && reportDialog.open) reportDialog.close();
     if (action === "statement-view") {
       ui.setStatementView(button.dataset.id);
+      const alreadyViewed = state.achievements.viewedStatements.includes(button.dataset.id);
+      engine.markStatementViewed(button.dataset.id);
+      const unlockedAchievements = engine.drainAchievementAwards();
+      if (!alreadyViewed && (state.accounting?.monthlyReports || []).length) renderUI();
       if (reportDialog.open) renderReportDialogContent("statement-view", button.dataset.id, true);
+      if (unlockedAchievements.length) showAchievementToast(unlockedAchievements);
     }
     if (action === "main-action") {
       if (state.phase === "prep") openDoors();
@@ -654,7 +747,10 @@ export function boot() {
     const next = tabs[(current + offset + tabs.length) % tabs.length];
     next.focus();
     ui.setTab(next.dataset.tab);
+    if (next.dataset.tab === "journal") engine.markJournalViewed();
+    const unlockedAchievements = engine.drainAchievementAwards();
     renderUI();
+    if (unlockedAchievements.length) showAchievementToast(unlockedAchievements);
   });
   scene.canvas.addEventListener("click", onSceneClick);
 

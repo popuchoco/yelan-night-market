@@ -2,9 +2,10 @@ import { DATA, createOutletInventory, getOutletProduct, outletAvailableStock, ou
 import { ACQUISITION_TYPES, CAMPAIGN_DAYS, acquisitionGroupCounts, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
 import { createAccountingState, ensureAccounting } from "./accounting.js";
 import { getMonthlyInsurance, getOutletCapacity, getOutletTier, getTierDailyUtilities, getTierReadiness, isInsuranceBillingDay, monthlyInsuranceTotals } from "./safety.js";
+import { createAchievementState, normalizeAchievementState } from "./achievements.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-export const SAVE_SCHEMA_VERSION = 3;
+export const SAVE_SCHEMA_VERSION = 4;
 
 function resolveStorage(storage) {
   if (storage !== undefined) return storage;
@@ -54,6 +55,7 @@ export function freshState() {
     loanPrincipal: 0,
     loanTakenDay: 0,
     loanNights: 0,
+    achievements: createAchievementState(),
     marketChoiceDay: 0,
     marketCardChoice: null,
     decisions: [],
@@ -78,6 +80,7 @@ export function normalizeState(data) {
   // is written back on the next successful save.
   fresh.schemaVersion = SAVE_SCHEMA_VERSION;
   fresh.staff = Object.assign({ cook: true, server: true }, fresh.staff || {});
+  fresh.achievements = normalizeAchievementState(data.achievements);
   const validRecipeIds = new Set(DATA.dishes.map((dish) => dish.id));
   fresh.unlockedRecipes = Array.from(new Set([
     ...DATA.dishes.filter((dish) => !dish.unlockTier && !dish.secretFor).map((dish) => dish.id),

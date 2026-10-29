@@ -13,11 +13,12 @@ dist/index.html + dist/styles.css
             └── dist/app.js
                   └── game.js（瀏覽器組裝與流程協調）
                         ├── engine.js（遊戲規則與動作）
+                        │     └── achievements.js（成就資料與狀態推導）
                         │     ├── state.js（狀態、成本、日常資料）
                         │     ├── campaign.js（週期、公告卡、故事、週決策）
                         │     ├── safety.js（攤型、安全、保險）
                         │     └── accounting.js（分錄、資產、結帳、報表）
-                        ├── ui.js + ui/reports.js（管理介面與報表）
+                        ├── ui.js + ui/reports.js + ui/achievements.js（面板、報表與成就清單）
                         └── scene.js
                               ├── scene/objects.js（攤位與物件）
                               └── scene/effects.js（事件特效）
@@ -36,6 +37,7 @@ dist/index.html + dist/styles.css
 | --- | --- | --- |
 | `dist/data.js` | 菜單、原料、顧客、事件、攤位座標、價格、成本、相機與動畫參數 | 操作 DOM、存檔、結算分錄 |
 | `dist/campaign.js` | 30 夜敘事週期、跨週節點、市集公告卡、週決策選項、結局判定 | 場景繪圖、localStorage 存取 |
+| `dist/achievements.js` | 成就目錄、存檔正規化、依既有營運狀態判定首次里程碑；不提供經濟獎勵 | DOM 呈現或阻塞式互動 |
 | `dist/state.js` | 新遊戲狀態、存檔正規化、存取結果、當晚顧客／事件、成本與帳本試算 | Canvas 繪製、DOM 面板 |
 | `dist/safety.js` | 攤型階段、安全設備條件、容量、保險費與有效保障判定 | 實際法規或保險契約解讀 |
 | `dist/accounting.js` | 內部科目表、借貸分錄、資產清冊、折舊／攤銷、週工作底稿與週期報表 | 遊戲畫面與營運選單 |
@@ -43,6 +45,7 @@ dist/index.html + dist/styles.css
 | `dist/game.js` | 建立 state、引擎、UI、場景；管理對話框、鍵盤／指標操作、提示、存檔與動畫循環 | 細部會計科目計算、物件幾何繪製 |
 | `dist/ui.js` | 營運、備料、設備、人事、攤位與安全管理面板 | 規則計算、財務分錄 |
 | `dist/ui/reports.js` | 日記簿、週底稿、期末工作底稿、報表與科目表 DOM | 修改引擎或帳務規則 |
+| `dist/ui/achievements.js` | 篩選成就分類、顯示解鎖紀錄與灰階未解鎖項目 | 改變遊戲經濟或保存額外進度計數 |
 | `dist/scene.js` | 相機、投影、Canvas 尺寸、角色路徑／更新、場景合成、命中測試 | 攤位商業規則、會計計算 |
 | `dist/scene/objects.js` | 攤位、桌椅、招牌、燈籠等場景物件繪製 | 保存場景座標或決定營運結果 |
 | `dist/scene/effects.js` | 雨、煙、節慶、事件視覺效果 | 產生經濟事件或收支 |
