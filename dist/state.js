@@ -340,6 +340,25 @@ export function saveState(state, storage) {
   return saveStateResult(state, storage).ok;
 }
 
+/**
+ * Remove the current save and all known legacy/recovery copies.
+ * Every key is attempted even if one removal fails.
+ * @param {Storage|undefined|null} [storage]
+ * @param {{ preserveNewerSave?: boolean }} [options]
+ * @returns {{ ok: boolean, reason: "cleared"|"unavailable"|"failed"|"unsupported-version" }}
+ */
+export function clearSavedProgress(storage, { preserveNewerSave = false } = {}) {
+  if (preserveNewerSave) return { ok: false, reason: "unsupported-version" };
+  storage = resolveStorage(storage);
+  if (!storage) return { ok: false, reason: "unavailable" };
+  const keys = [DATA.saveKey, DATA.legacyKey, DATA.saveKey + ".corrupt-backup"];
+  let failed = false;
+  keys.forEach((key) => {
+    try { storage.removeItem(key); } catch { failed = true; }
+  });
+  return failed ? { ok: false, reason: "failed" } : { ok: true, reason: "cleared" };
+}
+
 export function money(value) {
   return "NT$ " + Math.round(Number(value) || 0).toLocaleString("zh-TW");
 }

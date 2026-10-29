@@ -1,4 +1,4 @@
-import { captureStateSnapshot, getTonightGuests, loadStateResult, restoreStateSnapshot, saveState, saveStateResult, todayEvent, todayStory } from "./state.js";
+import { captureStateSnapshot, clearSavedProgress, getTonightGuests, loadStateResult, restoreStateSnapshot, saveState, saveStateResult, todayEvent, todayStory } from "./state.js";
 import { createScene } from "./scene.js";
 import { createUI } from "./ui.js";
 import { createGameEngine } from "./engine.js";
@@ -65,7 +65,9 @@ export function boot() {
   const storyChoiceDialog = document.getElementById("storyChoiceDialog");
   const storyChoiceContent = document.getElementById("storyChoiceContent");
   const gameGuideDialog = document.getElementById("gameGuideDialog");
+  const restartConfirmDialog = document.getElementById("restartConfirmDialog");
   let gameGuideReturnFocus = null;
+  let restartReturnFocus = null;
   let worldEventReturnFocus = null;
   let storyChoiceReturnFocus = null;
   let worldEventPosition = "";
@@ -319,6 +321,16 @@ export function boot() {
     gameGuideReturnFocus = null;
     if (target && target.focus) requestAnimationFrame(() => target.focus());
   });
+  restartConfirmDialog.addEventListener("click", (event) => {
+    if (event.target === restartConfirmDialog) restartConfirmDialog.close();
+  });
+  restartConfirmDialog.addEventListener("close", () => {
+    const fallback = document.querySelector('[data-action="request-restart-campaign"]')
+      || document.querySelector(".game-guide-trigger");
+    const target = restartReturnFocus && restartReturnFocus.isConnected ? restartReturnFocus : fallback;
+    restartReturnFocus = null;
+    if (target && target.focus && gameGuideDialog.open) requestAnimationFrame(() => target.focus());
+  });
   document.addEventListener("scene-motion-change", syncMotionControl);
   function syncToastPosition() {
     const frame = document.querySelector(".world-frame");
@@ -422,7 +434,7 @@ export function boot() {
     "upgrade-stall-tier", "toggle-accident-coverage", "release-crew-member", "hire-outlet-manager",
     "dismiss-outlet-manager", "resolve-manager-event", "resolve-safety-incident", "upgrade-equipment",
     "buy-upgrade", "toggle-staff", "choose-story", "choose-market-card", "next-night", "choose-weekly",
-    "borrow-loan", "repay-loan", "restart-campaign"
+    "borrow-loan", "repay-loan"
   ]);
   document.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
@@ -444,6 +456,16 @@ export function boot() {
       playTone("open");
     }
     if (action === "close-game-guide" && gameGuideDialog.open) gameGuideDialog.close();
+    if (action === "request-restart-campaign") {
+      restartReturnFocus = button;
+      if (!restartConfirmDialog.open) {
+        restartConfirmDialog.showModal();
+        const confirmButton = restartConfirmDialog.querySelector('[data-action="confirm-restart-campaign"]');
+        if (confirmButton) confirmButton.focus();
+        playTone("open");
+      }
+    }
+    if (action === "close-restart-confirm" && restartConfirmDialog.open) restartConfirmDialog.close();
     if (action === "toggle-camera-tools") {
       const expanded = button.getAttribute("aria-expanded") !== "true";
       setCameraToolsExpanded(expanded);
@@ -527,11 +549,23 @@ export function boot() {
     if (action === "choose-weekly") showResult(engine.chooseWeeklyDecision(button.dataset.id, button.dataset.targetType));
     if (action === "borrow-loan") showResult(engine.borrowWorkingCapital());
     if (action === "repay-loan") showResult(engine.repayWorkingCapital());
-    if (action === "restart-campaign") {
+    if (action === "confirm-restart-campaign") {
+      if (restartConfirmDialog.open) restartConfirmDialog.close();
+      if (gameGuideDialog.open) gameGuideDialog.close();
+      // Keep a save from a newer build untouched; only this in-memory world resets.
+      const clearResult = clearSavedProgress(undefined, { preserveNewerSave });
       ui.setTab("ops");
       const result = engine.restartCampaign();
       scene.spawnGuests([]);
-      showResult(result);
+      renderUI();
+      if (preserveNewerSave) {
+        toast("記憶中的夜市已重啟；較新版本存檔仍保留且未覆寫。");
+      } else if (!clearResult?.ok || document.getElementById("saveLabel").textContent !== "進度已儲存") {
+        toast("夜市已重啟，但本機進度或舊備份未能完整清除／保存。");
+      } else {
+        toast("新世界已開張");
+      }
+      if (result.ok) playTone("success");
     }
     if (["orbit-left", "orbit-right", "tilt-up", "tilt-down", "zoom-in", "zoom-out", "camera-reset"].includes(action)) scene.cameraAction(action);
     if (action === "toggle-pause") {

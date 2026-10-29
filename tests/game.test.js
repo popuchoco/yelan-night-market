@@ -12,7 +12,7 @@ import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   captureStateSnapshot, loadState, loadStateResult, normalizeState, restoreStateSnapshot,
-  saveState, saveStateResult, SAVE_SCHEMA_VERSION,
+  saveState, saveStateResult, clearSavedProgress, SAVE_SCHEMA_VERSION,
   todayEvent, todayMarketCard, ledgerIncome, ledgerNet
 } from "../dist/state.js";
 
@@ -134,6 +134,60 @@ test("mutable game actions can restore the same state object after an exception"
   restoreStateSnapshot(state, snapshot);
   assert.equal(state, stateReference);
   assert.deepEqual(state, before);
+});
+
+test("clearSavedProgress removes current, legacy, and corrupt-backup keys", () => {
+  const values = new Map([
+    [DATA.saveKey, "current"],
+    [DATA.legacyKey, "legacy"],
+    [DATA.saveKey + ".corrupt-backup", "backup"]
+  ]);
+  const attempted = [];
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => { attempted.push(key); values.delete(key); }
+  };
+  assert.deepEqual(clearSavedProgress(storage), { ok: true, reason: "cleared" });
+  assert.equal(values.size, 0);
+  assert.deepEqual(attempted, [DATA.saveKey, DATA.legacyKey, DATA.saveKey + ".corrupt-backup"]);
+
+  const failedAttempts = [];
+  const partialStorage = {
+    removeItem: (key) => { failedAttempts.push(key); if (key === DATA.legacyKey) throw new Error("blocked"); }
+  };
+  assert.deepEqual(clearSavedProgress(partialStorage), { ok: false, reason: "failed" });
+  assert.deepEqual(failedAttempts, [DATA.saveKey, DATA.legacyKey, DATA.saveKey + ".corrupt-backup"]);
+  assert.deepEqual(clearSavedProgress(null), { ok: false, reason: "unavailable" });
+
+  const protectedValues = new Map([[DATA.saveKey, JSON.stringify({ schemaVersion: SAVE_SCHEMA_VERSION + 1 })]]);
+  const protectedStorage = { removeItem: (key) => protectedValues.delete(key) };
+  assert.deepEqual(clearSavedProgress(protectedStorage, { preserveNewerSave: true }), { ok: false, reason: "unsupported-version" });
+  assert.equal(protectedValues.has(DATA.saveKey), true);
+});
+
+test("restartCampaign resets live state to day 1 without keeping progress fields", () => {
+  const state = freshState();
+  state.day = 18;
+  state.coins = 5200;
+  state.phase = "service";
+  state.expansions = 2;
+  state.acquisitions = 1;
+  state.outlets.push({ id: "branch-1", name: "港口炸物", type: "food", tier: "mobile", active: true });
+  state.journal.push({ day: 7, event: "節慶", net: 40 });
+  const stateReference = state;
+  const result = createGameEngine(state).restartCampaign();
+  assert.equal(result.ok, true);
+  assert.equal(state, stateReference);
+  assert.equal(state.day, 1);
+  assert.equal(state.phase, "prep");
+  assert.equal(state.coins, 1480);
+  assert.equal(state.expansions, 0);
+  assert.equal(state.acquisitions, 0);
+  assert.equal(state.outlets.length, 1);
+  assert.equal(state.outlets[0].id, "main");
+  assert.equal(state.journal.length, 0);
+  assert.equal(state.schemaVersion, SAVE_SCHEMA_VERSION);
 });
 
 test("extreme or oversized legacy progress normalizes to bounded outlet and event collections", () => {
@@ -751,6 +805,11 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(html, /data-action="toggle-pause"[^>]*aria-label="暫停場景動畫"/);
   assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
   assert.match(html, /<dialog class="story-choice-dialog" id="storyChoiceDialog"/);
+  assert.match(html, /<span class="guide-index">08｜重啟<\/span>/);
+  assert.match(html, /data-action="request-restart-campaign">重新開始遊戲<\/button>/);
+  assert.match(html, /<dialog class="restart-confirm-dialog" id="restartConfirmDialog"/);
+  assert.match(html, /data-action="confirm-restart-campaign">清空進度並重啟<\/button>/);
+  assert.match(html, /此操作無法復原/);
   const worldFrameStart = html.indexOf('<section class="world-frame');
   const mainEnd = html.indexOf("</main>", worldFrameStart);
   const toastIndex = html.indexOf('id="toast"');
