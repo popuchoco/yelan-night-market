@@ -1,6 +1,7 @@
 import { DATA } from "./data.js";
 import { createObjectRenderer } from "./scene/objects.js";
 import { createEffectRenderer } from "./scene/effects.js";
+import { createRevenueRenderer } from "./scene/revenue.js";
 
 export function applyCameraAction(camera, action) {
   const next = { ...camera };
@@ -244,6 +245,7 @@ export function createScene(runtime) {
         todayEvent: todayEvent, state: state, mainStall: mainStall,
         getGuestActors: function() { return guestActors; }
       });
+      const revenueRenderer = createRevenueRenderer({ state: state, ctx: ctx, view: view, drawRoundRect: drawRoundRect, eventAnchor: eventAnchor });
       function drawScene(time) {
         if(!view.w||!view.h) resizeCanvas();
         ctx.setTransform(view.dpr,0,0,view.dpr,0,0);
@@ -277,6 +279,7 @@ export function createScene(runtime) {
         }
         drawEventEffects(time);
         drawOutletEventBeacons(time);
+        revenueRenderer.draw(time, paused || motionReduced);
         if(performance.now()<sceneToastUntil&&lastToast) {
           var tw=Math.min(view.w-30,Math.max(170,lastToast.length*10));
           drawRoundRect((view.w-tw)/2,view.h*.19,tw,29,11,"#182727e8","#ead18c55");
@@ -431,9 +434,11 @@ export function createScene(runtime) {
   }
 
   function update(dt) {
-    if (paused || motionReduced) return;
-    animationTime += dt * 1000;
-    updateActors(dt);
+    if (!paused && !motionReduced) {
+      animationTime += dt * 1000;
+      updateActors(dt);
+    }
+    revenueRenderer.update(animationTime, paused || motionReduced);
   }
 
   function draw() { drawScene(animationTime); }
@@ -452,6 +457,8 @@ export function createScene(runtime) {
   resizeCanvas();
   return { canvas: canvas, update: update, draw: draw, spawnGuests: spawnGuests, cameraAction: cameraAction,
     setCameraLabel: setCameraLabel, hitTest: hitTest, eventAnchor: eventAnchor, showToast: setToast, togglePause: togglePause,
+    getRevenueDisplay: revenueRenderer.getDisplay, drainRevenueAnnouncements: revenueRenderer.drainAnnouncements,
+    showRevenueNotice: function(amount, label, outletId) { revenueRenderer.showNotice(amount, label, outletId, animationTime, paused || motionReduced); },
     get paused() { return paused; }, get motionReduced() { return motionReduced; },
     get motionSuppressed() { return paused || motionReduced; } };
 }

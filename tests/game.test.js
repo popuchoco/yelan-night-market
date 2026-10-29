@@ -8,6 +8,7 @@ import { boot, createGameEngine } from "../dist/game.js";
 import { createUI } from "../dist/ui.js";
 import { applyCameraAction } from "../dist/scene.js";
 import { getStallVisualProfile } from "../dist/scene/objects.js";
+import { createRevenueRenderer, getRevenueBreakdown } from "../dist/scene/revenue.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS, evaluateAchievements, normalizeAchievementState } from "../dist/achievements.js";
 import {
@@ -566,6 +567,66 @@ test("camera operations clamp tilt and zoom and support reset", () => {
   assert.deepEqual(applyCameraAction(zoomed, "camera-reset"), initial);
 });
 
+test("scene revenue summary keeps sales, tips, activity, other income, and cash adjustments separate", () => {
+  const breakdown = getRevenueBreakdown({
+    sales: 420, tips: 95, bonus: 35, storyBonus: 80,
+    subsidies: 60, insuranceClaimRevenue: 110, cashOver: 25,
+    cashShort: 45, refunds: 30
+  });
+  assert.deepEqual(breakdown, {
+    sales: 420, tips: 95, activity: 115, subsidies: 60,
+    insuranceClaimRevenue: 110, cashOver: 25, other: 195,
+    adjustments: 75, total: 630
+  });
+  assert.equal(breakdown.total, breakdown.sales + breakdown.tips + breakdown.activity);
+  assert.notEqual(breakdown.total, breakdown.total + breakdown.other);
+});
+
+test("scene revenue tracker animates branch receipts and resets when a new night starts", () => {
+  const state = freshState();
+  const renderer = createRevenueRenderer({
+    state, ctx: {}, view: { w: 900, h: 600 },
+    drawRoundRect() {}, eventAnchor: () => ({ x: 450, y: 280 })
+  });
+  assert.equal(renderer.getDisplay().total, 0);
+
+  state.phase = "service";
+  state.ledger = {
+    sales: 200, tips: 40, bonus: 30, storyBonus: 0,
+    subsidies: 60, insuranceClaimRevenue: 0, cashOver: 0,
+    cashShort: 0, refunds: 0
+  };
+  state.outlets.push({ id: "branch-fish", name: "港口炸物", lastResult: { day: state.day, sales: 100 } });
+  renderer.update(1000);
+  assert.ok(renderer.getDisplay().total > 0);
+  assert.ok(renderer.getDisplay().total < 270);
+  assert.deepEqual(renderer.drainAnnouncements(), [
+    "港口炸物・自動營運，+新台幣 100 元。",
+    "商品銷售＋小費＋活動／手記收入，+新台幣 170 元。",
+    "補助收入，+新台幣 60 元；另列其他收入，不併入今晚營業收入。"
+  ]);
+
+  renderer.update(1200, true);
+  assert.equal(renderer.getDisplay().total, 270);
+  assert.equal(renderer.getDisplay().other, 60);
+  assert.equal(renderer.drainAnnouncements().length, 0);
+
+  state.day += 1;
+  state.phase = "prep";
+  state.ledger = null;
+  renderer.update(1400);
+  assert.deepEqual(renderer.getDisplay(), {
+    sales: 0, tips: 0, activity: 0, subsidies: 0, insuranceClaimRevenue: 0,
+    cashOver: 0, other: 0, adjustments: 0, total: 0, day: 2, settled: false
+  });
+  renderer.showNotice(-45, "昨夜・收銀短溢損失");
+  renderer.update(1450);
+  assert.equal(renderer.getDisplay().total, 0);
+  assert.deepEqual(renderer.drainAnnouncements(), [
+    "昨夜・收銀短溢損失，−新台幣 45 元；作為收銀差異或退款另列，不列為營收。"
+  ]);
+});
+
 test("main stall visual profile reflects tier and expansion growth without saving scene coordinates", () => {
   const mainStall = DATA.stalls.find((stall) => stall.main);
   const state = freshState();
@@ -902,12 +963,13 @@ test("ending rules represent successful and adverse business outcomes", () => {
 });
 
 test("DOM helpers and split scene renderers remain in place without HTML injection", async () => {
-  const [ui, reports, scene, objects, effects, html, app] = await Promise.all([
+  const [ui, reports, scene, objects, effects, revenue, html, app] = await Promise.all([
     readFile(new URL("../dist/ui.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/ui/reports.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene/objects.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene/effects.js", import.meta.url), "utf8"),
+    readFile(new URL("../dist/scene/revenue.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/index.html", import.meta.url), "utf8"),
     readFile(new URL("../dist/app.js", import.meta.url), "utf8")
   ]);
@@ -920,9 +982,16 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.doesNotMatch(ui, /\.innerHTML\s*=/);
   assert.match(scene, /createObjectRenderer/);
   assert.match(scene, /createEffectRenderer/);
+  assert.match(scene, /createRevenueRenderer/);
+  assert.match(scene, /revenueRenderer\.draw\(time, paused \|\| motionReduced\)/);
   assert.match(objects, /drawStall/);
   assert.match(effects, /createEffectRenderer/);
+  assert.match(revenue, /getRevenueBreakdown/);
+  assert.match(revenue, /eventAnchor\(pulse\.outletId\)/);
   assert.match(html, /id="worldCanvas" tabindex="0"/);
+  assert.match(html, /class="revenue-plaque" id="revenuePlaque"/);
+  assert.match(html, /id="revenueClose"[^>]*aria-label="關閉摘要，下一夜會再次顯示"/);
+  assert.match(html, /id="revenueLive" role="status" aria-live="polite"/);
   assert.match(html, /id="worldEventTrigger"[^>]*data-action="open-world-event"/);
   assert.match(html, /id="outletEventTriggers"/);
   assert.match(html, /data-action="toggle-camera-tools"[^>]*aria-expanded="false"[^>]*aria-controls="cameraTools"/);
@@ -946,6 +1015,12 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   const css = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
   const game = await readFile(new URL("../dist/game.js", import.meta.url), "utf8");
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /\.revenue-plaque/);
+  assert.match(css, /\.revenue-plaque\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  assert.match(css, /\.revenue-close[^\n]*width:\s*44px/);
+  assert.match(game, /scene\.getRevenueDisplay\(\)/);
+  assert.match(game, /state\.phase !== "prep" \|\| revenueDismissedDay === state\.day/);
+  assert.match(game, /scene\.showRevenueNotice/);
   assert.match(css, /\.world-frame\.camera-collapsed \.camera-tools\s*\{\s*display:\s*none/);
   assert.match(css, /\.world-frame\.world-ui-hidden \.world-actions/);
   assert.match(scene, /motionReduced/);

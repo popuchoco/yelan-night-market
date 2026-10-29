@@ -850,3 +850,31 @@ body { font-size: var(--type-body); }
 .world-actions [data-action="open-stall"] { grid-area: manage; }
 .world-actions [data-action="main-action"] { grid-area: primary; }
 .world-actions [data-action="open-main-stock"] { grid-area: stock; }
+
+/* Live operating income stays fixed to the scene viewport while the map rotates underneath. */
+.revenue-plaque { position: absolute; z-index: 3; left: 16px; bottom: 74px; display: grid; gap: 5px; width: min(286px, calc(100% - 32px)); padding: 11px 13px; border: 1px solid #e5c77c55; border-radius: 14px; color: #dbe3d5; background: linear-gradient(145deg, #152724f2, #172321ed); box-shadow: 0 8px 25px #08110f75, inset 0 1px #ffffff10; backdrop-filter: blur(10px); pointer-events: none; font-variant-numeric: tabular-nums; }
+.revenue-plaque[hidden] { display: none !important; }
+.revenue-plaque-heading { display: flex; align-items: center; gap: 7px; color: #e4d29d; font-size: var(--type-caption); font-weight: 800; letter-spacing: .04em; }
+.revenue-spark { color: var(--gold); font-size: 13px; }
+.revenue-plaque-heading small { margin-left: auto; color: #91a397; font-size: var(--type-caption); font-weight: 650; letter-spacing: 0; }
+.revenue-close { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin: -4px -5px -4px 0; border: 1px solid #ffffff18; border-radius: 9px; color: #c2cec1; background: #ffffff08; font: 700 20px/1 system-ui, sans-serif; cursor: pointer; pointer-events: auto; }
+.revenue-close:hover, .revenue-close:focus-visible { border-color: #edc77c88; color: #f4e7c2; background: #edc77c15; outline: 2px solid #edc77c77; outline-offset: 2px; }
+.revenue-total { color: #f4e7c2; font-size: 23px; font-weight: 850; line-height: 1.1; letter-spacing: .01em; text-shadow: 0 2px 12px #d3aa4c30; }
+.revenue-plaque[data-phase="service"] .revenue-total { color: #f2d98e; }
+.revenue-breakdown { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding-top: 5px; border-top: 1px solid #ffffff12; }
+.revenue-breakdown span { display: grid; gap: 2px; min-width: 0; color: #95a69a; font-size: 10px; line-height: 1.25; }
+.revenue-breakdown b { overflow: hidden; color: #d2ddcf; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.revenue-extra-row { display: flex; justify-content: space-between; gap: 8px; color: #9fac9e; font-size: 10px; line-height: 1.35; }
+.revenue-extra-row[hidden] { display: none; }
+.revenue-extra-row b { flex: 0 0 auto; color: #c8d4c3; font-size: 10px; font-weight: 750; }
+.revenue-extra-row.adjustment b { color: #e9a387; }
+.world-frame.world-ui-hidden .revenue-plaque { display: none !important; }
+@media (max-width: 800px) {
+  .revenue-plaque { left: 10px; bottom: 120px; width: min(266px, calc(100% - 20px)); padding: 9px 11px; }
+  .revenue-total { font-size: 21px; }
+}
+@media (max-width: 480px) {
+  .revenue-plaque { bottom: 120px; width: min(250px, calc(100% - 20px)); padding: 8px 10px; }
+  .revenue-total { font-size: 20px; }
+  .revenue-breakdown b { font-size: 10px; }
+}

@@ -25,6 +25,49 @@ export function boot() {
   const ui = createUI({ state, saveState: persistState, saveStateDetailed: persistStateDetailed });
   const achievementsRenderer = createAchievementsRenderer();
   const scene = createScene({ state, todayEvent: () => todayEvent(state), getTonightGuests: () => getTonightGuests(state) });
+  const revenueHud = {
+    plaque: document.getElementById("revenuePlaque"),
+    close: document.getElementById("revenueClose"),
+    night: document.getElementById("revenueNight"),
+    total: document.getElementById("revenueTotal"),
+    sales: document.getElementById("revenueSales"),
+    tips: document.getElementById("revenueTips"),
+    activity: document.getElementById("revenueActivity"),
+    otherRow: document.getElementById("revenueOtherRow"),
+    other: document.getElementById("revenueOther"),
+    adjustmentsRow: document.getElementById("revenueAdjustmentsRow"),
+    adjustments: document.getElementById("revenueAdjustments"),
+    live: document.getElementById("revenueLive")
+  };
+  let revenueDismissedDay = null;
+  const formatNTD = (value) => "NT$ " + Math.max(0, Math.round(Number(value) || 0)).toLocaleString("zh-TW");
+  function syncRevenueHud() {
+    const summary = scene.getRevenueDisplay();
+    if (!revenueHud.plaque) return;
+    if (revenueDismissedDay !== null && revenueDismissedDay !== state.day) revenueDismissedDay = null;
+    revenueHud.plaque.hidden = state.phase !== "prep" || revenueDismissedDay === state.day;
+    revenueHud.plaque.dataset.phase = state.phase;
+    revenueHud.night.textContent = "第 " + summary.day + " 夜";
+    const values = [
+      [revenueHud.total, formatNTD(summary.total)],
+      [revenueHud.sales, formatNTD(summary.sales)],
+      [revenueHud.tips, formatNTD(summary.tips)],
+      [revenueHud.activity, formatNTD(summary.activity)]
+    ];
+    values.forEach(([node, value]) => { if (node && node.textContent !== value) node.textContent = value; });
+    revenueHud.otherRow.hidden = summary.other <= 0;
+    revenueHud.other.textContent = "+" + formatNTD(summary.other);
+    revenueHud.adjustmentsRow.hidden = summary.adjustments <= 0;
+    revenueHud.adjustments.textContent = "−" + formatNTD(summary.adjustments);
+    const announcements = scene.drainRevenueAnnouncements();
+    if (announcements.length && revenueHud.live) revenueHud.live.textContent = announcements.join(" ");
+  }
+  if (revenueHud.close) {
+    revenueHud.close.addEventListener("click", () => {
+      revenueDismissedDay = state.day;
+      revenueHud.plaque.hidden = true;
+    });
+  }
   let orderReturnFocus = null;
   let reportReturnFocus = null;
 
@@ -265,11 +308,29 @@ export function boot() {
     if (firstChoice) firstChoice.focus();
     playTone("open");
   }
+  function showClosingFinancialNotices() {
+    const closingEvents = state.journal?.[0]?.closingEvents || [];
+    closingEvents.forEach((item) => {
+      const value = Math.max(0, Math.round(Number(item.amount) || 0));
+      if (!value) return;
+      if (item.kind === "counterfeit" || item.kind === "undercharge") {
+        scene.showRevenueNotice(-value, "昨夜・收銀短溢損失");
+      } else if (item.kind === "cash-over") {
+        scene.showRevenueNotice(value, "昨夜・收銀盤盈（其他收入）");
+      } else if (item.kind === "customer-overcharge") {
+        scene.showRevenueNotice(-value, "昨夜・顧客退款／銷貨折讓");
+      } else if (item.kind === "secret-inspection") {
+        scene.showRevenueNotice(item.outcome === "pass" ? value : -value,
+          item.outcome === "pass" ? "昨夜・衛生稽查獎勵（其他收入）" : "昨夜・衛生整改費");
+      }
+    });
+  }
   function advanceNight() {
     const result = engine.nextNight();
     if (result.ok) {
       scene.spawnGuests([]);
       if (state.phase === "decision") ui.setTab("ops");
+      showClosingFinancialNotices();
     }
     showResult(result);
   }
@@ -280,6 +341,8 @@ export function boot() {
     if (nextResult.ok) {
       scene.spawnGuests([]);
       if (state.phase === "decision") ui.setTab("ops");
+      if (id === "window") scene.showRevenueNotice(80, "昨夜・熟客心意收入");
+      showClosingFinancialNotices();
     }
     if (storyChoiceDialog.open) storyChoiceDialog.close();
     showResult({ ok: nextResult.ok, changed: nextResult.changed, message: choiceResult.message + " " + nextResult.message });
@@ -757,7 +820,7 @@ export function boot() {
   function frame(time) {
     const dt = lastFrame ? Math.min(0.05, (time - lastFrame) / 1000) : 0.016;
     lastFrame = time;
-    if (!document.hidden) { scene.update(dt); scene.draw(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
+    if (!document.hidden) { scene.update(dt); scene.draw(); syncRevenueHud(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
     requestAnimationFrame(frame);
   }
   const soundButton = document.querySelector('[data-action="toggle-sound"]');
@@ -769,6 +832,7 @@ export function boot() {
   }
   syncToastPosition();
   renderUI();
+  syncRevenueHud();
   if (loadedSave.status === "corrupt") {
     document.getElementById("saveLabel").textContent = "存檔異常・已保留備份";
     toast("原存檔無法讀取；已保留備份並以新進度開啟夜市。");

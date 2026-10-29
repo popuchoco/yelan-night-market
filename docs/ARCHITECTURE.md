@@ -21,7 +21,8 @@ dist/index.html + dist/styles.css
                         ├── ui.js + ui/reports.js + ui/achievements.js（面板、報表與成就清單）
                         └── scene.js
                               ├── scene/objects.js（攤位與物件）
-                              └── scene/effects.js（事件特效）
+                              ├── scene/effects.js（事件特效）
+                              └── scene/revenue.js（收入摘要與攤位交易回饋）
 ```
 
 依賴方向的主要原則：
@@ -29,6 +30,7 @@ dist/index.html + dist/styles.css
 - `data.js` 提供設定與靜態內容，不依賴其他遊戲模組。
 - 領域模組提供純計算或狀態操作；DOM、Canvas 與瀏覽器事件由 `game.js`、`ui.js`、`scene.js` 負責。
 - `scene/objects.js` 與 `scene/effects.js` 透過 renderer API 使用投影和繪圖工具，不直接承擔遊戲規則。
+- `scene/revenue.js` 只讀取當夜帳本，將商品、服務與活動收入摘要及分店交易轉成短暫視覺回饋；不寫回 state 或存檔。
 - 報表 DOM 由 `ui/reports.js` 管理，不把財務結算邏輯放在 UI。
 
 ## 2. 模組責任
@@ -49,6 +51,7 @@ dist/index.html + dist/styles.css
 | `dist/scene.js` | 相機、投影、Canvas 尺寸、角色路徑／更新、場景合成、命中測試 | 攤位商業規則、會計計算 |
 | `dist/scene/objects.js` | 攤位、桌椅、招牌、燈籠等場景物件繪製 | 保存場景座標或決定營運結果 |
 | `dist/scene/effects.js` | 雨、煙、節慶、事件視覺效果 | 產生經濟事件或收支 |
+| `dist/scene/revenue.js` | 從當夜 ledger 派生收入分類、計數器動畫、主店／分店浮動交易提示；暫態效果不保存 | 修改帳本、現金、會計分錄或存檔 |
 | `dist/app.js` | 呼叫並匯出 `boot()` 啟動入口 | 遊戲規則 |
 
 ## 3. 執行與狀態邊界
@@ -69,6 +72,8 @@ dist/index.html + dist/styles.css
 場景使用 Canvas 2D 程序化繪製與斜視投影。相機狀態包含 yaw、elevation、zoom、panX、panY；互動包含滑鼠／觸控拖曳、縮放、旋轉、角度調整與重置。固定場景資料目前包含一個主店與四個鄰攤，遊客、店員與環境行人於場景座標中移動。
 
 攤位視覺資料以既有營運 state 推導，而非另存座標：主店依攤型與擴店次數改變幾何、桌椅、燈籠與煙霧；被接手的鄰攤提升可見度並顯示所屬狀態。這是固定場景內的成長回饋，不代表地圖已能無限生成或自由探索。
+
+`scene/revenue.js` 只讀取當夜 ledger，將商品銷售、小費、活動／手記收入分列於固定 DOM 營收牌，並把主店交易、分店自動銷售與其他帳務項目錨定至相關攤位短暫顯示。營收牌只在接客前的準備階段顯示；玩家可手動關閉至下一夜，營業開始後自動隱藏。補助、理賠應收、盤盈與收銀短溢／退款不混入商品銷售；動畫為執行期暫態，不寫回 state 或存檔。計數器更新遵循場景暫停及 `prefers-reduced-motion`。
 
 ## 5. 驗證與交付
 
