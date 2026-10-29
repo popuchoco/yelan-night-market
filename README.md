@@ -129,3 +129,7 @@ python -m http.server 4173 --directory dist
 ## 驗證
 
 執行 `npm test` 可驗證客訴選項、庫存耗盡、設備效果、存檔版本遷移／壞檔備份／QuotaExceeded 回饋／未來版本保留、極端存檔正規化、市集公告卡、週轉貸款、同業聯盟、相機限制、跨越 30 夜持續營運、攤型升級與免費菜色解鎖、員工及食品安全事故、保單理賠應收與延後收款、家鄉秘笈隨機解鎖、離職孤兒保單期末調整、借貸平衡及報表勾稽等核心路徑。
+
+GitHub Actions 會在推送至 `main`、建立 Pull Request 或手動觸發時執行相同的 `npm test`，用來及早攔截回歸。
+
+維護紀錄：`dist/campaign.js` 曾因 Windows 安全性處理而從 `origin/main` 還原；還原以既有版本為準，沒有刻意變更活動／劇情規則。
