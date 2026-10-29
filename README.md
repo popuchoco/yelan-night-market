@@ -133,3 +133,7 @@ python -m http.server 4173 --directory dist
 GitHub Actions 會在推送至 `main`、建立 Pull Request 或手動觸發時執行相同的 `npm test`，用來及早攔截回歸。
 
 維護紀錄：`dist/campaign.js` 曾因 Windows 安全性處理而從 `origin/main` 還原；還原以既有版本為準，沒有刻意變更活動／劇情規則。
+
+## 維運文件
+
+架構說明、軟體設計說明（SDD）、設計決策紀錄與里程碑路線圖整理於 [`docs/`](docs/README.md)。修改核心規則、存檔結構、會計週期或場景資料時，請一併維護對應文件。
