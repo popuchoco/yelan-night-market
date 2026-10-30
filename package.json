@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests"
+    "test": "node --test tests/game.test.js tests/accounting.test.js tests/achievements.test.js tests/progression.test.js"
   }
 }
