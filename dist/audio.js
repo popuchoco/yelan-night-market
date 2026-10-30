@@ -1,15 +1,15 @@
 // Optional, user-controlled sound layer. No audio context is created until a
 // player interaction, so browsers never need to autoplay or request permission.
+function defaultContextFactory() {
+  const AudioContext = globalThis.window?.AudioContext || globalThis.window?.webkitAudioContext;
+  return AudioContext ? new AudioContext() : null;
+}
+
 export function createGameAudio({ contextFactory = defaultContextFactory, random = Math.random } = {}) {
   let context = null;
   let enabled = false;
   let ambience = null;
   let ambienceBuffer = null;
-
-  function defaultContextFactory() {
-    const AudioContext = globalThis.window?.AudioContext || globalThis.window?.webkitAudioContext;
-    return AudioContext ? new AudioContext() : null;
-  }
 
   function stopAmbience() {
     if (!ambience) return;

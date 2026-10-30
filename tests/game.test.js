@@ -308,6 +308,12 @@ test("optional harbor ambience is lazy, user-controlled, and stops when muted", 
   assert.equal(audio.isEnabled(), false);
 });
 
+test("default audio factory safely handles browsers without Web Audio", () => {
+  const audio = createGameAudio();
+  audio.setEnabled(true);
+  assert.equal(audio.playTone("tap"), false);
+});
+
 test("legacy 30-night ending saves resume at night 31 with a live world", () => {
   const migrated = normalizeState({ day: 30, phase: "ending", endingId: "harbor-icon", coins: 700 });
   assert.equal(migrated.day, 31);
