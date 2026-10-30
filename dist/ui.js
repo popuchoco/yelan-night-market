@@ -67,7 +67,7 @@ export function createUI(runtime) {
 
   const engagementRenderer = createEngagementRenderer({
     state, CAMPAIGN_DAYS, campaignCycleDay,
-    fixedOperatingCost: ledgerFixedOperatingCost, createLedger, getStory: todayStory,
+    getStory: todayStory,
     money, moneyNet, button, el, append, helper
   });
 
@@ -439,13 +439,15 @@ export function createUI(runtime) {
       subhead("新的一週・經營方向", "第 " + state.day + " 夜開始前", true),
       helper("每完成七夜結算一次週轉工作底稿；下一週可擴店、招募人手、併購、培養分店店長或保留現金。店長接手日常營運，總部只需決定重大事件。", "helper-copy manager-intro"));
     const summary = el("div", "decision-summary");
-    append(summary, el("span", "", "可用現金"), el("b", "", money(state.coins)),
-      el("span", "", "目前每夜固定營運成本"), el("b", "", money(fixedOperatingCost(createLedger()))));
     const currentFixedCost = engagementRenderer.currentFixedCost();
+    append(summary, el("span", "", "可用現金"), el("b", "", money(state.coins)),
+      el("span", "", "目前每夜固定承諾"), el("b", "", money(currentFixedCost)));
     const runway = currentFixedCost > 0 ? Math.floor(Number(state.coins) / currentFixedCost) : null;
-    if (runway !== null) append(summary, el("span", "", "固定支出可支應"), el("b", runway <= 5 ? "decision-runway-tight" : "", runway + " 夜"));
-    if (runway !== null) summary.append(el("span", "decision-runway-note", "估算未含補貨、事件及浮動人事支出。"));
+    if (runway !== null) append(summary, el("span", "", "現金固定承諾續航"), el("b", runway <= 5 ? "decision-runway-tight" : "", runway + " 夜"));
+    if (runway !== null) summary.append(el("span", "decision-runway-note", "含月保費按 30 夜攤提；未含補貨、天候／稽查事件、事故處置與一次性支出。"));
     decision.append(summary);
+    const riskRecap = engagementRenderer.riskChainRecap();
+    if (riskRecap) decision.append(riskRecap);
     const finance = el("section", "finance-panel");
     const debt = Number(state.loanPrincipal) || 0;
     const interest = debt ? createLedger().interest : 0;

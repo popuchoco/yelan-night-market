@@ -16,6 +16,7 @@ import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS, evaluateAchievements, normalizeAc
 import { WEEKLY_FOCUSES, createWeeklyFocus, getLegacyWeeklyFocus, getWeeklyFocusIdForDecision, normalizeWeeklyFocus, recordWeeklyFocusProgress, resolveWeeklyFocus } from "../dist/progression.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
+  knownRecurringOperatingCost,
   captureStateSnapshot, loadState, loadStateResult, normalizeState, restoreStateSnapshot,
   saveState, saveStateResult, clearSavedProgress, SAVE_SCHEMA_VERSION,
   todayEvent, todayMarketCard, todayStory, ledgerIncome, ledgerNet
@@ -1060,8 +1061,74 @@ test("new-period recap links to the prior report and weekly investment previews 
     };
     collect(overview);
     assert.ok(previews.length > 0);
-    assert.ok(previews.some((preview) => preview.children.some((child) => /投資後已知每夜固定成本/.test(child.textContent || ""))));
+    assert.ok(previews.some((preview) => preview.children.some((child) => /投資後每夜固定承諾/.test(child.textContent || ""))));
+    assert.ok(previews.some((preview) => preview.children.some((child) => /接下來 7 夜約增加/.test(child.textContent || ""))));
+    assert.ok(previews.some((preview) => preview.children.some((child) => /新增同額每夜貢獻/.test(child.textContent || ""))));
     assert.ok(previews.some((preview) => preview.children.some((child) => /本週焦點預覽/.test(child.textContent || ""))));
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
+});
+
+test("growth commitment estimate excludes one-off event costs and includes persistent branch costs", () => {
+  const state = freshState();
+  const baseline = knownRecurringOperatingCost(state);
+  state.day = 27;
+  state.marketChoiceDay = 27;
+  state.marketCardChoice = "buy-ad";
+  assert.equal(createLedger(state).marketing, DATA.economy.paidAdCost);
+  assert.equal(knownRecurringOperatingCost(state), baseline);
+
+  state.expansions = 1;
+  assert.equal(knownRecurringOperatingCost(state), baseline + 24);
+  state.hiredCrew = 1;
+  assert.equal(knownRecurringOperatingCost(state), baseline + 24 + 90);
+  state.acquisitions = 1;
+  state.outlets.push({ id: "acquired-1", name: "港口炸物・分店 1", type: "fish", tier: "mobile", active: false,
+    manager: false, accidentCoverage: false, equipmentLevel: 0, safety: { fire: 0, ventilation: 0, coldStorage: 0 } });
+  const inactiveBranchCost = knownRecurringOperatingCost(state);
+  assert.equal(inactiveBranchCost, baseline + 24 + 90 + 38);
+  state.outlets[1].active = true;
+  assert.equal(knownRecurringOperatingCost(state), inactiveBranchCost + DATA.economy.outletUtilities);
+});
+
+test("weekly risk recap connects recent incidents, effective coverage, and pending claim collection", () => {
+  const priorDocument = globalThis.document;
+  const makeNode = (tagName) => ({
+    tagName, children: [], dataset: {}, attributes: {}, style: {},
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  });
+  globalThis.document = { createElement: makeNode, createDocumentFragment: () => makeNode("#fragment") };
+  try {
+    const state = freshState();
+    state.day = 31;
+    state.phase = "decision";
+    state.outlets[0].tier = "fixed";
+    state.outlets[0].accidentCoverage = true;
+    state.insuranceSnapshot = { periodStartDay: 31, outlets: [{ outletId: "main", employees: 3,
+      perEmployee: { accident: 24, labor: 0, health: 0 }, covered: { accident: true, product: true, public: false } }] };
+    state.journal = [{ day: 30, safetyIncident: { title: "切菜備料意外", claim: 58 } }];
+    state.insuranceClaims = [{ incidentId: "knife-cut", description: "切菜備料意外", amount: 58, payoutDay: 33, status: "receivable" }];
+    const overview = createUI({ state, saveState() {} }).renderOverview();
+    const find = (node, className) => {
+      if (node.className === className || node.className?.split(/\s+/).includes(className)) return node;
+      for (const child of node.children || []) {
+        const found = find(child, className);
+        if (found) return found;
+      }
+      return null;
+    };
+    const risk = find(overview, "risk-chain-card");
+    assert.ok(risk);
+    const textContent = (node) => [node.textContent || "", ...(node.children || []).map(textContent)].join(" ");
+    const text = textContent(risk);
+    assert.match(text, /切菜備料意外/);
+    assert.match(text, /待收/);
+    assert.match(text, /第 33 夜/);
+    assert.match(text, /本期已生效 2 \/ 2 項適用保障/);
+    assert.match(text, /下期保費估算/);
   } finally {
     if (priorDocument === undefined) delete globalThis.document;
     else globalThis.document = priorDocument;
@@ -1114,9 +1181,23 @@ test("extracted journal renderer builds DOM nodes for daily and monthly views", 
     createDocumentFragment: () => makeNode("#fragment")
   };
   try {
-    const ui = createUI({ state: freshState(), saveState() { return true; } });
+    const state = freshState();
+    state.day = 2;
+    state.accounting.journal = [{ day: 1, description: "理賠收款", lines: [] }];
+    state.journal = [{ day: 1, title: "港邊的晚風", event: "潮汐", choice: "把紙船放回港灣", net: 0,
+      claimSettlements: [{ title: "切菜備料意外", amount: 58, story: "刀具歸位列入班前檢查。" }] }];
+    const ui = createUI({ state, saveState() { return true; } });
     const daily = ui.renderJournalReport();
     assert.equal(daily.children[0].children[0].textContent, "前一日・日記簿");
+    const find = (node, className) => {
+      if (node.className === className || node.className?.split(/\s+/).includes(className)) return node;
+      for (const child of node.children || []) {
+        const found = find(child, className);
+        if (found) return found;
+      }
+      return null;
+    };
+    assert.match(find(daily, "claim-settlement-note").textContent, /理賠後續.*刀具歸位/);
     ui.setJournalView("monthly");
     const monthly = ui.renderJournalReport();
     assert.equal(monthly.children[0].children[0].textContent, "每三十夜・綜合財務報表");

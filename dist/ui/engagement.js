@@ -1,10 +1,12 @@
 import { ACHIEVEMENTS } from "../achievements.js";
 import { getDailyCashbookSummary } from "../accounting.js";
+import { hasCurrentCoverage, getMonthlyInsurance, monthlyInsuranceTotals } from "../safety.js";
+import { knownRecurringOperatingCost } from "../state.js";
 import { getWeeklyFocusDefinition, getWeeklyFocusIdForDecision } from "../progression.js";
 
 /** Small, read-only feedback surfaces that connect night, week, and period loops. */
 export function createEngagementRenderer({
-  state, CAMPAIGN_DAYS, campaignCycleDay, fixedOperatingCost, createLedger,
+  state, CAMPAIGN_DAYS, campaignCycleDay,
   getStory, money, moneyNet, button, el, append, helper
 }) {
   function previousNightRecap() {
@@ -90,9 +92,78 @@ export function createEngagementRenderer({
     return section;
   }
 
+  function riskChainRecap() {
+    if (state.phase !== "decision") return null;
+    const day = Math.max(1, Number(state.day) || 1);
+    const recentIncidents = (Array.isArray(state.journal) ? state.journal : [])
+      .filter((entry) => Number(entry?.day) >= day - 7 && Number(entry?.day) < day && entry?.safetyIncident?.title);
+    const pendingClaims = (Array.isArray(state.insuranceClaims) ? state.insuranceClaims : [])
+      .filter((claim) => claim?.status === "receivable" && Number(claim.amount) > 0);
+    const claimTotal = pendingClaims.reduce((sum, claim) => sum + Math.max(0, Number(claim.amount) || 0), 0);
+    const nextClaimDay = pendingClaims.length
+      ? Math.min(...pendingClaims.map((claim) => Math.max(1, Number(claim.payoutDay) || day))) : null;
+    const cycleStart = Math.floor((day - 1) / CAMPAIGN_DAYS) * CAMPAIGN_DAYS + 1;
+    const snapshotReady = Number(state.insuranceSnapshot?.periodStartDay) === cycleStart;
+    const expectedPolicies = [];
+    (Array.isArray(state.outlets) ? state.outlets : []).forEach((outlet) => {
+      const coverage = getMonthlyInsurance(state, outlet);
+      const prefix = outlet?.name || "店面";
+      if (coverage.mandatoryEmployerCoverage) {
+        expectedPolicies.push({ outlet, policy: "accident", label: prefix + "・職災" });
+        expectedPolicies.push({ outlet, policy: "labor", label: prefix + "・勞保" });
+        expectedPolicies.push({ outlet, policy: "health", label: prefix + "・健保" });
+      } else if (coverage.accident > 0) {
+        expectedPolicies.push({ outlet, policy: "accident", label: prefix + "・雇主職災加保" });
+      }
+      if (coverage.product > 0) expectedPolicies.push({ outlet, policy: "product", label: prefix + "・產品責任" });
+      if (coverage.public > 0) expectedPolicies.push({ outlet, policy: "public", label: prefix + "・公共意外" });
+    });
+    const snapshotOutlet = (outletId) => (state.insuranceSnapshot?.outlets || []).find((item) => item.outletId === outletId);
+    const policyCovered = (outlet, policy) => {
+      if (!snapshotReady) return false;
+      if (policy === "labor" || policy === "health") {
+        return Number(snapshotOutlet(outlet.id)?.perEmployee?.[policy]) > 0;
+      }
+      return hasCurrentCoverage(state, outlet.id, policy);
+    };
+    const coveredCount = expectedPolicies.filter((item) => policyCovered(item.outlet, item.policy)).length;
+    const gaps = expectedPolicies.filter((item) => !policyCovered(item.outlet, item.policy)).map((item) => item.label);
+    const premium = monthlyInsuranceTotals(state).total;
+    const section = el("section", "risk-chain-card", null, { "aria-label": "營運風險與保險追蹤" });
+    append(section,
+      el("span", "risk-chain-kicker", "本週風險線索"),
+      el("h3", "", "事故、保障與理賠會跨夜延續"));
+    const metrics = el("div", "risk-chain-metrics");
+    const incidentMetric = el("div", "risk-chain-metric", null, { "aria-label": "近七夜事故" });
+    const claimsMetric = el("div", "risk-chain-metric", null, { "aria-label": "待收理賠" });
+    const premiumMetric = el("div", "risk-chain-metric", null, { "aria-label": "下期保費估算" });
+    const incidentText = recentIncidents.length
+      ? recentIncidents.slice(0, 2).map((entry) => "第 " + entry.day + " 夜・" + entry.safetyIncident.title).join("；")
+      : "近 7 夜沒有重大安全事件";
+    const claimText = pendingClaims.length
+      ? pendingClaims.length + " 件・待收 " + money(claimTotal) + "・最近預計第 " + nextClaimDay + " 夜入帳"
+      : "目前沒有待收理賠款";
+    append(incidentMetric, el("span", "", "近 7 夜"), el("b", "", incidentText));
+    append(claimsMetric, el("span", "", "理賠追蹤"), el("b", "", claimText));
+    append(premiumMetric, el("span", "", "下期保費估算"), el("b", "", money(premium) + " / 期"));
+    append(metrics, incidentMetric, claimsMetric, premiumMetric);
+    section.append(metrics);
+    let coverageText;
+    if (!expectedPolicies.length) coverageText = "目前沒有雇主或第三人責任保費項目；流動／固定攤位未由雇主加保的員工仍須自行安排保障。";
+    else if (!snapshotReady) coverageText = "本期保障快照尚未建立；首夜開門時會依當時攤型、人力與保單確認。";
+    else if (gaps.length) coverageText = "本期已生效 " + coveredCount + " / " + expectedPolicies.length + " 項適用保障；尚未生效：「" + gaps.join("、") + "」。保單異動於下期首夜重新確認。";
+    else coverageText = "本期已生效 " + coveredCount + " / " + expectedPolicies.length + " 項適用保障；保費不會消除事故、清消停業或口碑影響。";
+    section.append(el("p", "risk-chain-coverage", coverageText));
+    section.append(el("p", "risk-chain-note", recentIncidents.length
+      ? "手記會留下處置，理賠款則在核認後延後入帳；口碑、熟客與食安恢復仍按各自規則變化。"
+      : "安全設備降低部分事故機率，保單協助分攤合格處置費；兩者都不能讓風險歸零。"));
+    return section;
+  }
+
   function investmentPreview(option, cost, capped, insufficient, currentFixedCost) {
     const projectedCash = Math.max(0, Number(state.coins) - (Number(cost) || 0));
-    const projectedFixed = Math.max(0, currentFixedCost) + (Number(option.recurring) || 0);
+    const addedRecurring = Math.max(0, Number(option.recurring) || 0);
+    const projectedFixed = Math.max(0, currentFixedCost) + addedRecurring;
     const projectedRunway = projectedFixed > 0 ? Math.floor(projectedCash / projectedFixed) : null;
     const preview = el("p", "decision-preview" + (projectedRunway !== null && projectedRunway <= 5 ? " is-tight" : ""));
     if (capped) preview.textContent = "目前場景已達容量，無法再投入。";
@@ -100,8 +171,13 @@ export function createEngagementRenderer({
     else {
       const focus = getWeeklyFocusDefinition(getWeeklyFocusIdForDecision(option.id));
       append(preview,
-        el("span", "", "投資後已知每夜固定成本約 " + money(projectedFixed)),
-        el("span", "", projectedRunway === null ? "目前固定成本為 0" : "以目前現金推估可支應約 " + projectedRunway + " 夜"),
+        el("span", "", "投資後每夜固定承諾約 " + money(projectedFixed) + "（月保費按 30 夜攤提）"),
+        el("span", "", addedRecurring
+          ? "每夜新增 " + money(addedRecurring) + "；接下來 7 夜約增加 " + money(addedRecurring * 7) + " 固定支出"
+          : "不增加每夜固定支出"),
+        ...(addedRecurring ? [el("span", "", "至少需新增同額每夜貢獻才能打平固定成本；尚未扣食材與事件費。") ] : []),
+        ...(projectedRunway === null ? [] : [el("span", "", "扣除一次性投入後，現金按固定承諾估算可支應約 " + projectedRunway + " 夜")]),
+        ...(option.id === "acquire" ? [el("span", "", "分店開門後另加每日能源費；店長薪資與升級／保險依實際安排計入。") ] : []),
         ...(focus ? [el("span", "", "本週焦點預覽：" + focus.title + "・0 / " + focus.target)] : []));
     }
     return preview;
@@ -112,7 +188,8 @@ export function createEngagementRenderer({
     recoveryNotice,
     periodOpeningRecap,
     weeklyMilestoneRecap,
-    currentFixedCost: () => Math.max(0, fixedOperatingCost(createLedger())),
+    riskChainRecap,
+    currentFixedCost: () => knownRecurringOperatingCost(state),
     investmentPreview
   };
 }

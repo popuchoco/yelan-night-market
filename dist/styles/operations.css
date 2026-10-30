@@ -46,6 +46,18 @@
 .weekly-milestone-recap { border-color: #8fbd9666; background: #7eaf8c12; }
 .weekly-milestone-recap p { margin: 0; color: #d8e5d4; font-size: var(--type-caption); line-height: 1.55; }
 .recovery-notice { border-color: #d59a7077; color: #f2d4bb; background: #9e563d18; font-size: var(--type-caption); font-weight: 750; line-height: 1.55; }
+.risk-chain-card { display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid #98b39a55; border-radius: 12px; background: linear-gradient(145deg,#223330,#1a2827); }
+.risk-chain-kicker { color: #c2d6b8; font-size: var(--type-caption); font-weight: 850; }
+.risk-chain-card h3 { margin: 0; color: #eee4c9; font-size: var(--type-body); line-height: 1.4; }
+.risk-chain-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-1); }
+.risk-chain-metric { display: grid; align-content: start; gap: 4px; min-width: 0; padding: var(--space-2); border: 1px solid #ffffff14; border-radius: 8px; background: #0e18184d; }
+.risk-chain-metric:last-child { grid-column: 1 / -1; }
+.risk-chain-metric span { color: #adbdad; font-size: 11px; }
+.risk-chain-metric b { color: #e5e9d7; font-size: var(--type-caption); line-height: 1.45; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.risk-chain-coverage, .risk-chain-note { margin: 0; color: #c9d3c5; font-size: var(--type-caption); line-height: 1.5; }
+.risk-chain-coverage { color: #e7d9ae; }
+.risk-chain-note { color: #aebcae; }
+.claim-settlement-note { padding-left: var(--space-2); border-left: 2px solid #93b79c; color: #c5d8c4 !important; }
 .decision-preview { display: grid; gap: 3px; margin: 0; padding: var(--space-2); border-left: 2px solid #9bb69a; border-radius: 4px; color: #c9d3c5; background: #7ea5860d; font-size: var(--type-caption); line-height: 1.45; }
 .decision-preview.is-tight { border-color: #d99b74; color: #f0c9ae; background: #a4503012; }
 .decision-runway-tight { color: #f0c4a7 !important; }
@@ -241,6 +253,8 @@
   .night-recap-metrics { gap: 5px; }
   .night-recap-metric { padding: 7px; }
   .night-recap-metric b { font-size: 12px; }
+  .risk-chain-metrics { grid-template-columns: 1fr; }
+  .risk-chain-metric:last-child { grid-column: auto; }
   .achievement-progress-line { grid-template-columns: 1fr; gap: 4px; }
 }
 

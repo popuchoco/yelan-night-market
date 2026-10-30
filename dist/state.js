@@ -1,5 +1,5 @@
 import { DATA, createOutletInventory, getOutletProduct, outletAvailableStock, outletRetailPrice } from "./data.js";
-import { ACQUISITION_TYPES, CAMPAIGN_DAYS, acquisitionGroupCounts, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
+import { ACQUISITION_TYPES, CAMPAIGN_DAYS, WEEKLY_OPTIONS, acquisitionGroupCounts, campaignEntry, campaignCycleDay, isWeeklyDecisionDay, marketCardForDay } from "./campaign.js";
 import { createAccountingState, ensureAccounting } from "./accounting.js";
 import { getMonthlyInsurance, getOutletCapacity, getOutletTier, getTierDailyUtilities, getTierReadiness, isInsuranceBillingDay, monthlyInsuranceTotals } from "./safety.js";
 import { createAchievementState, normalizeAchievementState } from "./achievements.js";
@@ -548,6 +548,29 @@ export function fixedOperatingCost(ledger) {
     (ledger.insuranceHealth || 0) + (ledger.insuranceProduct || 0) + (ledger.insurancePublic || 0) +
     (ledger.water || 0) + ledger.electricity + ledger.gas + (ledger.fees || 0) +
     (ledger.marketing || 0) + (ledger.preparation || 0) + (ledger.interest || 0);
+}
+
+/**
+ * A stable nightly commitment estimate for weekly growth decisions.
+ * Unlike the current-night ledger, it excludes one-off weather, inspection,
+ * promotion, and cleanup costs; monthly premiums are spread over 30 nights.
+ */
+export function knownRecurringOperatingCost(state) {
+  const economy = DATA.economy;
+  const hood = Math.max(0, Number(state.equipment?.hood) || 0);
+  const outlets = Array.isArray(state.outlets) ? state.outlets : [];
+  const activeBranches = outlets.filter((outlet) => outlet && outlet.id !== "main" && outlet.active).length;
+  const insurancePerNight = monthlyInsuranceTotals(state).total / CAMPAIGN_DAYS;
+  const ledger = createLedger(state);
+  const total = economy.rent + (Number(state.expansions) || 0) * WEEKLY_OPTIONS.expand.recurring +
+    (Number(state.acquisitions) || 0) * WEEKLY_OPTIONS.acquire.recurring +
+    staffCost(state) + outlets.filter((outlet) => outlet?.manager).length * economy.managerWage +
+    activeBranches * economy.outletUtilities + getTierDailyUtilities(state) +
+    Math.max(economy.minWater, economy.water) +
+    Math.max(economy.minElectricity, economy.electricity - hood * economy.hoodElectricitySavings) +
+    Math.max(economy.minGas, economy.gas - hood * economy.hoodGasSavings) + insurancePerNight +
+    (Number(ledger.interest) || 0);
+  return Math.max(0, Math.round(total));
 }
 
 export function ledgerCosts(ledger) {

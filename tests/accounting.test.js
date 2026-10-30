@@ -450,6 +450,12 @@ test("insured workplace accidents pause service, book treatment and receivable, 
   assert.equal(state.ledger.insuranceClaimReceipts, 58);
   assert.equal(state.accounting.balances["1210"], 0);
   assert.equal(state.accounting.balances["1000"], state.coins);
+  state.phase = "report";
+  state.reportChoice = "paperboat";
+  assert.equal(engine.nextNight().ok, true);
+  assert.equal(state.journal[0].claimSettlements.length, 1);
+  assert.equal(state.journal[0].claimSettlements[0].amount, 58);
+  assert.match(state.journal[0].claimSettlements[0].story, /刀具歸位/);
 });
 
 test("fixed food outlet contamination recalls the affected dish and records a product claim", () => {

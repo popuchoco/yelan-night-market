@@ -137,7 +137,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     state.selectedDish = menu.length ? menu[(state.day - 1) % menu.length].index : 0;
   }
 
-  const { rollSafetyIncident, applyPromotionOutcome, resolveClosingSurprises } = createEventActions({ state, randomUnit });
+  const { rollSafetyIncident, applyPromotionOutcome, resolveClosingSurprises, claimSettlementNotes } = createEventActions({ state, randomUnit });
 
   function openDoors() {
     if (state.phase !== "prep") return response(false, "現在不是開門準備時段。");
@@ -498,6 +498,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
         affectedDishName: state.safetyIncident.affectedDishName || null,
         dishRecall: !!state.safetyIncident.dishRecall, shutdown: !!state.safetyIncident.shutdown
       } : null,
+      claimSettlements: claimSettlementNotes(finishedDay),
       closingEvents,
       promotionOutcome: state.marketCardOutcome?.summary || null,
       recipesUnlocked: (Array.isArray(state.recipeLog) ? state.recipeLog : [])

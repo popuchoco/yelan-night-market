@@ -87,6 +87,9 @@ export function createReportRenderer(runtime) {
         story.append(el("p", "", "安全事件：" + incident.title + "・處置 " + money(incident.expense) +
           (incident.claim ? "・理賠應收 " + money(incident.claim) : "・店家自行負擔")));
       }
+      if (narrative.claimSettlements?.length) narrative.claimSettlements.forEach((settlement) => {
+        story.append(el("p", "claim-settlement-note", "理賠後續・" + settlement.title + "・收回 " + money(settlement.amount) + "。" + settlement.story));
+      });
       if (narrative.recipesUnlocked?.length) {
         const names = narrative.recipesUnlocked.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean);
         if (names.length) story.append(el("p", "", "熟客秘笈／升級菜色免費解鎖：" + names.join("、")));
@@ -285,6 +288,9 @@ export function createReportRenderer(runtime) {
       if (entry.closingEvents?.length) entry.closingEvents.forEach((event) => item.append(el("p", "", "打烊事件：" + event.message)));
       if (entry.safetyIncident) item.append(el("p", "", "安全事件：" + entry.safetyIncident.title + "・處置 " +
         money(entry.safetyIncident.expense) + (entry.safetyIncident.claim ? "・理賠應收 " + money(entry.safetyIncident.claim) : "・店家自行負擔")));
+      if (entry.claimSettlements?.length) entry.claimSettlements.forEach((settlement) => {
+        item.append(el("p", "claim-settlement-note", "理賠後續・" + settlement.title + "・收回 " + money(settlement.amount) + "。" + settlement.story));
+      });
       if (entry.recipesUnlocked?.length) {
         const names = entry.recipesUnlocked.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean);
         if (names.length) item.append(el("p", "", "免費解鎖：" + names.join("、")));

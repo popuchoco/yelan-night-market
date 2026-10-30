@@ -4,6 +4,19 @@ import { getUnlockedDishes, marketCardChoice, money, todayMarketCard } from "../
 import { postJournal, recordCashVariance, recordExpense, recordRefund, recordSale } from "../accounting.js";
 
 export function createEventActions({ state, randomUnit }) {
+  function claimSettlementNotes(day) {
+    const settled = (Array.isArray(state.insuranceClaims) ? state.insuranceClaims : [])
+      .filter((claim) => claim?.status === "collected" && Number(claim.collectionDay) === Number(day));
+    return settled.map((claim) => {
+      const incident = DATA.safetyIncidents.find((item) => item.id === claim.incidentId);
+      return {
+        title: String(claim.description || incident?.title || "營運事故"),
+        amount: Math.max(0, Math.round(Number(claim.amount) || 0)),
+        story: incident?.claimSettlementStory || "理賠款已收回；後續改善事項留在夜市交班紀錄。"
+      };
+    });
+  }
+
   function rollSafetyIncident() {
     state.safetyIncident = null;
     state.recalledDishIds = [];
@@ -134,5 +147,5 @@ export function createEventActions({ state, randomUnit }) {
     return resolved;
   }
 
-  return { rollSafetyIncident, applyPromotionOutcome, resolveClosingSurprises };
+  return { rollSafetyIncident, applyPromotionOutcome, resolveClosingSurprises, claimSettlementNotes };
 }
