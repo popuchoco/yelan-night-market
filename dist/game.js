@@ -843,7 +843,7 @@ export function boot() {
   } else if (loadedSave.status === "unsupported-version") {
     toast("這份存檔由較新版建立；目前先保留原檔，不會覆寫。");
   } else if (loadedSave.status === "unavailable") {
-    toast("瀏覽器目前無法使用本機儲存，這次進度無法存檔。");
+    toast("瀏覽器本機儲存目前不可用，這次進度無法存檔。");
   }
   requestAnimationFrame(frame);
 }
