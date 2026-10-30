@@ -723,7 +723,7 @@ export function boot() {
       }
       if (result.ok) playTone("success");
     }
-    if (["orbit-left", "orbit-right", "tilt-up", "tilt-down", "zoom-in", "zoom-out", "camera-reset"].includes(action)) scene.cameraAction(action);
+    if (["orbit-left", "orbit-right", "tilt-up", "tilt-down", "zoom-in", "zoom-out", "pan-left", "pan-right", "pan-up", "pan-down", "camera-reset"].includes(action)) scene.cameraAction(action);
     if (action === "toggle-pause") {
       if (scene.motionReduced) { toast("夜市動畫已依系統設定降低動態效果。"); return; }
       const paused = scene.togglePause();
@@ -787,11 +787,13 @@ export function boot() {
   scene.canvas.addEventListener("keydown", (event) => {
     const actions = {
       ArrowLeft: "orbit-left", ArrowRight: "orbit-right", ArrowUp: "tilt-up", ArrowDown: "tilt-down",
+      w: "pan-up", a: "pan-left", s: "pan-down", d: "pan-right",
       "+": "zoom-in", "=": "zoom-in", "-": "zoom-out"
     };
-    if (actions[event.key]) {
+    const pressedKey = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    if (actions[pressedKey]) {
       event.preventDefault();
-      scene.cameraAction(actions[event.key]);
+      scene.cameraAction(actions[pressedKey]);
       return;
     }
     if (event.key === "Enter" || event.key === " ") {

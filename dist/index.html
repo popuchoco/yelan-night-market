@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111b1d">
-  <meta name="description" content="夜嵐夜市是一款台灣港邊主題的 2.5D 斜視角經營模擬遊戲。每日營運串連每週經營焦點與 30 夜財報回顧；逐級發展流動攤販、固定攤販與大排檔，管理分店、人員、保險與營運事件。">
+  <meta name="description" content="夜嵐夜市是一款台灣港邊主題的 2.5D 斜視角經營模擬遊戲。經營進度逐步開放有限相機探索；每日營運串連每週經營焦點與 30 夜財報回顧，發展攤型、分店、人員、保險與場景。">
   <title>夜嵐夜市 — 2.5D 港邊經營模擬</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -25,7 +25,7 @@
     </header>
     <main class="game-layout">
       <section class="world-frame camera-collapsed" aria-label="夜嵐夜市 2.5D 斜俯視經營場景">
-        <canvas id="worldCanvas" tabindex="0" role="img" aria-describedby="sceneHelp" aria-keyshortcuts="Enter Space ArrowLeft ArrowRight + -" aria-label="可旋轉夜市地圖；鍵盤聚焦後按 Enter 或空白鍵開啟攤位工作台，左右方向鍵旋轉視角，上下方向鍵調整角度，正負鍵縮放"></canvas>
+        <canvas id="worldCanvas" tabindex="0" role="img" aria-describedby="sceneHelp" aria-keyshortcuts="Enter Space ArrowLeft ArrowRight ArrowUp ArrowDown W A S D + -" aria-label="夜市地圖；滑鼠拖曳旋轉，Shift 或右鍵拖曳平移，滾輪縮放；聚焦後方向鍵旋轉與俯仰、WASD 平移、正負鍵縮放，Enter 或空白鍵開啟攤位工作台"></canvas>
         <div class="world-top-left">
           <span class="world-eyebrow">NORTH COAST ｜ DISTRICT 09</span>
           <strong class="world-title">潮聲近了，準備開門嗎？</strong>
@@ -61,14 +61,18 @@
               <button class="icon-button" data-action="orbit-left" aria-label="將相機往左旋轉 45 度">⟲</button>
               <button class="icon-button" data-action="tilt-up" aria-label="相機抬高">⌃</button>
               <button class="icon-button" data-action="tilt-down" aria-label="相機降低">⌄</button>
+              <button class="icon-button" data-action="orbit-right" aria-label="將相機往右旋轉 45 度">⟳</button>
               <button class="icon-button" data-action="zoom-out" aria-label="縮小">−</button>
               <button class="icon-button" data-action="zoom-in" aria-label="放大">+</button>
+              <button class="icon-button" data-action="pan-up" aria-label="將夜市畫面往上平移">↑</button>
               <button class="icon-button" data-action="camera-reset" aria-label="重設相機">◎</button>
-              <button class="icon-button" data-action="orbit-right" aria-label="將相機往右旋轉 45 度">⟳</button>
+              <button class="icon-button" data-action="pan-left" aria-label="將夜市畫面往左平移">←</button>
+              <button class="icon-button" data-action="pan-down" aria-label="將夜市畫面往下平移">↓</button>
+              <button class="icon-button" data-action="pan-right" aria-label="將夜市畫面往右平移">→</button>
             </div>
           </div>
         </div>
-        <div class="world-hint" id="sceneHelp"><b>操作：</b>拖曳旋轉・滾輪縮放・Enter 開攤</div>
+        <div class="world-hint" id="sceneHelp"><b>操作：</b><span class="scene-hint-desktop">拖曳旋轉・Shift／右鍵拖曳或 WASD 平移・滾輪縮放・Enter 開攤</span><span class="scene-hint-mobile">拖曳旋轉・右上角調整視角・Enter 開攤</span></div>
         <div class="world-actions">
           <button class="world-action" data-action="open-stall">⌂ 攤位管理</button>
           <button class="world-action" data-action="open-main-stock">◈ 店面備料</button>

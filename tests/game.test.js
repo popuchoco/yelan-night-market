@@ -8,7 +8,7 @@ import { closeDepreciation, CHART_OF_ACCOUNTS, getDailyCashbookSummary, postJour
 import { boot, createGameEngine } from "../dist/game.js";
 import { createGameAudio } from "../dist/audio.js";
 import { createUI } from "../dist/ui.js";
-import { applyCameraAction, getFootprintDepth } from "../dist/scene.js";
+import { applyCameraAction, getCameraProfile, getFootprintDepth } from "../dist/scene.js";
 import { getStallVisualProfile, splitStallSupportPosts } from "../dist/scene/objects.js";
 import { createRevenueRenderer, getRevenueBreakdown } from "../dist/scene/revenue.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
@@ -416,6 +416,51 @@ test("camera operations clamp tilt and zoom and support reset", () => {
   assert.deepEqual(applyCameraAction(zoomed, "camera-reset"), initial);
 });
 
+test("camera exploration range follows owned growth and pan remains bounded", () => {
+  const state = freshState();
+  const viewport = { width: 1000, height: 600 };
+  const starter = getCameraProfile(state, viewport);
+  assert.equal(starter.level, 0);
+  assert.equal(starter.minZoom, DATA.camera.minZoom);
+  assert.ok(starter.panX > 0 && starter.panY > 0);
+
+  state.expansions = 1;
+  const firstGrowth = getCameraProfile(state, viewport);
+  assert.equal(firstGrowth.level, 1);
+  assert.ok(firstGrowth.minZoom < starter.minZoom);
+  assert.ok(firstGrowth.panX > starter.panX);
+
+  state.expansions = 2;
+  state.outlets.push({ id: "branch-fish", type: "fish", name: "港口炸物" });
+  const developed = getCameraProfile(state, viewport);
+  assert.equal(developed.level, 2);
+  assert.ok(developed.minZoom < firstGrowth.minZoom);
+  assert.ok(developed.panY > firstGrowth.panY);
+
+  const initial = { yaw: 0, elevation: DATA.camera.defaultElevation, zoom: 1, panX: 0, panY: 0 };
+  let camera = initial;
+  for (let i = 0; i < 12; i++) camera = applyCameraAction(camera, "pan-left", developed);
+  assert.equal(camera.panX, -developed.panX);
+  for (let i = 0; i < 24; i++) camera = applyCameraAction(camera, "pan-down", developed);
+  assert.equal(camera.panY, developed.panY);
+  for (let i = 0; i < 20; i++) camera = applyCameraAction(camera, "zoom-out", developed);
+  assert.equal(camera.zoom, developed.minZoom);
+  assert.deepEqual(applyCameraAction(camera, "camera-reset", developed), initial);
+});
+
+test("camera exploration profile also expands from acquired outlets without persisted camera data", () => {
+  const state = freshState();
+  const viewport = { width: 400, height: 700 };
+  const initial = getCameraProfile(state, viewport);
+  state.outlets.push({ id: "branch-fish", type: "fish", name: "港口炸物" });
+  const acquired = getCameraProfile(state, viewport);
+  assert.equal(acquired.level, 1);
+  assert.ok(acquired.minZoom < initial.minZoom);
+  assert.ok(acquired.panX > initial.panX);
+  assert.ok(acquired.panY > initial.panY);
+  assert.equal(Object.hasOwn(state, "camera"), false);
+});
+
 test("scene depth sorting uses camera-facing footprint edges and reorders stall supports after orbit", () => {
   const depthBySum = (x, z) => x + z;
   assert.equal(getFootprintDepth({ x: 10, z: 20, w: 30, d: 40 }, depthBySum), 100);
@@ -808,11 +853,20 @@ test("DOM helpers, modular engine and scene renderers remain in place", async ()
   assert.match(scene, /createEffectRenderer/);
   assert.match(scene, /createRevenueRenderer/);
   assert.match(scene, /revenueRenderer\.draw\(time, paused \|\| motionReduced\)/);
+  assert.match(scene, /function drawFarPort\(/);
+  assert.match(scene, /function drawTerritoryBoundary\(/);
+  assert.match(scene, /getCameraProfile\(state, view\)/);
+  assert.match(scene, /pointer\.mode === "pan"/);
   assert.match(objects, /drawStall/);
   assert.match(effects, /createEffectRenderer/);
   assert.match(revenue, /getRevenueBreakdown/);
   assert.match(revenue, /eventAnchor\(pulse\.outletId\)/);
   assert.match(html, /id="worldCanvas" tabindex="0"/);
+  assert.match(html, /data-action="pan-up" aria-label="將夜市畫面往上平移"/);
+  assert.match(html, /data-action="pan-left" aria-label="將夜市畫面往左平移"/);
+  assert.match(html, /class="scene-hint-desktop">拖曳旋轉・Shift／右鍵拖曳或 WASD 平移/);
+  assert.match(html, /class="scene-hint-mobile">拖曳旋轉・右上角調整視角/);
+  assert.match(html, /Shift 或右鍵拖曳平移/);
   assert.match(html, /class="revenue-plaque cashbook-plaque" id="revenuePlaque"/);
   assert.match(html, /昨夜現金簿/);
   assert.match(html, /現金收入 <b id="revenueIncome">/);
@@ -854,6 +908,11 @@ test("DOM helpers, modular engine and scene renderers remain in place", async ()
   assert.match(game, /state\.phase !== "prep" \|\| revenueDismissedDay === state\.day/);
   assert.match(game, /scene\.showRevenueNotice/);
   assert.match(css, /\.world-frame\.camera-collapsed \.camera-tools\s*\{\s*display:\s*none/);
+  assert.match(css, /grid-template-areas: "orbit-left tilt-up tilt-down orbit-right"/);
+  assert.match(css, /grid-template-columns:\s*repeat\(4, 44px\)/);
+  assert.match(css, /\.icon-button\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/s);
+  assert.match(game, /w: "pan-up", a: "pan-left", s: "pan-down", d: "pan-right"/);
+  assert.match(game, /event\.key\.length === 1 \? event\.key\.toLowerCase\(\)/);
   assert.match(css, /\.world-frame\.world-ui-hidden \.world-actions/);
   assert.match(scene, /motionReduced/);
   assert.match(game, /action === "toggle-camera-tools"/);

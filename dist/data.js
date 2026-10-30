@@ -86,7 +86,38 @@ export const DATA = Object.freeze({
     maxZoom: 1.42,
     zoomStep: 1.12,
     wheelZoomIn: 1.08,
-    wheelZoomOut: 0.93
+    wheelZoomOut: 0.93,
+    panStepRatio: 0.04,
+    progressLevels: [
+      { progress: 0, minZoom: 0.72, panRatio: 0.025 },
+      { progress: 1, minZoom: 0.66, panRatio: 0.05 },
+      { progress: 3, minZoom: 0.62, panRatio: 0.075 },
+      { progress: 5, minZoom: 0.58, panRatio: 0.1 }
+    ]
+  },
+  sceneAmbience: {
+    farShore: [
+      { x: -540, z: -210 }, { x: -420, z: -295 }, { x: -260, z: -278 },
+      { x: -115, z: -342 }, { x: 65, z: -292 }, { x: 235, z: -328 },
+      { x: 410, z: -286 }, { x: 610, z: -344 }, { x: 810, z: -292 },
+      { x: 990, z: -326 }, { x: 1190, z: -272 }, { x: 1390, z: -312 },
+      { x: 1510, z: -210 }, { x: 1510, z: -84 }, { x: -540, z: -84 }
+    ],
+    portBuildings: [
+      { x: -305, z: -148, w: 90, d: 42, h: 38 },
+      { x: -185, z: -166, w: 62, d: 36, h: 58 },
+      { x: 25, z: -176, w: 112, d: 52, h: 42 },
+      { x: 225, z: -159, w: 72, d: 42, h: 66 },
+      { x: 490, z: -180, w: 104, d: 48, h: 48 },
+      { x: 760, z: -158, w: 78, d: 40, h: 54 },
+      { x: 1030, z: -173, w: 118, d: 50, h: 40 },
+      { x: 1270, z: -151, w: 84, d: 44, h: 60 }
+    ],
+    portLights: [
+      { x: -365, z: -102 }, { x: -248, z: -110 }, { x: -82, z: -118 },
+      { x: 148, z: -104 }, { x: 365, z: -114 }, { x: 594, z: -108 },
+      { x: 865, z: -118 }, { x: 1110, z: -102 }, { x: 1355, z: -113 }
+    ]
   },
   motion: {
     ambientSpeed: 34,

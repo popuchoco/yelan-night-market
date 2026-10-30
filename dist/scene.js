@@ -3,17 +3,60 @@ import { createObjectRenderer, getStallVisualProfile } from "./scene/objects.js"
 import { createEffectRenderer } from "./scene/effects.js";
 import { createRevenueRenderer } from "./scene/revenue.js";
 
-export function applyCameraAction(camera, action) {
+export function getCameraProfile(state, viewport = {}) {
+  const config = DATA.camera;
+  const width = Math.max(1, Number(viewport.width ?? viewport.w) || 1000);
+  const height = Math.max(1, Number(viewport.height ?? viewport.h) || 600);
+  const expansions = Math.max(0, Math.floor(Number(state?.expansions) || 0));
+  const acquiredOutlets = Array.isArray(state?.outlets)
+    ? state.outlets.filter((outlet) => outlet && outlet.id !== "main").length
+    : Math.max(0, Math.floor(Number(state?.acquisitions) || 0));
+  const progress = expansions + acquiredOutlets;
+  const level = [...config.progressLevels].reverse().find((item) => progress >= item.progress) || config.progressLevels[0];
+  return {
+    progress,
+    level: config.progressLevels.indexOf(level),
+    minZoom: level.progress === 0 ? config.minZoom : level.minZoom,
+    maxZoom: config.maxZoom,
+    panX: Math.round(width * level.panRatio),
+    panY: Math.round(height * level.panRatio),
+    panStepX: Math.max(12, Math.round(width * config.panStepRatio)),
+    panStepY: Math.max(12, Math.round(height * config.panStepRatio))
+  };
+}
+
+export function clampCamera(camera, profile = getCameraProfile(null)) {
+  const config = DATA.camera;
+  return {
+    ...camera,
+    elevation: Math.max(config.minElevation, Math.min(config.maxElevation, Number(camera.elevation) || config.defaultElevation)),
+    zoom: Math.max(profile.minZoom, Math.min(profile.maxZoom, Number(camera.zoom) || 1)),
+    panX: Math.max(-profile.panX, Math.min(profile.panX, Number(camera.panX) || 0)),
+    panY: Math.max(-profile.panY, Math.min(profile.panY, Number(camera.panY) || 0))
+  };
+}
+
+export function applyCameraAction(camera, action, profile = getCameraProfile(null)) {
   const next = { ...camera };
   const config = DATA.camera;
   if (action === "orbit-left") next.yaw -= config.orbitStep;
   if (action === "orbit-right") next.yaw += config.orbitStep;
   if (action === "tilt-up") next.elevation = Math.min(config.maxElevation, next.elevation + config.tiltStep);
   if (action === "tilt-down") next.elevation = Math.max(config.minElevation, next.elevation - config.tiltStep);
-  if (action === "zoom-in") next.zoom = Math.min(config.maxZoom, next.zoom * config.zoomStep);
-  if (action === "zoom-out") next.zoom = Math.max(config.minZoom, next.zoom / config.zoomStep);
-  if (action === "camera-reset") return { yaw: config.defaultYaw, elevation: config.defaultElevation, zoom: 1, panX: 0, panY: 0 };
-  return next;
+  if (action === "zoom-in") next.zoom = Math.min(profile.maxZoom, next.zoom * config.zoomStep);
+  if (action === "zoom-out") next.zoom = Math.max(profile.minZoom, next.zoom / config.zoomStep);
+  if (action === "pan-left") next.panX -= profile.panStepX;
+  if (action === "pan-right") next.panX += profile.panStepX;
+  if (action === "pan-up") next.panY -= profile.panStepY;
+  if (action === "pan-down") next.panY += profile.panStepY;
+  if (action === "camera-reset") {
+    next.yaw = config.defaultYaw;
+    next.elevation = config.defaultElevation;
+    next.zoom = 1;
+    next.panX = 0;
+    next.panY = 0;
+  }
+  return clampCamera(next, profile);
 }
 
 /** Sort a ground-level object by its nearest-to-camera footprint edge, not its center. */
@@ -145,6 +188,7 @@ export function createScene(runtime) {
         if (!rect.width || !rect.height) return;
         view.dpr = Math.min(window.devicePixelRatio || 1,2);
         view.w = rect.width; view.h = rect.height;
+        camera = clampCamera(camera, getCameraProfile(state, view));
         canvas.width = Math.round(view.w*view.dpr);
         canvas.height = Math.round(view.h*view.dpr);
         ctx.setTransform(view.dpr,0,0,view.dpr,0,0);
@@ -174,10 +218,29 @@ export function createScene(runtime) {
       function worldPoly(coords,y,fill,stroke,width) {
         pathPolygon(coords.map(function (v) { return project(v.x,y||0,v.z); }),fill,stroke,width);
       }
+      function drawFarPort() {
+        var shore = DATA.sceneAmbience.farShore;
+        worldPoly(shore, -1, "#1c3836", "#76958a40", 1);
+        DATA.sceneAmbience.portBuildings.forEach(function(building, index) {
+          drawBox(building.x, building.z, building.w, building.d, building.h, {
+            top: index % 2 ? "#284541" : "#2e4b45",
+            sideA: "#203b38", sideB: "#192f2e", stroke: "#7d9a8c28"
+          });
+        });
+        DATA.sceneAmbience.portLights.forEach(function(light) {
+          var point = project(light.x, 3, light.z);
+          var radius = Math.max(1.2, 2.1 * view.scale);
+          ctx.fillStyle = "#d8be7b";
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
       function drawGround() {
         var sky=ctx.createLinearGradient(0,0,0,view.h);
         sky.addColorStop(0,"#18353a"); sky.addColorStop(.37,"#27433d"); sky.addColorStop(1,"#1b2c2b");
         ctx.fillStyle=sky; ctx.fillRect(0,0,view.w,view.h);
+        drawFarPort();
         worldPoly([{x:-120,z:96},{x:1120,z:96},{x:1120,z:1040},{x:-120,z:1040}],0,"#665e49","#d1b87b33",1);
         for (var x=-120;x<1120;x+=118) {
           for (var z=100;z<1040;z+=118) {
@@ -208,6 +271,29 @@ export function createScene(runtime) {
           g.addColorStop(0,"#efc77c31"); g.addColorStop(1,"#efc77c00");
           ctx.fillStyle=g; ctx.fillRect(glow.x-r,glow.y-r,r*2,r*2);
         });
+      }
+      function drawTerritoryBoundary() {
+        var expansions = Math.max(0, Math.floor(Number(state.expansions) || 0));
+        if (!expansions) return;
+        var profile = getStallVisualProfile(mainStall, state);
+        var margin = 28 + Math.min(6, expansions) * 8;
+        var points = [
+          { x: profile.x - margin, z: profile.z - margin },
+          { x: profile.x + profile.w + margin, z: profile.z - margin },
+          { x: profile.x + profile.w + margin, z: profile.z + profile.d + margin },
+          { x: profile.x - margin, z: profile.z + profile.d + margin }
+        ].map(function(point) { return project(point.x, 0.7, point.z); });
+        ctx.save();
+        ctx.setLineDash([Math.max(5, 9 * view.scale), Math.max(4, 7 * view.scale)]);
+        pathPolygon(points, null, "#e1c27866", Math.max(1.2, 1.8 * view.scale));
+        ctx.setLineDash([]);
+        points.forEach(function(point) {
+          ctx.fillStyle = "#efce7b99";
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, Math.max(1.8, 2.6 * view.scale), 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
       }
       function drawBox(x,z,w,d,h,colors) {
         colors=colors||{};
@@ -268,6 +354,7 @@ export function createScene(runtime) {
         stallHitBounds=[];
         eventHitBounds=[];
         drawGround();
+        drawTerritoryBoundary();
         var items=[];
         marketStalls.forEach(function(stall){
           const profile = getStallVisualProfile(stall, state);
@@ -361,7 +448,7 @@ export function createScene(runtime) {
   }
 
   function cameraAction(action) {
-    camera = applyCameraAction(camera, action);
+    camera = applyCameraAction(camera, action, getCameraProfile(state, view));
     setCameraLabel();
     resizeCanvas();
   }
@@ -423,7 +510,9 @@ export function createScene(runtime) {
 
   function bindPointerControls() {
     canvas.addEventListener("pointerdown", function(event) {
-      pointer = { x: event.clientX, y: event.clientY, yaw: camera.yaw, elevation: camera.elevation, moved: false };
+      var mode = event.shiftKey || event.button === 2 ? "pan" : "orbit";
+      pointer = { x: event.clientX, y: event.clientY, yaw: camera.yaw, elevation: camera.elevation,
+        panX: camera.panX, panY: camera.panY, mode: mode, moved: false };
       canvas.classList.add("dragging");
       if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
     });
@@ -432,16 +521,22 @@ export function createScene(runtime) {
       var dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) pointer.moved = true;
       if (pointer.moved) {
-        camera.yaw = pointer.yaw + dx * DATA.camera.yawDrag;
-        camera.elevation = Math.max(DATA.camera.minElevation, Math.min(DATA.camera.maxElevation, pointer.elevation + dy * DATA.camera.elevationDrag));
+        if (pointer.mode === "pan") {
+          camera = clampCamera({ ...camera, panX: pointer.panX + dx, panY: pointer.panY + dy }, getCameraProfile(state, view));
+        } else {
+          camera.yaw = pointer.yaw + dx * DATA.camera.yawDrag;
+          camera.elevation = Math.max(DATA.camera.minElevation, Math.min(DATA.camera.maxElevation, pointer.elevation + dy * DATA.camera.elevationDrag));
+        }
         setCameraLabel();
       }
     });
     canvas.addEventListener("pointerup", endPointer);
     canvas.addEventListener("pointercancel", endPointer);
+    canvas.addEventListener("contextmenu", function(event) { event.preventDefault(); });
     canvas.addEventListener("wheel", function(event) {
       event.preventDefault();
-      camera.zoom = Math.max(DATA.camera.minZoom, Math.min(DATA.camera.maxZoom, camera.zoom * (event.deltaY < 0 ? DATA.camera.wheelZoomIn : DATA.camera.wheelZoomOut)));
+      var profile = getCameraProfile(state, view);
+      camera.zoom = Math.max(profile.minZoom, Math.min(profile.maxZoom, camera.zoom * (event.deltaY < 0 ? DATA.camera.wheelZoomIn : DATA.camera.wheelZoomOut)));
       resizeCanvas();
     }, { passive: false });
     canvas.addEventListener("click", function(event) {

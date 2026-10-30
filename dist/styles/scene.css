@@ -160,6 +160,7 @@
 .camera-tools { position: static; z-index: auto; flex: 0 0 auto; width: max-content; min-width: 0; }
 .camera-tools .icon-button { flex: 0 0 44px; }
 .world-frame.camera-collapsed .camera-tools { display: none; }
+.scene-hint-mobile { display: none; }
 .world-frame.world-ui-hidden .world-top-left,
 .world-frame.world-ui-hidden .world-event-trigger,
 .world-frame.world-ui-hidden .outlet-event-triggers,
@@ -170,15 +171,31 @@
 @media (max-width: 1060px) {
   .camera-label { display: none; }
 }
+@media (min-width: 801px) {
+  .camera-tools [data-action^="pan-"] { display: none; }
+}
 @media (max-width: 800px) {
+  .scene-hint-desktop { display: none; }
+  .scene-hint-mobile { display: inline; }
   .world-tools { top: 10px; right: 10px; display: block; width: 44px; height: 44px; }
   .world-visibility-toggle { position: absolute; top: 0; right: 0; }
   .world-tool-action[data-action="toggle-sound"] { position: absolute; top: 0; right: 49px; }
   .world-tool-action[data-action="toggle-pause"] { position: absolute; top: 0; right: 98px; }
   .camera-control-group { display: contents; }
   .camera-collapse { position: absolute; top: 49px; right: 0; }
-  .camera-tools { position: absolute; top: 98px; right: 0; display: grid; grid-template-columns: repeat(4, 44px); grid-auto-rows: 44px; justify-content: center; gap: 5px; width: max-content; max-width: calc(100vw - 118px); overflow: visible; flex-wrap: wrap; padding: 5px; }
+  .camera-tools { position: absolute; top: 98px; right: 0; display: grid; grid-template-columns: repeat(4, 44px); grid-template-rows: repeat(3, 44px); grid-template-areas: "orbit-left tilt-up tilt-down orbit-right" "zoom-out zoom-in pan-up camera-reset" ". pan-left pan-down pan-right"; justify-content: center; gap: 5px; width: max-content; max-width: calc(100vw - 118px); overflow: visible; padding: 5px; }
   .camera-tools .icon-button { flex: 0 0 44px; }
+  .camera-tools [data-action="orbit-left"] { grid-area: orbit-left; }
+  .camera-tools [data-action="tilt-up"] { grid-area: tilt-up; }
+  .camera-tools [data-action="tilt-down"] { grid-area: tilt-down; }
+  .camera-tools [data-action="orbit-right"] { grid-area: orbit-right; }
+  .camera-tools [data-action="zoom-out"] { grid-area: zoom-out; }
+  .camera-tools [data-action="zoom-in"] { grid-area: zoom-in; }
+  .camera-tools [data-action="pan-up"] { grid-area: pan-up; }
+  .camera-tools [data-action="camera-reset"] { grid-area: camera-reset; }
+  .camera-tools [data-action="pan-left"] { grid-area: pan-left; }
+  .camera-tools [data-action="pan-down"] { grid-area: pan-down; }
+  .camera-tools [data-action="pan-right"] { grid-area: pan-right; }
 }
 @media (max-width: 480px) {
   .world-tools { top: 8px; right: 8px; }
