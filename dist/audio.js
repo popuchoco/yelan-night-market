@@ -82,7 +82,11 @@ export function createGameAudio({ contextFactory = defaultContextFactory, random
       const oscillator = audioContext.createOscillator();
       const gain = audioContext.createGain();
       const now = audioContext.currentTime;
-      const frequency = kind === "success" ? 660 : (kind === "open" ? 520 : 390);
+      const comboMatch = /^combo-(\d+)$/.exec(String(kind));
+      const comboLevel = comboMatch ? Math.max(2, Math.min(6, Number(comboMatch[1]) || 2)) : 0;
+      const frequency = comboLevel
+        ? 720 + (comboLevel - 2) * 48
+        : (kind === "success" ? 660 : (kind === "open" ? 520 : 390));
       oscillator.type = "sine";
       oscillator.frequency.setValueAtTime(frequency, now);
       oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.35, now + 0.09);

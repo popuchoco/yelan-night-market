@@ -76,6 +76,7 @@ export function boot() {
   }
   let orderReturnFocus = null;
   let reportReturnFocus = null;
+  let goodServiceStreak = 0;
 
   function playTone(kind = "tap") {
     return audio.playTone(kind);
@@ -314,6 +315,7 @@ export function boot() {
   function advanceNight() {
     const result = engine.nextNight();
     if (result.ok) {
+      goodServiceStreak = 0;
       scene.spawnGuests([]);
       if (state.phase === "decision") ui.setTab("ops");
       showClosingFinancialNotices();
@@ -325,6 +327,7 @@ export function boot() {
     if (!choiceResult.ok) { showResult(choiceResult); return; }
     const nextResult = engine.nextNight();
     if (nextResult.ok) {
+      goodServiceStreak = 0;
       scene.spawnGuests([]);
       if (state.phase === "decision") ui.setTab("ops");
       if (id === "window") scene.showRevenueNotice(80, "昨夜・熟客心意收入");
@@ -463,11 +466,13 @@ export function boot() {
       achievementToastTimer = setTimeout(() => { popup.hidden = true; }, 240);
     }, 3800);
   }
-  function showResult(result, refresh = true) {
+  function showResult(result, refresh = true, toneKind = "success") {
     const unlockedAchievements = engine.drainAchievementAwards();
+    const focusMilestones = engine.drainWeeklyFocusMilestones?.() || [];
     if (result.changed && refresh) renderUI();
-    if (result.message) toast(result.message);
-    if (result.ok) playTone("success");
+    const message = [result.message, ...focusMilestones].filter(Boolean).join(" ");
+    if (message) toast(message);
+    if (result.ok) playTone(toneKind);
     if (unlockedAchievements.length) {
       syncAchievementTrigger();
       showAchievementToast(unlockedAchievements);
@@ -475,7 +480,7 @@ export function boot() {
   }
   function openDoors() {
     const result = engine.openDoors();
-    if (result.ok) { scene.spawnGuests(); ui.setTab("ops"); }
+    if (result.ok) { goodServiceStreak = 0; scene.spawnGuests(); ui.setTab("ops"); }
     showResult(result);
   }
   function openOrder(index) {
@@ -504,9 +509,18 @@ export function boot() {
     orderReturnFocus = null;
     if (target && target.focus) requestAnimationFrame(() => target.focus());
   }
-  function runOrderAction(result) {
+  function runOrderAction(result, complaint = false) {
     if (result.ok) document.getElementById("orderModal").hidden = true;
-    showResult(result);
+    if (result.ok) {
+      if (complaint) goodServiceStreak = 0;
+      else {
+        const latest = state.results?.[state.results.length - 1];
+        goodServiceStreak = latest?.good ? goodServiceStreak + 1 : 0;
+      }
+    }
+    const comboTone = !complaint && result.ok && goodServiceStreak >= 2
+      ? "combo-" + Math.min(6, goodServiceStreak) : "success";
+    showResult(result, true, comboTone);
     if (result.ok) {
       const fallback = state.phase === "service"
         ? document.querySelector('[data-action="call-next"]')
@@ -650,7 +664,7 @@ export function boot() {
     if (action === "open-doors") openDoors();
     if (action === "call-next") openOrder(state.customerIndex);
     if (action === "serve-dish") runOrderAction(engine.serveDish(button.dataset.id));
-    if (action === "resolve-complaint") runOrderAction(engine.resolveComplaint(button.dataset.choice));
+    if (action === "resolve-complaint") runOrderAction(engine.resolveComplaint(button.dataset.choice), true);
     if (action === "close-order") closeOrder();
     if (action === "select-dish") showResult(engine.selectDish(button.dataset.index));
     if (action === "buy-stock") showResult(engine.buyStock(button.dataset.id));

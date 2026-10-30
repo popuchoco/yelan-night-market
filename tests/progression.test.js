@@ -76,6 +76,37 @@ test("weekly focus closes into the diary and worksheet, rewarding completion onl
   assert.match(state.journal[0].weeklyFocus.message, /口碑 \+2/);
 });
 
+test("weekly focus announces halfway and completion milestones exactly once", () => {
+  const state = serviceState(5);
+  state.weeklyFocus = createWeeklyFocus("opening", 1, 2);
+  const engine = createGameEngine(state, { random: () => 1 });
+  assert.equal(engine.serveDish("pepper-soup").ok, true);
+  assert.match(engine.drainWeeklyFocusMilestones()[0], /本週焦點過半/);
+  assert.deepEqual(engine.drainWeeklyFocusMilestones(), []);
+  assert.equal(engine.serveDish("pepper-soup").ok, true);
+  assert.match(engine.drainWeeklyFocusMilestones()[0], /本週焦點達標/);
+  assert.deepEqual(engine.drainWeeklyFocusMilestones(), []);
+});
+
+test("night close snapshots the day's cashbook and focus summary into the journal", () => {
+  const state = serviceState(7);
+  state.phase = "report";
+  state.reportChoice = "paperboat";
+  state.results = [{ name: "藍姨", good: true }];
+  postJournal(state, "測試夜間現金收入", [
+    { account: "1000", debit: 135 }, { account: "4000", credit: 135 }
+  ], null, 7);
+  const engine = createGameEngine(state, { random: () => 1 });
+  assert.equal(engine.nextNight().ok, true);
+  const cashbook = state.journal[0].cashbook;
+  assert.equal(cashbook.available, true);
+  assert.equal(cashbook.day, 7);
+  assert.equal(cashbook.income, getDailyCashbookSummary(state, 7).income);
+  assert.equal(cashbook.income, 135);
+  assert.equal(cashbook.guestCount, 1);
+  assert.equal(cashbook.satisfiedCount, 1);
+});
+
 test("engine backfills a missing legacy focus when the current week is already underway", () => {
   const state = freshState();
   state.day = 7;

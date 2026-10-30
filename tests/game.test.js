@@ -269,7 +269,7 @@ test("new 30-night chapter opening reflects the previous ending and last weekly 
 });
 
 test("optional harbor ambience is lazy, user-controlled, and stops when muted", () => {
-  const makeParam = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} });
+  const makeParam = () => ({ value: 0, lastValue: null, setValueAtTime(value) { this.lastValue = value; }, exponentialRampToValueAtTime() {} });
   class FakeNode {
     constructor() { this.gain = makeParam(); this.frequency = makeParam(); this.Q = makeParam(); this.started = 0; this.stopped = 0; this.connections = []; }
     connect(node) { this.connections.push(node); return node; }
@@ -300,6 +300,9 @@ test("optional harbor ambience is lazy, user-controlled, and stops when muted", 
   assert.equal(audio.playTone("success"), true);
   assert.deepEqual(context.bufferArgs, [32000, 8000]);
   assert.equal(context.nodes.filter((node) => node.started).length, 3);
+  assert.equal(audio.playTone("combo-4"), true);
+  const comboOscillator = context.nodes.filter((node) => node.frequency.lastValue !== null).at(-1);
+  assert.equal(comboOscillator.frequency.lastValue, 816, "a longer service streak rises in pitch without changing game values");
   audio.suspend();
   assert.equal(context.suspendCalls, 1);
   const ambientSource = context.nodes[0];
@@ -899,7 +902,7 @@ test("weekly focus UI exposes compact progress and an accessible numeric status"
   globalThis.document = { createElement: makeNode, createDocumentFragment: () => makeNode("#fragment") };
   try {
     const state = freshState();
-    state.weeklyFocus.progress = 4;
+    state.weeklyFocus.progress = 9;
     const ui = createUI({ state, saveState() {} });
     const overview = ui.renderOverview();
     const find = (node, className) => {
@@ -915,8 +918,125 @@ test("weekly focus UI exposes compact progress and an accessible numeric status"
     assert.ok(card);
     assert.equal(progress.attributes.role, "progressbar");
     assert.equal(progress.attributes["aria-valuemax"], "18");
-    assert.equal(progress.attributes["aria-valuenow"], "4");
+    assert.equal(progress.attributes["aria-valuenow"], "9");
     assert.ok(find(card, "weekly-focus-copy"));
+    assert.match(find(card, "weekly-focus-status").textContent, /已過半/);
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
+});
+
+test("overview shows an explicitly labeled prior-night cashbook and recovery countdown", () => {
+  const priorDocument = globalThis.document;
+  const makeNode = (tagName) => ({
+    tagName, children: [], dataset: {}, attributes: {}, style: {},
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  });
+  globalThis.document = { createElement: makeNode, createDocumentFragment: () => makeNode("#fragment") };
+  try {
+    const state = freshState();
+    state.day = 3;
+    state.outbreakRecoveryUntilDay = 4;
+    state.journal = [{ day: 2, net: 90, guests: ["熟客"], goodGuests: 1, cashbook: {
+      day: 2, income: 420, expenses: 330, net: 90, available: true,
+      sales: 300, tips: 70, activity: 50, guestCount: 1, satisfiedCount: 1,
+      focus: { title: "讓巷口記住夜嵐", progress: 4, target: 18, resolved: false }
+    } }];
+    const overview = createUI({ state, saveState() {} }).renderOverview();
+    const find = (node, className) => {
+      if (node.className === className || node.className?.split(/\s+/).includes(className)) return node;
+      for (const child of node.children || []) {
+        const found = find(child, className);
+        if (found) return found;
+      }
+      return null;
+    };
+    const recap = find(overview, "night-recap");
+    const recovery = find(overview, "recovery-notice");
+    assert.ok(recap);
+    assert.equal(recap.attributes["aria-label"], "前一夜現金簿摘要");
+    assert.ok(find(recap, "night-recap-metrics"));
+    assert.match(recovery.textContent, /接下來 2 夜客流各少 1 桌/);
+    assert.match(recovery.textContent, /第 5 夜起恢復/);
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
+});
+
+test("new-period recap links to the prior report and weekly investment previews recurring costs", () => {
+  const priorDocument = globalThis.document;
+  const makeNode = (tagName) => ({
+    tagName, children: [], dataset: {}, attributes: {}, style: {},
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  });
+  globalThis.document = { createElement: makeNode, createDocumentFragment: () => makeNode("#fragment") };
+  try {
+    const state = freshState();
+    state.day = 31;
+    state.phase = "decision";
+    state.accounting.monthlyReports = [{ endDay: 30, outcomeId: "steady-lantern",
+      outcome: { title: "穩穩亮著的小店" }, totals: { profit: 420 } }];
+    const overview = createUI({ state, saveState() {} }).renderOverview();
+    const find = (node, className) => {
+      if (node.className === className || node.className?.split(/\s+/).includes(className)) return node;
+      for (const child of node.children || []) {
+        const found = find(child, className);
+        if (found) return found;
+      }
+      return null;
+    };
+    const period = find(overview, "period-opening-recap");
+    assert.ok(period);
+    const reportLink = find(period, "period-opening-report");
+    assert.equal(reportLink.dataset.action, "open-report");
+    assert.equal(reportLink.dataset.id, "monthly");
+    const previews = [];
+    const collect = (node) => {
+      if (node.className?.startsWith("decision-preview")) previews.push(node);
+      (node.children || []).forEach(collect);
+    };
+    collect(overview);
+    assert.ok(previews.length > 0);
+    assert.ok(previews.some((preview) => preview.children.some((child) => /投資後已知每夜固定成本/.test(child.textContent || ""))));
+    assert.ok(previews.some((preview) => preview.children.some((child) => /本週焦點預覽/.test(child.textContent || ""))));
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
+});
+
+test("near-complete weekly focus recap says how little remained without adding a failure penalty", () => {
+  const priorDocument = globalThis.document;
+  const makeNode = (tagName) => ({
+    tagName, children: [], dataset: {}, attributes: {}, style: {},
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  });
+  globalThis.document = { createElement: makeNode, createDocumentFragment: () => makeNode("#fragment") };
+  try {
+    const state = freshState();
+    state.day = 31;
+    state.phase = "decision";
+    state.weeklyFocus = { id: "expand", startDay: 22, progress: 22, target: 24, resolved: true,
+      result: { title: "讓新桌區熱鬧起來", progress: 22, target: 24, success: false, startDay: 22,
+        resolvedDay: 28, message: "未完成，沒有額外扣款。" } };
+    const overview = createUI({ state, saveState() {} }).renderOverview();
+    const find = (node, className) => {
+      if (node.className === className || node.className?.split(/\s+/).includes(className)) return node;
+      for (const child of node.children || []) {
+        const found = find(child, className);
+        if (found) return found;
+      }
+      return null;
+    };
+    const recap = find(overview, "weekly-focus");
+    const copy = find(recap, "weekly-focus-copy");
+    assert.match(copy.textContent, /只差 2 桌/);
+    assert.match(copy.textContent, /沒有扣款/);
   } finally {
     if (priorDocument === undefined) delete globalThis.document;
     else globalThis.document = priorDocument;

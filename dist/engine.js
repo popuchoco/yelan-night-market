@@ -8,7 +8,7 @@ import {
 import { getMonthlyInsurance, getNextStallTier, getOutletCapacity, getOutletTier, getTierReadiness, hasCurrentCoverage, isInsuranceBillingDay, INSURANCE_RATES, OUTLET_SAFETY_EQUIPMENT } from "./safety.js";
 import {
   closeDepreciation, closeMonthlyStatements, closeWeeklyWorksheet, closeInsuranceRefundAdjustments, collectInsuranceRefundReceivables,
-  recordAssetPurchase, recordExpense, recordInventoryPurchase, recordLoanDraw,
+  getDailyCashbookSummary, recordAssetPurchase, recordExpense, recordInventoryPurchase, recordLoanDraw,
   recordLoanRepayment, recordOperatingClose, recordRefund, recordSale,
   recordInsuranceClaimAccrual, collectInsuranceClaims
 } from "./accounting.js";
@@ -50,8 +50,34 @@ export function createGameEngine(state, { random = Math.random } = {}) {
   const guests = () => getTonightGuests(state);
   const event = () => todayEvent(state);
   const pendingAchievementAwards = [];
+  const weeklyFocusMilestoneNotices = [];
+  let trackedWeeklyFocusKey = state.weeklyFocus ? state.weeklyFocus.id + ":" + state.weeklyFocus.startDay : "";
+  let lastWeeklyFocusProgress = Math.max(0, Number(state.weeklyFocus?.progress) || 0);
+  function collectWeeklyFocusMilestone() {
+    const focus = state.weeklyFocus;
+    const key = focus ? focus.id + ":" + focus.startDay : "";
+    if (key !== trackedWeeklyFocusKey) {
+      trackedWeeklyFocusKey = key;
+      lastWeeklyFocusProgress = Math.max(0, Number(focus?.progress) || 0);
+      return;
+    }
+    if (!focus || focus.resolved) return;
+    const progress = Math.max(0, Math.min(Number(focus.target) || 0, Number(focus.progress) || 0));
+    const target = Math.max(1, Number(focus.target) || 1);
+    const definition = getWeeklyFocusDefinition(focus.id);
+    const title = definition?.title || "本週經營焦點";
+    if (lastWeeklyFocusProgress < target && progress >= target) {
+      weeklyFocusMilestoneNotices.push("本週焦點達標｜" + title + "，今晚結算時會記下成果。");
+    } else if (lastWeeklyFocusProgress < Math.ceil(target / 2) && progress >= Math.ceil(target / 2)) {
+      weeklyFocusMilestoneNotices.push("本週焦點過半｜" + title + "，已完成 " + progress + " / " + target + "。");
+    }
+    lastWeeklyFocusProgress = progress;
+  }
   const response = (ok, message, changed = ok) => {
-    if (ok) pendingAchievementAwards.push(...evaluateAchievements(state));
+    if (ok) {
+      pendingAchievementAwards.push(...evaluateAchievements(state));
+      collectWeeklyFocusMilestone();
+    }
     return { ok, changed, message };
   };
 
@@ -468,7 +494,9 @@ export function createGameEngine(state, { random = Math.random } = {}) {
       marketChoice: selectedMarketChoice ? selectedMarketChoice.name : null,
       safetyIncident: state.safetyIncident ? {
         title: state.safetyIncident.title, choice: state.safetyIncident.choice || null,
-        expense: Number(state.safetyIncident.expensePosted) || 0, claim: Number(state.safetyIncident.claimAmount) || 0
+        expense: Number(state.safetyIncident.expensePosted) || 0, claim: Number(state.safetyIncident.claimAmount) || 0,
+        affectedDishName: state.safetyIncident.affectedDishName || null,
+        dishRecall: !!state.safetyIncident.dishRecall, shutdown: !!state.safetyIncident.shutdown
       } : null,
       closingEvents,
       promotionOutcome: state.marketCardOutcome?.summary || null,
@@ -490,6 +518,22 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     const weeklyClose = finishedDay % 7 === 0 || finishedDay % 30 === 0
       ? closeWeeklyWorksheet(state, finishedDay, { periodEnd: finishedDay % 30 === 0, insuranceAdjustment }) : null;
     if (weeklyClose && weeklyFocusResult) weeklyClose.weeklyFocus = weeklyFocusResult;
+    const cashbook = getDailyCashbookSummary(state, finishedDay);
+    journalEntry.cashbook = {
+      ...cashbook,
+      sales: Math.max(0, Math.round(Number(state.ledger?.sales) || 0)),
+      tips: Math.max(0, Math.round(Number(state.ledger?.tips) || 0)),
+      activity: Math.max(0, Math.round((Number(state.ledger?.bonus) || 0) + (Number(state.ledger?.storyBonus) || 0))),
+      guestCount: state.results.length,
+      satisfiedCount: state.results.filter((result) => result.good).length,
+      focus: state.weeklyFocus ? {
+        title: getWeeklyFocusDefinition(state.weeklyFocus.id)?.title || "本週經營焦點",
+        progress: Math.max(0, Number(state.weeklyFocus.progress) || 0),
+        target: Math.max(1, Number(state.weeklyFocus.target) || 1),
+        resolved: !!state.weeklyFocus.resolved,
+        success: !!state.weeklyFocus.success
+      } : null
+    };
     state.customerIndex = 0;
     state.revenue = 0;
     state.results = [];
@@ -530,6 +574,9 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     pendingAchievementAwards.length = 0;
     Object.keys(state).forEach((key) => delete state[key]);
     Object.assign(state, fresh);
+    weeklyFocusMilestoneNotices.length = 0;
+    trackedWeeklyFocusKey = state.weeklyFocus ? state.weeklyFocus.id + ":" + state.weeklyFocus.startDay : "";
+    lastWeeklyFocusProgress = Math.max(0, Number(state.weeklyFocus?.progress) || 0);
     return response(true, "新的夜市世界已開張。先備料、排班，再掛燈迎客。");
   }
 
@@ -537,6 +584,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     buyOutletStock, toggleOutlet, upgradeOutletEquipment, upgradeOutletSafety, upgradeStallTier, toggleAccidentCoverage, hireOutletManager, dismissOutletManager, resolveManagerEvent,
     releaseCrewMember,
     markJournalViewed, markStatementViewed, markAchievementListSeen, drainAchievementAwards,
+    drainWeeklyFocusMilestones: () => weeklyFocusMilestoneNotices.splice(0),
     getEvent: event, getGuests: guests, getStaffCost: () => staffCost(state), getIncome: () => state.ledger ? ledgerIncome(state.ledger) : 0 };
 }
 

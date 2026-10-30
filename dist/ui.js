@@ -4,6 +4,7 @@ import { ACQUISITION_GROUPS, ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS
 import { CHART_OF_ACCOUNTS, formatBalance } from "./accounting.js";
 import { createReportRenderer } from "./ui/reports.js";
 import { createPreparationRenderer } from "./ui/preparation.js";
+import { createEngagementRenderer } from "./ui/engagement.js";
 import { getWeeklyFocusDefinition } from "./progression.js";
 import {
   STALL_TIERS, OUTLET_SAFETY_EQUIPMENT, getMonthlyInsurance, getNextInsuranceBillingDay,
@@ -63,6 +64,12 @@ export function createUI(runtime) {
   function getPurchasePrice(item) { return getPurchasePriceForState(state, item); }
   function getFoodCost(dish) { return getFoodCostForState(state, dish); }
   function createLedger() { return createLedgerForState(state); }
+
+  const engagementRenderer = createEngagementRenderer({
+    state, CAMPAIGN_DAYS, campaignCycleDay,
+    fixedOperatingCost: ledgerFixedOperatingCost, createLedger, getStory: todayStory,
+    money, moneyNet, button, el, append, helper
+  });
 
   const reportRenderer = createReportRenderer({
     state, dishes, CHART_OF_ACCOUNTS, formatBalance, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS,
@@ -394,11 +401,16 @@ export function createUI(runtime) {
       const result = focus.result;
       const card = el("section", "weekly-focus weekly-focus-recap" + (result.success ? " is-success" : ""));
       const heading = el("div", "weekly-focus-heading");
+      const remaining = Math.max(0, Number(result.target) - Number(result.progress));
+      const unit = focus.id === "acquire" || focus.id === "hold" ? "夜" : "桌";
+      const recapMessage = !result.success && remaining > 0 && remaining <= 2
+        ? "只差 " + remaining + " " + unit + " 就達標；這週沒有扣款，下週可再試。 " + result.message
+        : result.message;
       append(heading, el("b", "", (result.success ? "完成" : "持續累積") + "｜" + result.title),
         el("span", "weekly-focus-count", result.progress + " / " + result.target));
       append(card, el("span", "weekly-focus-kicker", "經營焦點・第 " + result.startDay + "–" + result.resolvedDay + " 夜"),
         heading,
-        el("p", "weekly-focus-copy", result.message));
+        el("p", "weekly-focus-copy", recapMessage));
       return card;
     }
     if (!focus || focus.resolved) return null;
@@ -412,7 +424,11 @@ export function createUI(runtime) {
     const bar = el("div", "weekly-focus-track", null, { role: "progressbar", "aria-label": definition.title,
       "aria-valuemin": 0, "aria-valuemax": focus.target, "aria-valuenow": progress });
     bar.append(el("span", "", null, { style: "transform:scaleX(" + (progress / focus.target) + ")" }));
+    const milestone = progress >= focus.target
+      ? "已達標，打烊結算時會記下成果。"
+      : (progress >= Math.ceil(focus.target / 2) ? "本週焦點已過半，維持目前節奏即可。" : "完成一半後會收到進度提醒；未完成不會受罰。");
     append(card, heading, bar, el("p", "weekly-focus-copy", definition.description),
+      el("span", "weekly-focus-status", milestone),
       el("span", "weekly-focus-reward", "完成可得口碑 +2、熟客 +1；未完成不扣款、不扣口碑。"));
     return card;
   }
@@ -425,6 +441,10 @@ export function createUI(runtime) {
     const summary = el("div", "decision-summary");
     append(summary, el("span", "", "可用現金"), el("b", "", money(state.coins)),
       el("span", "", "目前每夜固定營運成本"), el("b", "", money(fixedOperatingCost(createLedger()))));
+    const currentFixedCost = engagementRenderer.currentFixedCost();
+    const runway = currentFixedCost > 0 ? Math.floor(Number(state.coins) / currentFixedCost) : null;
+    if (runway !== null) append(summary, el("span", "", "固定支出可支應"), el("b", runway <= 5 ? "decision-runway-tight" : "", runway + " 夜"));
+    if (runway !== null) summary.append(el("span", "decision-runway-note", "估算未含補貨、事件及浮動人事支出。"));
     decision.append(summary);
     const finance = el("section", "finance-panel");
     const debt = Number(state.loanPrincipal) || 0;
@@ -512,6 +532,7 @@ export function createUI(runtime) {
       const price = capped ? "此項發展已達場景容量" : (cost ? option.label + " ｜ " + money(cost) : option.label + " ｜ 免費");
       append(card, header, el("span", "decision-cost", price), el("p", "", option.effect),
         el("span", "decision-recurring", recurring));
+      card.append(engagementRenderer.investmentPreview(option, cost, capped, insufficient, currentFixedCost));
       if (option.id === "acquire" && !capped) {
         const targets = el("div", "acquisition-targets");
         Object.values(ACQUISITION_TYPES).filter(function(target) { return target.selectable; }).forEach(function(target) {
@@ -541,12 +562,26 @@ export function createUI(runtime) {
     const parts = [campaignMeter()];
     if (state.phase === "decision") {
       parts.push(weeklyFocusCard({ recap: true }));
+      const milestoneRecap = engagementRenderer.weeklyMilestoneRecap();
+      if (milestoneRecap) parts.push(milestoneRecap);
+      const periodRecap = engagementRenderer.periodOpeningRecap();
+      if (periodRecap) parts.push(periodRecap);
+      const nightRecap = engagementRenderer.previousNightRecap();
+      if (nightRecap) parts.push(nightRecap);
+      const recovery = engagementRenderer.recoveryNotice();
+      if (recovery) parts.push(recovery);
       parts.push(eventCard(event));
       const announcement = marketAnnouncement();
       if (announcement) parts.push(announcement);
       parts.push(renderWeeklyDecision());
       return fragment(parts);
     }
+    const periodRecap = engagementRenderer.periodOpeningRecap();
+    if (periodRecap) parts.push(periodRecap);
+    const nightRecap = engagementRenderer.previousNightRecap();
+    if (nightRecap) parts.push(nightRecap);
+    const recovery = engagementRenderer.recoveryNotice();
+    if (recovery) parts.push(recovery);
     const focusCard = weeklyFocusCard();
     if (focusCard) parts.push(focusCard);
     if (state.day === 1) {

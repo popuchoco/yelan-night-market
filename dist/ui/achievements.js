@@ -1,4 +1,4 @@
-import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS } from "../achievements.js";
+import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS, getAchievementProgress } from "../achievements.js";
 
 const CATEGORY_LABELS = Object.fromEntries(ACHIEVEMENT_CATEGORIES.map((category) => [category.id, category.label]));
 
@@ -67,6 +67,22 @@ export function createAchievementsRenderer() {
         stamp.append(status, date);
         card.append(mark, copy, stamp);
       } else {
+        const progressInfo = isHidden ? null : getAchievementProgress(state, item.id);
+        if (progressInfo && progressInfo.current > 0) {
+          const progressWrap = element("div", "achievement-progress-line");
+          const progressLabel = element("span", "", "進度 " + progressInfo.current + " / " + progressInfo.target);
+          const progressBar = element("span", "achievement-progress-track");
+          progressBar.setAttribute("role", "progressbar");
+          progressBar.setAttribute("aria-label", item.title + "進度");
+          progressBar.setAttribute("aria-valuemin", "0");
+          progressBar.setAttribute("aria-valuemax", String(progressInfo.target));
+          progressBar.setAttribute("aria-valuenow", String(progressInfo.current));
+          const fill = element("span", "");
+          fill.style.transform = "scaleX(" + (progressInfo.current / progressInfo.target) + ")";
+          progressBar.append(fill);
+          progressWrap.append(progressLabel, progressBar);
+          copy.append(progressWrap);
+        }
         card.append(mark, copy, status);
       }
       list.append(card);

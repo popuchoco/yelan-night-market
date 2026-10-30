@@ -22,7 +22,7 @@ dist/index.html + dist/styles.css（樣式進入點）
                         │     ├── campaign.js（週期、公告卡、故事、週決策）
                         │     ├── safety.js（攤型、安全、保險）
                         │     └── accounting.js（分錄、資產、結帳、報表）
-                        ├── ui.js + ui/preparation.js + ui/reports.js + ui/achievements.js（管理面板、報表與成就清單）
+                        ├── ui.js + ui/preparation.js + ui/reports.js + ui/achievements.js + ui/engagement.js（管理面板、報表、成就與節奏回饋）
                         └── scene.js
                               ├── scene/objects.js（攤位與物件）
                               ├── scene/effects.js（事件特效）
@@ -59,6 +59,7 @@ dist/index.html + dist/styles.css（樣式進入點）
 | `dist/ui/preparation.js` | 備料、設備、人員及保險面板的 DOM 節點渲染 | 遊戲規則、存檔與分錄 |
 | `dist/ui/reports.js` | 日記簿、週底稿、期末工作底稿、報表與科目表 DOM | 修改引擎或帳務規則 |
 | `dist/ui/achievements.js` | 篩選成就分類、顯示解鎖紀錄與灰階未解鎖項目 | 改變遊戲經濟或儲存額外進度計數 |
+| `dist/ui/engagement.js` | 前夜現金簿、食安恢復倒數、新期回顧、週里程碑及投資固定成本提示 | 建立平行任務、改變經濟數值或持久化暫態提醒 |
 | `dist/scene.js` | 相機、投影、Canvas 尺寸、角色路徑／更新、場景合成、命中測試 | 攤位商業規則、會計計算 |
 | `dist/scene/objects.js` | 攤位、桌椅、招牌、燈籠等場景物件繪製 | 將場景座標寫入存檔或決定營運結果 |
 | `dist/scene/effects.js` | 雨、煙、節慶、事件視覺效果 | 產生經濟事件或收支 |

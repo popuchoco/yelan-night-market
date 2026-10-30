@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { readStyles } from "./style-support.js";
+import { createAchievementsRenderer } from "../dist/ui/achievements.js";
 import { DATA, getOutletSpecialty, outletRetailPrice } from "../dist/data.js";
 import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, MARKET_CARDS, MARKET_CARD_SCHEDULE, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, marketCardForDay, selectEnding } from "../dist/campaign.js";
 import { closeDepreciation, CHART_OF_ACCOUNTS, getDailyCashbookSummary, postJournal } from "../dist/accounting.js";
@@ -56,6 +57,45 @@ test("achievement state normalization filters unknown ids and legacy backfill is
   assert.deepEqual(migrated.achievements.unlocked.first_open, { day: 0, period: 0 });
   assert.deepEqual(migrated.achievements.pending, []);
   assert.equal(migrated.schemaVersion, SAVE_SCHEMA_VERSION);
+});
+
+test("visible locked achievements show a bounded next-step progress bar without exposing secrets", () => {
+  const priorDocument = globalThis.document;
+  const makeNode = (tagName) => ({
+    tagName, children: [], dataset: {}, attributes: {}, style: {},
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  });
+  globalThis.document = { createElement: makeNode };
+  try {
+    const state = freshState();
+    state.expansions = 2;
+    const root = createAchievementsRenderer().render(state);
+    const findByAchievement = (node, id) => {
+      if (node.dataset?.achievementId === id) return node;
+      for (const child of node.children || []) {
+        const found = findByAchievement(child, id);
+        if (found) return found;
+      }
+      return null;
+    };
+    const findClass = (node, className) => {
+      if (node.className === className) return node;
+      for (const child of node.children || []) {
+        const found = findClass(child, className);
+        if (found) return found;
+      }
+      return null;
+    };
+    const progress = findClass(findByAchievement(root, "expand_thrice"), "achievement-progress-track");
+    assert.equal(progress.attributes.role, "progressbar");
+    assert.equal(progress.attributes["aria-valuenow"], "2");
+    assert.equal(progress.attributes["aria-valuemax"], "3");
+    assert.equal(findClass(findByAchievement(root, "harbor_icon"), "achievement-progress-line"), null);
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
 });
 
 test("first successful opening records a milestone without granting money", () => {

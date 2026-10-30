@@ -147,6 +147,27 @@ export function evaluateAchievements(state, { silent = false } = {}) {
   return newlyUnlocked;
 }
 
+/** Return conservative, non-secret progress for achievements with a single clear counter. */
+export function getAchievementProgress(state, id) {
+  if (!state || !id) return null;
+  const main = (Array.isArray(state.outlets) ? state.outlets : []).find((outlet) => outlet?.id === "main");
+  const branches = (Array.isArray(state.outlets) ? state.outlets : []).filter((outlet) => outlet && outlet.id !== "main");
+  const levels = { mobile: 0, fixed: 1, dapaidang: 2 };
+  const progress = {
+    expand_once: { current: Number(state.expansions) || 0, target: 1 },
+    expand_thrice: { current: Number(state.expansions) || 0, target: 3 },
+    tier_fixed: { current: levels[main?.tier] || 0, target: 1 },
+    tier_dapaidang: { current: levels[main?.tier] || 0, target: 2 },
+    week_one: { current: Math.min(7, Math.max(0, (Number(state.day) || 1) - 1)), target: 7 },
+    period_close: { current: Math.min(1, Array.isArray(state.accounting?.monthlyReports) ? state.accounting.monthlyReports.length : 0), target: 1 },
+    first_acquire: { current: Math.min(1, branches.filter((outlet) => outlet.active).length), target: 1 },
+    manager_hired: { current: Math.min(1, branches.filter((outlet) => outlet.manager).length), target: 1 },
+    regulars_cap: { current: Number(state.regulars) || 0, target: 20 }
+  }[id];
+  if (!progress || progress.target < 1) return null;
+  return { current: Math.max(0, Math.min(progress.target, Math.floor(progress.current))), target: progress.target };
+}
+
 export function isAchievementCategory(id) {
   return categoryIds.has(id);
 }
