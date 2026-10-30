@@ -8,24 +8,28 @@
 本專案是以原生 HTML、CSS、JavaScript ES modules 與 Canvas 2D 建立的靜態網頁遊戲。部署內容由 `.openai/hosting.json` 指定的 `dist/` 提供；沒有必需的前端框架、打包步驟或伺服器端遊戲狀態。遊戲資料由瀏覽器 `localStorage` 儲存。
 
 ```text
-dist/index.html + dist/styles.css
+dist/index.html + dist/styles.css（樣式進入點）
             │
             └── dist/app.js
                   └── game.js（瀏覽器組裝與流程協調）
                         └── audio.js（互動後啟動的可選音景與音效）
-                        ├── engine.js（遊戲規則與動作）
-                        │     └── achievements.js（成就資料與狀態推導）
+                        ├── engine.js（遊戲規則組裝與共用狀態）
+                        │     ├── engine/branches.js（分店與店長營運）
+                        │     ├── engine/events.js（事故、宣傳與打烊事件）
+                        │     ├── achievements.js（成就資料與狀態推導）
                         │     ├── state.js（狀態、成本、日常資料）
                         │     ├── progression.js（週焦點目標、進度與結算）
                         │     ├── campaign.js（週期、公告卡、故事、週決策）
                         │     ├── safety.js（攤型、安全、保險）
                         │     └── accounting.js（分錄、資產、結帳、報表）
-                        ├── ui.js + ui/reports.js + ui/achievements.js（面板、報表與成就清單）
+                        ├── ui.js + ui/preparation.js + ui/reports.js + ui/achievements.js（管理面板、報表與成就清單）
                         └── scene.js
                               ├── scene/objects.js（攤位與物件）
                               ├── scene/effects.js（事件特效）
                               └── scene/revenue.js（收入摘要與攤位交易回饋）
 ```
+
+`dist/styles.css` 依序匯入 `dist/styles/{base,market,dialogs,operations,scene}.css`；不需要額外建置工具。
 
 依賴方向的主要原則：
 
@@ -47,9 +51,12 @@ dist/index.html + dist/styles.css
 | `dist/state.js` | 新遊戲狀態、存檔正規化、存取結果、當晚顧客／事件、成本與帳本試算 | Canvas 繪製、DOM 面板 |
 | `dist/safety.js` | 攤型階段、安全設備條件、容量、保險費與有效保障判定 | 實際法規或保險契約解讀 |
 | `dist/accounting.js` | 內部科目表、借貸分錄、現金短溢調整、資產清冊、折舊／攤銷、週工作底稿與週期報表 | 遊戲畫面與營運選單 |
-| `dist/engine.js` | 對遊戲動作套用規則並更新共用 state；結算隨機宣傳、收銀、秘密客與衛生稽查結果 | 瀏覽器事件綁定、Canvas 呈現 |
+| `dist/engine.js` | 組裝遊戲動作並更新共用 state；保留跨領域流程與週期結算 | 瀏覽器事件綁定、Canvas 呈現、分店細節及事件機率表 |
+| `dist/engine/branches.js` | 分店商品備料、店面升級、員工／保險調整、店長事件與分店自動營運 | 瀏覽器 UI、場景繪製 |
+| `dist/engine/events.js` | 安全事故抽選、宣傳結果、打烊收銀差異、秘密客與秘密衛生稽查 | 場景呈現及 UI 事件綁定 |
 | `dist/game.js` | 建立 state、引擎、UI、場景；管理對話框、鍵盤／指標操作、提示、存檔與動畫循環，協調 audio.js | 細部會計科目計算、物件幾何繪製 |
-| `dist/ui.js` | 營運、備料、設備、人事、攤位與安全管理面板 | 規則計算、財務分錄 |
+| `dist/ui.js` | 管理面板組裝、營運與攤位工作台、共用 DOM helper | 規則計算、財務分錄、備料／設備／排班細節渲染 |
+| `dist/ui/preparation.js` | 備料、設備、人員及保險面板的 DOM 節點渲染 | 遊戲規則、存檔與分錄 |
 | `dist/ui/reports.js` | 日記簿、週底稿、期末工作底稿、報表與科目表 DOM | 修改引擎或帳務規則 |
 | `dist/ui/achievements.js` | 篩選成就分類、顯示解鎖紀錄與灰階未解鎖項目 | 改變遊戲經濟或儲存額外進度計數 |
 | `dist/scene.js` | 相機、投影、Canvas 尺寸、角色路徑／更新、場景合成、命中測試 | 攤位商業規則、會計計算 |
@@ -57,6 +64,7 @@ dist/index.html + dist/styles.css
 | `dist/scene/effects.js` | 雨、煙、節慶、事件視覺效果 | 產生經濟事件或收支 |
 | `dist/scene/revenue.js` | 從當夜 ledger 派生收入分類、計數器動畫、主店／分店浮動交易提示；暫態效果不寫入存檔 | 修改帳本、現金、會計分錄或存檔 |
 | `dist/app.js` | 呼叫並匯出 `boot()` 啟動入口 | 遊戲規則 |
+| `dist/styles.css`、`dist/styles/*.css` | 維持單一樣式進入點，並依基礎、場景、對話框、營運面板分層維護 | 遊戲狀態與互動邏輯 |
 
 ## 3. 執行與狀態邊界
 
@@ -85,7 +93,7 @@ dist/index.html + dist/styles.css
 
 ## 5. 驗證與交付
 
-- 核心規則測試位於 `tests/game.test.js`，執行 `npm test`。
+- 測試依責任分於 `tests/game.test.js`、`tests/accounting.test.js`、`tests/achievements.test.js`、`tests/progression.test.js`；執行 `npm test` 會跑完 `tests/`。
 - 推送與 Pull Request 的自動檢查由 `.github/workflows/test.yml` 執行相同測試。
 - 靜態發布入口由 `.openai/hosting.json` 的 `static.directory` 指向 `dist`。
 - 調整 UI／場景時需在桌面與窄版尺寸檢查；調整遊戲規則時需增補可重現的測試。
@@ -96,3 +104,4 @@ dist/index.html + dist/styles.css
 - 主要場景範圍固定；既有畫面擴張不等同於新增可營運區塊。
 - 長期紀錄有上限，限制定義於 `state.js` 的正規化／帳務結算流程。
 - 報表是教育性簡化模擬，並非正式財報、稅務申報或法規遵循工具。
+- `engine.js` 與 `ui.js` 仍是主要組裝入口，尚未拆成所有更小的操作模組；後續應按穩定責任邊界漸進抽離，避免一次大規模改寫。

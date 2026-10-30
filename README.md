@@ -128,8 +128,8 @@ python -m http.server 4173 --directory dist
 
 ## 架構與資料安全
 
-- **規則與瀏覽器啟動分開**：`dist/engine.js` 集中處理可測試的經營規則；`dist/game.js` 負責瀏覽器事件、場景與對話框流程，並明確匯出 `boot()` 供啟動整合測試使用。
-- **介面按責任拆分**：`dist/ui.js` 管理營運與攤位面板；帳務、日記簿與報表由 `dist/ui/reports.js` 負責，場景物件與事件效果則維持在 `dist/scene/` 子模組。
+- **規則與瀏覽器啟動分開**：`dist/engine.js` 組裝可測試的經營流程；分店／店長規則位於 `dist/engine/branches.js`，事故、宣傳與打烊事件位於 `dist/engine/events.js`。`dist/game.js` 負責瀏覽器互動流程，並明確匯出 `boot()`。
+- **介面與樣式按責任拆分**：`dist/ui.js` 組裝管理面板；備料／設備／排班面板由 `dist/ui/preparation.js` 渲染，帳務報表由 `dist/ui/reports.js` 管理，場景物件與事件效果維持在 `dist/scene/`。`dist/styles.css` 是唯一 CSS 入口，依固定順序匯入語意化樣式 partial。
 - **狀態更新方式**：目前引擎刻意採用 mutable state，場景、面板與規則共用同一份遊戲世界。瀏覽器中的遊戲操作會在執行前建立 JSON 快照；若記帳或其他操作意外 throw，便復原快照、重新渲染並回報玩家，不寫入半套狀態。`postJournal` 的借貸檢查仍採 fail-fast，錯誤由操作邊界接住。
 - **存檔版本與復原**：localStorage 存檔帶有 `schemaVersion: 6`，舊版資料透過 `normalizeState` 遷移；新增每週焦點及進度狀態。壞格式存檔會盡力保留至 `.corrupt-backup` 再開啟新進度。較新版存檔不會被舊版遊戲覆寫；儲存空間不足或瀏覽器拒絕存取時，狀態列會顯示原因。
 - **規模上限**：手記最多保留 8,000 夜、分錄最多保留 8,000 筆、每週工作底稿最多 104 期、月報最多 36 期，以控制長期存檔體積。
@@ -137,26 +137,29 @@ python -m http.server 4173 --directory dist
 
 ## 專案結構
 
-- `dist/index.html`、`dist/styles.css`：遊戲頁面結構與視覺樣式。
+- `dist/index.html`、`dist/styles.css`：遊戲頁面結構與唯一 CSS 入口；細部樣式位於 `dist/styles/base.css`、`market.css`、`dialogs.css`、`operations.css`、`scene.css`。
 - `dist/data.js`：菜單、顧客、事件、價格與場景設定。
 - `dist/campaign.js`：30 夜故事日曆、市集公告卡、宣傳合作排程、每週決策與結局條件。
 - `dist/progression.js`：每週經營焦點目標、狀態正規化、活動累積與週結算。
 - `dist/state.js`：遊戲存檔、遷移、營運狀態、成本與事件規則。
-- `dist/engine.js`：可注入亂數的經營引擎，處理服務流程、打烊突發事件、週決策、事故／保險與分店自動營運。
+- `dist/engine.js`：可注入亂數的經營引擎與跨系統流程協調。
+- `dist/engine/branches.js`：分店備料、攤型與設備升級、排班、保險、店長決策及自動營運。
+- `dist/engine/events.js`：事故抽選、宣傳結果、打烊收銀短溢、秘密客與秘密衛生稽查。
 - `dist/safety.js`：攤型、安全升級條件、接待容量、期初保險費與保障規則。
 - `dist/accounting.js`：內部科目表、借貸分錄、資產折舊／攤銷與報表結算。
 - `dist/game.js`：可測試的遊戲規則與瀏覽器互動流程。
 - `dist/audio.js`：無外部音檔的可選程序化音景與短音效。
 - `dist/scene.js`：斜視投影、相機、場景合成、命中測試與操作控制。
 - `dist/scene/objects.js`、`dist/scene/effects.js`：場景物件與事件特效繪製。
-- `dist/ui.js`：以 DOM 節點建立的管理面板、攤型／保險管理、期末工作底稿與報表介面。
+- `dist/ui.js`：以 DOM 節點組裝營運與攤位管理面板。
+- `dist/ui/preparation.js`：備料、設備、人員與保險面板的節點渲染。
 - `dist/ui/reports.js`：日記簿、週底稿、期末調整與週期財務報表的節點渲染。
 - `dist/app.js`：瀏覽器啟動入口。
-- `tests/game.test.js`：遊戲規則、存檔、相機、經濟循環與會計報表測試。
+- `tests/game.test.js`、`tests/accounting.test.js`、`tests/achievements.test.js`、`tests/progression.test.js`：按領域分組的遊戲規則、存檔、帳務、成就、週進度與場景測試。
 
 ## 驗證
 
-執行 `npm test` 可驗證客訴選項、庫存耗盡、設備效果、存檔版本遷移／壞檔備份／QuotaExceeded 回饋／未來版本保留、極端存檔正規化、市集公告卡、週轉貸款、週焦點與週期回顧、同業聯盟、相機限制、跨越 30 夜持續營運、攤型升級與免費菜色解鎖、員工及食品安全事故、保單理賠應收與延後收款、家鄉秘笈隨機解鎖、離職孤兒保單期末調整、借貸平衡及報表勾稽等核心路徑。
+執行 `npm test` 會跑完 `tests/` 下的領域測試，目前共 74 項，可驗證客訴、庫存、存檔遷移、週轉貸款、攤型與分店營運、事故／保險、打烊收銀差異、成就、週焦點、會計平衡、報表及模組責任邊界等路徑。
 
 GitHub Actions 會在推送至 `main`、建立 Pull Request 或手動觸發時執行相同的 `npm test`，用來及早攔截回歸。
 

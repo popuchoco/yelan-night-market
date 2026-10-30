@@ -1,0 +1,265 @@
+/* The in-world operations keep their existing harbor palette; tier and insurance
+   controls use compact ledger-like surfaces so the safety rules stay scannable. */
+.tier-planning, .branch-safety-section { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
+.tier-plan-card, .branch-safety-card, .insurance-card, .staff-release-card { display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-3); border: 1px solid #c6ad6938; border-radius: 12px; background: linear-gradient(145deg,#263532,#1d2b2a); }
+.tier-plan-head, .insurance-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.tier-plan-title, .insurance-card-head h4, .branch-safety-card h4 { margin: 0; color: #f0e4c6; font-size: var(--type-body); font-weight: 800; }
+.tier-plan-badge { flex: 0 0 auto; padding: 5px 9px; border: 1px solid #d7bd7955; border-radius: 999px; color: #ecd8a3; background: #d7bd7910; font-size: var(--type-caption); font-weight: 800; }
+.tier-track { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-1); padding: 0; margin: 0; list-style: none; }
+.tier-track li { position: relative; display: grid; justify-items: center; gap: 5px; color: #aab9ac; text-align: center; font-size: var(--type-caption); }
+.tier-track li:not(:last-child)::after { position: absolute; top: 8px; left: calc(50% + 10px); width: calc(100% - 20px); border-top: 1px solid #95a99055; content: ""; }
+.tier-track-dot { z-index: 1; width: 16px; height: 16px; border: 2px solid #91a08f; border-radius: 50%; background: #1d2b2a; }
+.tier-track li.complete .tier-track-dot, .tier-track li.current .tier-track-dot { border-color: #e9cf8a; background: #b89854; box-shadow: 0 0 0 3px #d8b86719; }
+.tier-track li.current { color: #f0d99e; font-weight: 800; }
+.tier-track-label { line-height: 1.35; }
+.tier-plan-meta, .tier-plan-next, .tier-plan-finished, .insurance-summary { margin: 0; color: #c2cec0; font-size: var(--type-caption); line-height: 1.55; }
+.tier-plan-next { color: #f0daa2; font-weight: 800; }
+.tier-requirements { display: grid; gap: 4px; padding: 0; margin: 0; list-style: none; color: #f1c5a8; font-size: var(--type-caption); line-height: 1.45; }
+.tier-requirements .ready { color: #bdd6b8; }
+.tier-upgrade-action { width: 100%; }
+.branch-safety-section > .helper-copy { margin: 0; }
+.branch-safety-card h4 { margin-bottom: var(--space-1); }
+.branch-safety-grid { display: grid; gap: var(--space-2); }
+.branch-safety-grid .manager-item { align-items: flex-start; }
+.insurance-card .ledger-card { margin: 0; }
+.insurance-orphan { margin: 0; padding: var(--space-2); border-left: 3px solid var(--gold); border-radius: 5px; color: #f0d99e; background: #d5bd790c; font-size: var(--type-caption); line-height: 1.5; }
+.staff-release-card { border-color: #c97e6244; background: #9e563d0c; }
+.staff-release-card > b { color: #efcfb8; }
+.staff-release-card .manager-note { margin: 0; line-height: 1.5; }
+.game-footer { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); min-height: 56px; padding: var(--space-2) 4px 0; color: #aab7aa; font-size: var(--type-caption); }
+.achievement-trigger { position: relative; display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-3); border: 1px solid #d6bd7955; border-radius: 9px; color: #e7d7a6; background: #d6bd7912; font: inherit; font-size: var(--type-body); font-weight: 800; cursor: pointer; }
+.achievement-trigger > span:first-child { color: #efcb74; }
+.achievement-trigger:hover { border-color: #edc77c; background: #d6bd7922; }
+.achievement-new-badge { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; border: 2px solid #182523; border-radius: 999px; color: #17211d; background: #f0d185; font-size: 11px; line-height: 1; }
+.achievement-new-badge[hidden] { display: none; }
+.achievement-dialog { box-sizing: border-box; width: min(900px,calc(100vw - 32px)); height: min(760px,calc(100dvh - 32px)); max-width: none; max-height: none; margin: auto; padding: 0; overflow: hidden; border: 1px solid #e6d6a255; border-radius: 20px; color: var(--cream); background: linear-gradient(160deg,#223332,#152222); box-shadow: 0 28px 90px #000b; }
+.achievement-dialog:not([open]) { display: none; }
+.achievement-dialog[open] { display: grid; grid-template-rows: auto minmax(0,1fr); }
+.achievement-dialog::backdrop { background: #081111d9; backdrop-filter: blur(7px); }
+.achievement-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: clamp(16px,2.8vw,26px); border-bottom: 1px solid #ffffff18; background: #1c2a29; }
+.achievement-dialog-header .modal-title { margin: 5px 0 0; color: #f2ecd9; font-size: clamp(21px,3vw,28px); }
+.achievement-dialog-header .modal-desc { max-width: 640px; margin: 6px 0 0; color: #bdc9bc; font-size: var(--type-body); line-height: 1.55; }
+.achievement-dialog-content { min-width: 0; min-height: 0; overflow: auto; padding: var(--space-4) clamp(14px,2.8vw,26px) 24px; overscroll-behavior: contain; scrollbar-color: #758a77 #1c2826; }
+.achievement-dialog-content:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
+.achievement-browser { display: grid; gap: var(--space-3); }
+.achievement-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid #d0b76a3d; border-radius: 12px; background: linear-gradient(135deg,#2a3832,#202d2a); }
+.achievement-progress, .achievement-guidance { margin: 0; }
+.achievement-progress { color: #d9d5c2; font-size: var(--type-body); white-space: nowrap; }
+.achievement-progress strong { color: #f0d58d; font-size: 22px; font-variant-numeric: tabular-nums; }
+.achievement-guidance { color: #bdc8bb; font-size: var(--type-caption); line-height: 1.5; text-align: right; }
+.achievement-filters { display: flex; gap: 7px; overflow-x: auto; padding: 2px 1px 7px; scrollbar-color: #778a75 #1b2826; }
+.achievement-filter { flex: 0 0 auto; min-height: 44px; padding: 0 14px; border: 1px solid #95a48e45; border-radius: 999px; color: #c5d0c3; background: #1d2b29; font: inherit; font-size: var(--type-caption); font-weight: 750; cursor: pointer; }
+.achievement-filter:hover { border-color: #d8c27d88; color: #f0e2b8; }
+.achievement-filter[aria-pressed="true"] { border-color: #dbc47f; color: #201f19; background: #ddc681; box-shadow: 0 2px 10px #d7b76422; }
+.achievement-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
+.achievement-card { display: grid; grid-template-columns: 46px minmax(0,1fr) auto; align-items: start; gap: var(--space-2); min-width: 0; min-height: 108px; padding: var(--space-3); border: 1px solid #9aa88c3b; border-radius: 13px; background: #1a2826; }
+.achievement-card.is-unlocked { border-color: #d7bd7966; background: linear-gradient(145deg,#343a2d,#22312c); box-shadow: inset 3px 0 #e2c67f; }
+.achievement-card.is-locked { filter: grayscale(1); border-color: #8a958a32; background: #1b2524; }
+.achievement-mark { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #d8c47b55; border-radius: 12px; color: #f0d58d; background: #d1b66e19; font-size: 22px; }
+.is-locked .achievement-mark { border-color: #aab1a133; color: #adb4ac; background: #ffffff08; }
+.achievement-copy { display: grid; gap: 4px; min-width: 0; }
+.achievement-category { color: #c9bb84; font-size: 11px; font-weight: 800; letter-spacing: .04em; }
+.is-locked .achievement-category { color: #adb4ac; }
+.achievement-title { margin: 0; color: #f1e6ca; font-size: var(--type-body); line-height: 1.35; overflow-wrap: anywhere; }
+.is-locked .achievement-title { color: #c2c8bf; }
+.achievement-description { margin: 0; color: #c4cec1; font-size: var(--type-caption); line-height: 1.5; }
+.is-locked .achievement-description { color: #adb4ac; }
+.achievement-status { align-self: start; padding: 5px 8px; border: 1px solid #a9b2a539; border-radius: 999px; color: #adb6ac; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.is-unlocked .achievement-status { border-color: #dcc47b77; color: #edda9e; background: #dbbf6816; }
+.achievement-stamp { display: grid; justify-items: end; gap: 5px; }
+.achievement-date { color: #d5cda9; font-size: 11px; line-height: 1.3; white-space: nowrap; }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+.achievement-toast { position: absolute; z-index: 7; left: 50%; bottom: calc(var(--world-toast-offset,72px) + 56px); display: grid; grid-template-columns: 38px minmax(0,1fr) auto 30px; align-items: center; gap: 10px; width: min(520px,calc(100% - 28px)); min-height: 64px; padding: 8px 10px; border: 1px solid #e8cf8e77; border-radius: 14px; color: #efe8d6; background: #1b2b29f7; box-shadow: 0 12px 35px #0009; opacity: 0; transform: translate(-50%,12px); transition: opacity .18s ease, transform .18s ease; }
+.achievement-toast[hidden] { display: none; }
+.achievement-toast.show { opacity: 1; transform: translate(-50%,0); }
+.achievement-toast-mark { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #e0c67566; border-radius: 11px; color: #f3d480; background: #bd9b4322; font-size: 22px; }
+.achievement-toast-copy { display: grid; min-width: 0; gap: 2px; }
+.achievement-toast-copy small { color: #cfbd7f; font-size: 11px; font-weight: 800; letter-spacing: .07em; }
+.achievement-toast-copy strong { overflow: hidden; color: #f3ead2; font-size: var(--type-body); text-overflow: ellipsis; white-space: nowrap; }
+.achievement-toast-view, .achievement-toast-dismiss { min-height: 44px; border: 1px solid #d8c37a4d; border-radius: 9px; color: #f0d998; background: #d2b86416; font: inherit; font-size: var(--type-caption); font-weight: 800; cursor: pointer; }
+.achievement-toast-view { padding: 0 12px; }
+.achievement-toast-dismiss { width: 36px; font-size: 20px; }
+.achievement-trigger:focus-visible, .achievement-filter:focus-visible, .achievement-toast button:focus-visible { outline: 2px solid #f0d58d; outline-offset: 2px; }
+.game-guide-trigger { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-3); border: 1px solid #d6bd7955; border-radius: 9px; color: #f0dcaa; background: #d6bd7912; font: inherit; font-size: var(--type-body); font-weight: 800; cursor: pointer; }
+.game-guide-trigger:hover { border-color: #edc77c; background: #d6bd7922; }
+.game-guide-dialog { box-sizing: border-box; width: min(820px,calc(100vw - 32px)); max-width: none; max-height: min(88dvh,820px); margin: auto; padding: 0; overflow: hidden; border: 1px solid #ddc67c66; border-radius: 18px; color: var(--cream); background: linear-gradient(155deg,#243533,#172424); box-shadow: 0 28px 90px #000b; }
+.game-guide-dialog:not([open]) { display: none; }
+.game-guide-dialog[open] { display: grid; grid-template-rows: auto minmax(0,1fr); }
+.game-guide-dialog::backdrop { background: #071111dd; backdrop-filter: blur(6px); }
+.game-guide-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: clamp(16px,3vw,28px); border-bottom: 1px solid #ffffff18; background: #1c2a29; }
+.game-guide-header .modal-title { margin: 5px 0 0; color: #f3ecd7; font-size: clamp(22px,4vw,30px); }
+.game-guide-header .modal-desc { max-width: 620px; margin: 7px 0 0; color: #c4d0c3; font-size: var(--type-body); line-height: 1.55; }
+.game-guide-content { min-height: 0; overflow: auto; padding: var(--space-4) clamp(16px,3vw,28px) 24px; overscroll-behavior: contain; scrollbar-color: #758a77 #1c2826; }
+.game-guide-content:focus-visible { outline: 2px solid var(--gold); outline-offset: -4px; }
+.guide-section { display: grid; gap: var(--space-2); padding: var(--space-4) 0; border-bottom: 1px solid #ffffff15; }
+.guide-section:last-child { border-bottom: 0; }
+.guide-danger-zone {
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px dashed #c97e6244;
+  border-bottom: 0;
+}
+.guide-danger-zone h3 { color: #f1c6b2; }
+.guide-danger-zone p { color: #d4c4b8; }
+.guide-restart-button { margin-top: var(--space-2); min-height: 44px; }
+.restart-confirm-dialog {
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #c97e6266;
+  border-radius: 16px;
+  color: var(--cream);
+  background: linear-gradient(155deg, #2a2422, #1a1614);
+  box-shadow: 0 28px 90px #000c;
+}
+.restart-confirm-dialog:not([open]) { display: none; }
+.restart-confirm-dialog[open] { display: grid; }
+.restart-confirm-dialog::backdrop { background: #100808dd; backdrop-filter: blur(6px); }
+.restart-confirm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: clamp(16px, 3vw, 24px);
+  border-bottom: 1px solid #ffffff14;
+}
+.restart-confirm-header .modal-title { margin: 5px 0 0; color: #f3d9cc; font-size: clamp(20px, 3.6vw, 26px); }
+.restart-confirm-header .modal-desc { margin: 8px 0 0; color: #d2c0b4; font-size: var(--type-body); line-height: 1.6; }
+.restart-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: 16px clamp(16px, 3vw, 24px) 20px;
+}
+.guide-index { color: #d2b775; font-size: var(--type-caption); font-weight: 850; letter-spacing: .12em; }
+.guide-section h3 { margin: 0; color: #f1e6c8; font-size: var(--type-lead); }
+.guide-section p, .guide-section li { margin: 0; color: #d0d9cd; font-size: var(--type-body); line-height: 1.7; }
+.guide-section ul { display: grid; gap: var(--space-2); padding-left: 22px; margin: 0; }
+.guide-tier-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid #d6bd7932; border-radius: 9px; color: #f3dfab; background: #d5bd790c; font-size: var(--type-caption); font-weight: 850; }
+.guide-callout { padding: var(--space-3); border-left: 3px solid #d8bf7d; border-radius: 6px; background: #d5bd790d; }
+@media (max-width: 800px) {
+  .game-footer { justify-content: center; flex-wrap: wrap; padding-bottom: env(safe-area-inset-bottom,0px); }
+  .achievement-dialog { width: min(100% - 20px,760px); height: min(90dvh,820px); border-radius: 15px; }
+  .achievement-dialog-header { padding: var(--space-3); }
+  .achievement-dialog-content { padding: var(--space-3) var(--space-3) max(var(--space-4),env(safe-area-inset-bottom)); }
+  .achievement-toast { bottom: calc(var(--world-toast-offset,72px) + 52px); }
+  .game-guide-dialog { width: min(100% - 20px,760px); max-height: 90dvh; border-radius: 14px; }
+  .game-guide-header { padding: var(--space-3); }
+  .game-guide-content { padding: var(--space-3) var(--space-3) 20px; }
+  .tier-plan-meta, .tier-plan-next, .insurance-summary { font-size: 13px; }
+}
+.accounting-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; color: #cfdbca; font-size: var(--type-caption); font-weight: 750; }
+.accounting-filter select { min-height: 44px; max-width: 100%; padding: 0 var(--space-3); border: 1px solid #93a88b55; border-radius: 8px; color: #f0ead9; background: #202d2b; font: inherit; }
+.accounting-table-shell { max-width: 100%; overflow: auto; margin: var(--space-2) 0 var(--space-3); border: 1px solid #96a38b35; border-radius: 10px; background: #182321cc; scrollbar-color: #758a77 #1c2826; }
+.accounting-table-shell:focus-visible { outline: 2px solid #e3c77d; outline-offset: 2px; }
+.accounting-table { width: 100%; min-width: 560px; border-collapse: collapse; color: #dfe3d5; font-size: var(--type-caption); line-height: 1.45; }
+.accounting-table th, .accounting-table td { padding: 10px 12px; border-bottom: 1px solid #9dac9630; text-align: left; vertical-align: top; white-space: nowrap; }
+.accounting-table th { position: sticky; top: 0; color: #ecdfb6; background: #293733; font-weight: 800; }
+.accounting-table tbody tr:last-child td { border-bottom: 0; }
+.accounting-table tbody tr:nth-child(even) { background: #ffffff04; }
+.accounting-mobile-list { display: none; }
+.statement-summary { display: grid; gap: var(--space-2); padding: var(--space-3); margin: var(--space-2) 0; border: 1px solid #c6ad6944; border-radius: 11px; background: linear-gradient(135deg,#273631,#202d2b); }
+.statement-summary-heading { color: #ead69d; font-size: var(--type-caption); font-weight: 850; letter-spacing: .08em; }
+.statement-summary-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2); }
+.statement-metric { display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-2); border: 1px solid #b9d2b71c; border-radius: 8px; background: #101b1a55; }
+.statement-metric-label { color: #c3d0c4; font-size: var(--type-caption); line-height: 1.4; }
+.statement-metric-value { overflow-wrap: anywhere; color: #edf0df; font-size: var(--type-body); font-variant-numeric: tabular-nums; }
+.statement-metric-value.positive { color: #c7e0bd; }
+.statement-metric-value.negative { color: #ffd0b4; }
+.statement-status { min-height: 44px; display: flex; align-items: center; padding: var(--space-2) var(--space-3); margin: var(--space-2) 0; border: 1px solid #a58b5344; border-radius: 8px; color: #f0d798; background: #b3923c12; font-size: var(--type-caption); font-weight: 800; }
+.statement-status.balanced { border-color: #8fbd9666; color: #cce0c1; background: #7ea58618; }
+.statement-status.unbalanced { border-color: #dc997c88; color: #ffd0b4; background: #be634522; }
+.accounting-note { line-height: 1.6; }
+.asset-register { display: grid; gap: var(--space-2); }
+.asset-row { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid #96a38b35; border-radius: 10px; background: #1a2826; }
+.asset-row-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); color: #eee4c9; }
+.asset-code { padding: 4px 8px; border: 1px solid #d0b76a44; border-radius: 99px; color: #dac98f; font-size: var(--type-caption); }
+.asset-row-values { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-1) var(--space-3); color: #c6d0c4; font-size: var(--type-caption); }
+.asset-row-values b { color: #f0d696; }
+@media (max-width: 640px) {
+  .achievement-dialog { width: calc(100vw - 12px); height: calc(100dvh - 12px); border-radius: 14px; }
+  .achievement-dialog-header { padding: 12px; }
+  .achievement-dialog-header .modal-desc { font-size: 14px; }
+  .achievement-dialog-content { padding: 10px 11px max(16px,env(safe-area-inset-bottom)); }
+  .achievement-summary { align-items: flex-start; flex-direction: column; gap: 5px; padding: 10px 12px; }
+  .achievement-guidance { text-align: left; }
+  .achievement-list { grid-template-columns: 1fr; gap: 8px; }
+  .achievement-card { grid-template-columns: 42px minmax(0,1fr) auto; min-height: 92px; gap: 8px; padding: 10px; }
+  .achievement-mark { width: 40px; height: 40px; font-size: 20px; }
+  .achievement-stamp { gap: 4px; }
+  .achievement-date { max-width: 86px; white-space: normal; text-align: right; }
+  .achievement-toast { grid-template-columns: 34px minmax(0,1fr) auto 30px; gap: 6px; width: calc(100% - 16px); padding: 7px; }
+  .achievement-toast-mark { width: 34px; height: 34px; }
+  .achievement-toast-view { padding: 0 9px; }
+  .report-launch-grid { grid-template-columns: 1fr; }
+  .report-launch { min-height: 96px; }
+  .report-dialog { width: calc(100vw - 12px); height: calc(100dvh - 12px); border-radius: 15px; }
+  .report-dialog-header { padding: var(--space-3); }
+  .report-dialog-content { padding: var(--space-3) var(--space-3) max(var(--space-4),env(safe-area-inset-bottom)); }
+  .report-dialog .accounting-table-shell { overflow: visible; border: 0; background: transparent; }
+  .report-dialog .accounting-table { display: none; }
+  .report-dialog .accounting-mobile-list { display: grid; gap: var(--space-2); }
+  .accounting-mobile-record { min-width: 0; padding: var(--space-3); border: 1px solid #96a38b35; border-radius: 10px; background: #182321cc; }
+  .accounting-mobile-record-title { margin: 0 0 var(--space-2); color: #eee4c9; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+  .accounting-mobile-details { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-2); margin: 0; }
+  .accounting-mobile-item { display: grid; align-content: start; gap: 4px; min-width: 0; padding: var(--space-2); border: 1px solid #b9d2b71c; border-radius: 8px; background: #101b1a66; }
+  .accounting-mobile-item dt { color: #bdc9bc; font-size: 12px; font-weight: 750; line-height: 1.4; }
+  .accounting-mobile-item dd { margin: 0; color: #edf0df; font-size: 14px; line-height: 1.45; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .accounting-mobile-item:only-child { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+  .asset-row-values { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 800px) {
+  .app-shell { padding: var(--space-2) var(--space-2) var(--space-4); }
+  .topbar { display: flex; flex-wrap: wrap; row-gap: var(--space-2); column-gap: var(--space-2); padding: 0 0 var(--space-2); }
+  .brand { min-width: 0; flex: 1 1 100%; }
+  .brand-mark { width: 40px; height: 40px; }
+  .brand-sub { font-size: var(--type-caption); letter-spacing: .08em; }
+  .resource-row { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); width: 100%; gap: var(--space-1); }
+  .resource { min-width: 0; min-height: 44px; justify-content: center; padding: var(--space-2); }
+  .game-layout { gap: var(--space-3); padding-top: var(--space-2); }
+  .world-top-left { top: 12px; left: 12px; width: calc(47% - 12px); max-width: calc(47% - 12px); }
+  .world-title { font-size: var(--type-lead); line-height: 1.35; }
+  .camera-tools { top: 10px; right: 10px; width: calc(47% - 12px); max-width: calc(47% - 12px); flex-wrap: wrap; justify-content: flex-end; gap: var(--space-1); padding: var(--space-1); }
+  .camera-label { display: none; }
+  .icon-button { width: 44px; height: 44px; flex: 0 0 44px; }
+  .world-hint { left: 10px; bottom: 10px; max-width: 40%; padding: var(--space-2); font-size: var(--type-caption); line-height: 1.4; }
+  .world-actions { right: 10px; bottom: 10px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: 55%; gap: var(--space-1); }
+  .world-action { min-height: 44px; padding: var(--space-1); white-space: normal; line-height: 1.25; }
+  .panel { min-height: 520px; }
+  .panel-tabs { grid-template-columns: repeat(6,minmax(0,1fr)); gap: 2px; padding: var(--space-2); }
+  .panel-tab { padding: var(--space-1) 1px; }
+  .panel-tab span { font-size: var(--type-lead); }
+}
+@media (max-width: 480px) {
+  .app-shell { padding: var(--space-2); }
+  .resource { gap: var(--space-1); }
+  .resource small { font-size: var(--type-caption); }
+  .resource b { font-size: var(--type-caption); }
+  .world-frame { min-height: 360px; }
+  .world-top-left { width: calc(47% - 12px); }
+  .world-eyebrow { letter-spacing: .08em; }
+  .world-hint { max-width: 40%; }
+  .world-actions { width: 57%; }
+  .world-action { font-size: var(--type-caption); }
+  .panel-content { padding: var(--space-3); }
+  .manager-item { flex-wrap: wrap; }
+  .manager-copy { flex: 1 1 calc(100% - 58px); }
+  .manager-action { margin-left: auto; }
+  .complaint-options { grid-template-columns: 1fr; }
+  .market-announcement-choices, .acquisition-targets { grid-template-columns: 1fr; }
+  .finance-panel { align-items: stretch; flex-direction: column; }
+  .finance-action { width: 100%; }
+  .outlet-stock-row { grid-template-columns: minmax(0,1fr) auto; }
+  .outlet-stock-row .outlet-small-action { grid-column: 1 / -1; width: 100%; }
+  .manager-hiring-heading { align-items: flex-start; flex-direction: column; }
+  .manager-hiring-heading span { text-align: left; }
+  .manager-hiring-row { grid-template-columns: 1fr; }
+  .manager-hire-button { width: 100%; }
+  .manager-event-choices { grid-template-columns: 1fr; }
+  .modal { padding: var(--space-4); }
+}

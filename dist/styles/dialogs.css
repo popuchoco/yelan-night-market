@@ -1,0 +1,35 @@
+/* Reports are launched as independent dialogs so detail tables never resize
+   or push the management panel below its own navigation. */
+.report-launch-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,210px),1fr)); gap: var(--space-2); margin-top: var(--space-3); }
+.report-launch { display: grid; grid-template-columns: 36px minmax(0,1fr) 16px; align-items: start; gap: var(--space-2); width: 100%; min-height: 112px; padding: var(--space-3); border: 1px solid #96a38b3d; border-radius: 12px; color: var(--cream); background: linear-gradient(145deg,#263634,#1c2928); text-align: left; cursor: pointer; transition: border-color .16s ease, background-color .16s ease, transform .16s ease; }
+.report-launch:hover { border-color: #d5bd7988; background: linear-gradient(145deg,#30413b,#202e2c); transform: translateY(-1px); }
+.report-launch-icon { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #d5bd7940; border-radius: 10px; color: #ead69d; background: #c4a45b15; font-size: 19px; font-weight: 800; }
+.report-launch-copy { display: grid; min-width: 0; gap: 5px; }
+.report-launch-title { color: #eee6d1; font-size: var(--type-body); line-height: 1.35; }
+.report-launch-description { color: #bcc8bc; font-size: 13px; line-height: 1.5; }
+.report-launch-status { color: #e4cd92; font-size: 13px; font-weight: 750; line-height: 1.4; }
+.report-launch-arrow { align-self: center; color: #cfb978; font-size: 16px; }
+.report-intro { margin-top: var(--space-2); color: #c1cec1; }
+.report-dialog { box-sizing: border-box; width: min(1080px,calc(100vw - 32px)); max-width: none; height: min(900px,calc(100dvh - 32px)); max-height: none; margin: auto; padding: 0; overflow: hidden; border: 1px solid #e6d6a255; border-radius: 20px; color: var(--cream); background: linear-gradient(160deg,#223332,#152222); box-shadow: 0 28px 90px #000b; }
+.report-dialog:not([open]) { display: none; }
+.report-dialog[open] { display: grid; grid-template-rows: auto minmax(0,1fr); }
+.report-dialog::backdrop { background: #081111d9; backdrop-filter: blur(7px); }
+.report-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); padding: clamp(16px,2.8vw,28px); border-bottom: 1px solid #ffffff18; background: #1c2a29; }
+.report-dialog-heading { min-width: 0; }
+.report-dialog-header .modal-title { margin: 5px 0 0; color: #f2ecd9; font-size: clamp(21px,3vw,28px); }
+.report-dialog-header .modal-desc { margin: 6px 0 0; color: #bdc9bc; font-size: 16px; line-height: 1.55; }
+.report-dialog-content { min-width: 0; min-height: 0; overflow: auto; padding: var(--space-4) clamp(16px,2.8vw,28px) 28px; overscroll-behavior: contain; scrollbar-color: #758a77 #1c2826; }
+.report-dialog-content:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
+.report-dialog-content .helper-copy, .report-dialog-content .statement-status { font-size: 14px; }
+.report-dialog-content .subhead h3 { font-size: 16px; }
+.report-dialog-content .accounting-filter { font-size: 14px; }
+.report-dialog-content .accounting-filter select { font-size: 15px; }
+.report-dialog .accounting-table-shell { max-height: none; }
+.report-dialog .accounting-table { width: 100%; min-width: 560px; font-size: 14px; }
+.report-dialog .statement-summary-heading, .report-dialog .statement-metric-label { font-size: 14px; }
+.report-dialog .statement-metric-value { font-size: 16px; }
+.report-dialog .story-card p { font-size: 14px; }
+.statement-picker { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2); margin: var(--space-3) 0; }
+.statement-picker-button { min-height: 48px; padding: var(--space-2) var(--space-3); border: 1px solid #8fa58a55; border-radius: 9px; color: #dce0d1; background: #24312f; font: inherit; font-size: var(--type-body); font-weight: 750; line-height: 1.4; cursor: pointer; }
+.statement-picker-button:hover { border-color: #d1b876; }
+.statement-picker-button.active, .statement-picker-button[aria-pressed="true"] { border-color: #d5bd79; color: #f2e6bf; background: #9c875033; }
