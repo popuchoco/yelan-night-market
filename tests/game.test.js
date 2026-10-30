@@ -5,6 +5,7 @@ import { DATA, getOutletSpecialty, outletRetailPrice } from "../dist/data.js";
 import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, MARKET_CARDS, MARKET_CARD_SCHEDULE, WEEKLY_DECISION_DAYS, campaignCycleDay, campaignEntry, marketCardForDay, selectEnding } from "../dist/campaign.js";
 import { closeDepreciation, CHART_OF_ACCOUNTS, getDailyCashbookSummary, postJournal } from "../dist/accounting.js";
 import { boot, createGameEngine } from "../dist/game.js";
+import { createGameAudio } from "../dist/audio.js";
 import { createUI } from "../dist/ui.js";
 import { applyCameraAction, getFootprintDepth } from "../dist/scene.js";
 import { getStallVisualProfile, splitStallSupportPosts } from "../dist/scene/objects.js";
@@ -16,7 +17,7 @@ import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   captureStateSnapshot, loadState, loadStateResult, normalizeState, restoreStateSnapshot,
   saveState, saveStateResult, clearSavedProgress, SAVE_SCHEMA_VERSION,
-  todayEvent, todayMarketCard, ledgerIncome, ledgerNet
+  todayEvent, todayMarketCard, todayStory, ledgerIncome, ledgerNet
 } from "../dist/state.js";
 
 function serviceState(day = 3) {
@@ -238,6 +239,73 @@ test("campaign calendar covers 30 distinct story nights and has four weekly turn
   assert.equal(todayEvent({ day: 30 }).name, CAMPAIGN_CALENDAR[29].name);
   assert.equal(campaignEntry(31).title, campaignEntry(1).title);
   assert.equal(campaignCycleDay(61), 1);
+});
+
+test("new 30-night chapter opening reflects the previous ending and last weekly decision", () => {
+  const legacy = freshState();
+  legacy.day = 31;
+  assert.equal(todayStory(legacy).title, campaignEntry(1).title);
+
+  const thriving = freshState();
+  thriving.day = 31;
+  thriving.accounting.monthlyReports.push({ endDay: 30, outcomeId: "harbor-icon", outcome: { title: "港灣夜市名店" } });
+  thriving.decisions.push({ day: 29, id: "expand" });
+  const thrivingOpening = todayStory(thriving);
+  assert.equal(thrivingOpening.chapter, 2);
+  assert.match(thrivingOpening.title, /第 2 期/);
+  assert.match(thrivingOpening.story, /港灣夜市名店/);
+  assert.match(thrivingOpening.story, /添上的座位/);
+  assert.notEqual(thrivingOpening.title, campaignEntry(1).title);
+
+  const rebuilding = freshState();
+  rebuilding.day = 61;
+  rebuilding.accounting.monthlyReports.push({ endDay: 60, outcomeId: "quiet-lantern", outcome: { title: "巷口漸漸安靜" } });
+  rebuilding.decisions.push({ day: 59, id: "hold" });
+  const rebuildingOpening = todayStory(rebuilding);
+  assert.equal(rebuildingOpening.chapter, 3);
+  assert.match(rebuildingOpening.title, /重新聚起燈火/);
+  assert.match(rebuildingOpening.story, /保留的現金/);
+});
+
+test("optional harbor ambience is lazy, user-controlled, and stops when muted", () => {
+  const makeParam = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} });
+  class FakeNode {
+    constructor() { this.gain = makeParam(); this.frequency = makeParam(); this.Q = makeParam(); this.started = 0; this.stopped = 0; this.connections = []; }
+    connect(node) { this.connections.push(node); return node; }
+    disconnect() { this.disconnected = true; }
+    start() { this.started += 1; }
+    stop() { this.stopped += 1; }
+  }
+  class FakeAudioContext {
+    constructor() { this.sampleRate = 8000; this.currentTime = 1; this.state = "suspended"; this.destination = {}; this.nodes = []; }
+    createBuffer(_channels, length, rate) {
+      this.bufferArgs = [length, rate];
+      return { getChannelData: () => new Float32Array(length) };
+    }
+    createBufferSource() { const node = new FakeNode(); this.nodes.push(node); return node; }
+    createBiquadFilter() { const node = new FakeNode(); this.nodes.push(node); return node; }
+    createGain() { const node = new FakeNode(); this.nodes.push(node); return node; }
+    createOscillator() { const node = new FakeNode(); this.nodes.push(node); return node; }
+    resume() { this.state = "running"; return Promise.resolve(); }
+    suspend() { this.state = "suspended"; this.suspendCalls = (this.suspendCalls || 0) + 1; return Promise.resolve(); }
+  }
+  const context = new FakeAudioContext();
+  let factoryCalls = 0;
+  const audio = createGameAudio({ contextFactory: () => { factoryCalls += 1; return context; }, random: () => 0.6 });
+  assert.equal(audio.playTone("success"), false);
+  assert.equal(factoryCalls, 0);
+  audio.setEnabled(true);
+  assert.equal(factoryCalls, 0);
+  assert.equal(audio.playTone("success"), true);
+  assert.deepEqual(context.bufferArgs, [32000, 8000]);
+  assert.equal(context.nodes.filter((node) => node.started).length, 3);
+  audio.suspend();
+  assert.equal(context.suspendCalls, 1);
+  const ambientSource = context.nodes[0];
+  audio.setEnabled(false);
+  assert.equal(ambientSource.stopped, 1);
+  assert.equal(ambientSource.disconnected, true);
+  assert.equal(audio.isEnabled(), false);
 });
 
 test("legacy 30-night ending saves resume at night 31 with a live world", () => {
@@ -742,7 +810,7 @@ test("weekly focus closes into the diary and worksheet, rewarding completion onl
   state.weeklyFocus.progress = state.weeklyFocus.target;
   const beforeFame = state.fame;
   const beforeRegulars = state.regulars;
-  const engine = createGameEngine(state);
+  const engine = createGameEngine(state, { random: () => 1 });
   assert.equal(engine.nextNight().ok, true);
   assert.equal(state.weeklyFocus.result.success, true);
   assert.equal(state.journal[0].weeklyFocus.success, true);
@@ -1074,8 +1142,8 @@ test("ending rules represent successful and adverse business outcomes", () => {
   assert.ok(choices.includes("negative"));
 });
 
-test("DOM helpers and split scene renderers remain in place without HTML injection", async () => {
-  const [ui, reports, scene, objects, effects, revenue, html, app] = await Promise.all([
+test("DOM helpers, sound layer, and split scene renderers remain in place", async () => {
+  const [ui, reports, scene, objects, effects, revenue, html, app, gameSource, audio] = await Promise.all([
     readFile(new URL("../dist/ui.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/ui/reports.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene.js", import.meta.url), "utf8"),
@@ -1083,7 +1151,9 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
     readFile(new URL("../dist/scene/effects.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/scene/revenue.js", import.meta.url), "utf8"),
     readFile(new URL("../dist/index.html", import.meta.url), "utf8"),
-    readFile(new URL("../dist/app.js", import.meta.url), "utf8")
+    readFile(new URL("../dist/app.js", import.meta.url), "utf8"),
+    readFile(new URL("../dist/game.js", import.meta.url), "utf8"),
+    readFile(new URL("../dist/audio.js", import.meta.url), "utf8")
   ]);
   assert.match(ui, /function el\(/);
   assert.match(ui, /function append\(/);
@@ -1113,7 +1183,11 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(html, /data-action="toggle-world-ui"[^>]*aria-pressed="false"/);
   assert.match(html, /class="eye-icon eye-visible"/);
   assert.match(html, /data-action="open-main-stock">◈ 店面備料/);
-  assert.match(html, /data-action="toggle-sound"[^>]*aria-label="開啟音效"/);
+  assert.match(html, /data-action="toggle-sound"[^>]*aria-label="開啟夜市音景與音效"/);
+  assert.match(gameSource, /createGameAudio/);
+  assert.match(gameSource, /time - lastIdleDraw >= 100/);
+  assert.match(gameSource, /if \(document\.hidden\) audio\.suspend\(\)/);
+  assert.match(audio, /export function createGameAudio/);
   assert.match(html, /data-action="toggle-pause"[^>]*aria-label="暫停場景動畫"/);
   assert.match(html, /<dialog class="world-event-dialog" id="worldEventDialog"/);
   assert.match(html, /<dialog class="story-choice-dialog" id="storyChoiceDialog"/);

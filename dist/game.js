@@ -5,6 +5,7 @@ import { createGameEngine } from "./engine.js";
 import { getDailyCashbookSummary } from "./accounting.js";
 import { ACHIEVEMENTS, evaluateAchievements } from "./achievements.js";
 import { createAchievementsRenderer } from "./ui/achievements.js";
+import { createGameAudio } from "./audio.js";
 export { createGameEngine } from "./engine.js";
 
 export function boot() {
@@ -20,9 +21,12 @@ export function boot() {
   let toastTimer = 0;
   let achievementToastTimer = 0;
   let lastFrame = 0;
-  let audioContext = null;
+  let lastIdleDraw = Number.NEGATIVE_INFINITY;
   let soundEnabled = false;
   try { soundEnabled = localStorage.getItem("yelan-sound-enabled") === "true"; } catch {}
+  const audio = createGameAudio();
+  audio.setEnabled(soundEnabled);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) audio.suspend(); });
   const ui = createUI({ state, saveState: persistState, saveStateDetailed: persistStateDetailed });
   const achievementsRenderer = createAchievementsRenderer();
   const scene = createScene({ state, todayEvent: () => todayEvent(state), getTonightGuests: () => getTonightGuests(state) });
@@ -74,27 +78,7 @@ export function boot() {
   let reportReturnFocus = null;
 
   function playTone(kind = "tap") {
-    if (!soundEnabled) return;
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    try {
-      audioContext = audioContext || new AudioContext();
-      if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      const now = audioContext.currentTime;
-      const frequency = kind === "success" ? 660 : (kind === "open" ? 520 : 390);
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(frequency, now);
-      oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.35, now + 0.09);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.035, now + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.start(now);
-      oscillator.stop(now + 0.17);
-    } catch {}
+    return audio.playTone(kind);
   }
 
   function syncMotionControl() {
@@ -734,13 +718,14 @@ export function boot() {
     }
     if (action === "toggle-sound") {
       soundEnabled = !soundEnabled;
+      audio.setEnabled(soundEnabled);
       try { localStorage.setItem("yelan-sound-enabled", String(soundEnabled)); } catch {}
       button.setAttribute("aria-pressed", String(soundEnabled));
-      button.setAttribute("aria-label", soundEnabled ? "關閉音效" : "開啟音效");
-      button.title = soundEnabled ? "關閉音效" : "開啟音效";
+      button.setAttribute("aria-label", soundEnabled ? "關閉夜市音景與音效" : "開啟夜市音景與音效");
+      button.title = soundEnabled ? "關閉夜市音景與音效" : "開啟夜市音景與音效";
       button.querySelector("span").textContent = soundEnabled ? "♫" : "♪";
-      toast(soundEnabled ? "輕柔音效已開啟。" : "音效已關閉。");
-      if (soundEnabled) playTone("success");
+      toast(soundEnabled ? "夜市音景與操作音效已開啟。" : "音景與音效已關閉。");
+      if (soundEnabled && !playTone("success")) toast("這個瀏覽器目前不支援音景；遊戲操作不受影響。");
     }
     } catch (error) {
       console.error("Game action failed", action, error);
@@ -822,14 +807,20 @@ export function boot() {
   function frame(time) {
     const dt = lastFrame ? Math.min(0.05, (time - lastFrame) / 1000) : 0.016;
     lastFrame = time;
-    if (!document.hidden) { scene.update(dt); scene.draw(); syncCashbookHud(); syncWorldEventTrigger(); syncOutletEventTriggers(); }
+    const staticScene = scene.paused || scene.motionReduced;
+    if (!document.hidden && (!staticScene || time - lastIdleDraw >= 100)) {
+      if (!staticScene) scene.update(dt);
+      scene.draw();
+      syncCashbookHud(); syncWorldEventTrigger(); syncOutletEventTriggers();
+      if (staticScene) lastIdleDraw = time;
+    }
     requestAnimationFrame(frame);
   }
   const soundButton = document.querySelector('[data-action="toggle-sound"]');
   if (soundButton) {
     soundButton.setAttribute("aria-pressed", String(soundEnabled));
-    soundButton.setAttribute("aria-label", soundEnabled ? "關閉音效" : "開啟音效");
-    soundButton.title = soundEnabled ? "關閉音效" : "開啟音效";
+    soundButton.setAttribute("aria-label", soundEnabled ? "關閉夜市音景與音效" : "開啟夜市音景與音效");
+    soundButton.title = soundEnabled ? "關閉夜市音景與音效" : "開啟夜市音景與音效";
     soundButton.querySelector("span").textContent = soundEnabled ? "♫" : "♪";
   }
   syncToastPosition();

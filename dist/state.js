@@ -389,7 +389,21 @@ export function todayEvent(state) {
 }
 
 export function todayStory(state) {
-  return campaignEntry(state.day);
+  const day = Math.max(1, Math.floor(Number(state.day) || 1));
+  if (campaignCycleDay(day) !== 1 || day <= CAMPAIGN_DAYS) return campaignEntry(day);
+  const reports = Array.isArray(state.accounting?.monthlyReports) ? state.accounting.monthlyReports : [];
+  const previousReport = reports.find((report) => Number(report?.endDay) === day - 1)
+    || reports[reports.length - 1];
+  if (!previousReport?.outcomeId) return campaignEntry(day);
+  const decisions = Array.isArray(state.decisions) ? state.decisions : [];
+  const periodStart = day - CAMPAIGN_DAYS;
+  const latestDecision = decisions.filter((decision) => Number(decision?.day) > periodStart
+    && Number(decision?.day) <= day - 1).slice(-1)[0];
+  return campaignEntry(day, {
+    outcomeId: previousReport.outcomeId,
+    outcomeTitle: previousReport.outcome?.title,
+    decisionId: latestDecision?.id
+  });
 }
 
 export function todayMarketCard(state) {

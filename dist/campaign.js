@@ -156,9 +156,66 @@ export function marketCardForDay(day) {
   return id ? MARKET_CARDS[id] : null;
 }
 
-export function campaignEntry(day) {
+const CYCLE_OPENINGS = Object.freeze({
+  "harbor-icon": {
+    title: "招牌傳過港灣",
+    story: "新客沿著燈火找來，阿滿提醒你，人氣越旺，備料與排班越要跟上。"
+  },
+  "neighborhood-table": {
+    title: "熟客帶來新面孔",
+    story: "熟客邀朋友回來，窗邊桌多了幾張新面孔。藍姨說，願意再回來的人就是這條巷子的底氣。"
+  },
+  "market-keeper": {
+    title: "巷口一起顧生意",
+    story: "鄰攤的招牌連成一排，供應商也把貨送得更齊。隔壁老闆提醒你，合作的好處要靠每天互相照應。"
+  },
+  "night-market-alliance": {
+    title: "聯盟迎來新一夜",
+    story: "聯盟攤位亮起相連的燈，採購折扣讓備料寬裕一些；店長仍把一份突發狀況留給你決定。"
+  },
+  "steady-lantern": {
+    title: "穩穩亮著的下一期",
+    story: "帳本平穩地翻到新的一頁。小青把昨日的結帳收好，說先把每一晚做穩，也是一種向前。"
+  },
+  "quiet-lantern": {
+    title: "巷口重新聚起燈火",
+    story: "巷口比上期安靜，藍姨把燈籠掛回老位置，邀你先聽街坊的需要，再決定下一步。"
+  },
+  "harbor-debt": {
+    title: "風浪後先整理步伐",
+    story: "擴張留下的帳單還在桌上。阿慕叔陪你重算採購與人力，提醒你先讓每一間攤位回到穩定。"
+  },
+  overextended: {
+    title: "把承諾一項項照顧好",
+    story: "新店面和新夥伴都還在等你的安排。你把待辦寫在木板上，決定先補上最需要的一塊。"
+  },
+  "soft-goodbye": {
+    title: "把上一期的經驗帶上",
+    story: "你把前一期的手記翻了一遍，留下值得珍惜的片段，也替新的夜晚空出位置。"
+  }
+});
+
+const DECISION_ECHOES = Object.freeze({
+  expand: "上一期添上的座位仍在巷口，今晚又多了幾個可以坐下來的位置。",
+  hire: "新夥伴提早來到攤邊，先問今晚要從哪一段工作開始熟悉。",
+  acquire: "接手的攤位也亮起燈，店長把第一份營運回報放到你手邊。",
+  hold: "你保留的現金讓備料與維修多了一點餘裕，今晚先按原本的節奏開張。"
+});
+
+export function campaignEntry(day, continuity = null) {
   const index = campaignCycleDay(day) - 1;
-  return CAMPAIGN_CALENDAR[index];
+  const entry = CAMPAIGN_CALENDAR[index];
+  const chapter = Math.floor((Math.max(1, Math.floor(Number(day) || 1)) - 1) / CAMPAIGN_DAYS) + 1;
+  if (chapter < 2 || index !== 0 || !continuity?.outcomeId) return entry;
+  const opening = CYCLE_OPENINGS[continuity.outcomeId] || CYCLE_OPENINGS["soft-goodbye"];
+  const endingTitle = continuity.outcomeTitle || ENDINGS[continuity.outcomeId]?.title || "上一期的夜市故事";
+  const decisionEcho = DECISION_ECHOES[continuity.decisionId];
+  return {
+    ...entry,
+    chapter,
+    title: `第 ${chapter} 期・${opening.title}`,
+    story: `${opening.story}上一期以「${endingTitle}」收尾。${decisionEcho || "你把前一期的經驗帶進今晚，重新掛起招牌。"}`
+  };
 }
 
 export function weeklyOptionCost(state, id) {
