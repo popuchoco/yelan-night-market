@@ -142,6 +142,7 @@ export function boot() {
     document.getElementById("worldEventTitle").textContent = info.title;
     trigger.dataset.tone = info.tone || "positive";
     trigger.dataset.pending = String(!!info.pending);
+    if (trigger.title !== info.title) trigger.title = info.title;
     trigger.dataset.outletId = info.anchorOutletId || "main";
     trigger.setAttribute("aria-label", (info.pending ? "待處理：" : "查看：") +
       (info.anchorOutletName ? info.anchorOutletName + "・" : "") + info.title + "。開啟夜市事件視窗");
@@ -150,14 +151,42 @@ export function boot() {
     if (!point || !frame) return;
     const frameRect = frame.getBoundingClientRect();
     const canvasRect = scene.canvas.getBoundingClientRect();
-    const halfWidth = (trigger.offsetWidth || 216) / 2;
     const rawX = canvasRect.left - frameRect.left + point.x;
     const rawY = canvasRect.top - frameRect.top + point.y;
+    const compactScene = window.innerWidth <= 800 || frame.clientWidth <= 640;
+    const compactValue = String(compactScene);
+    if (trigger.dataset.compact !== compactValue) trigger.dataset.compact = compactValue;
+    if (compactScene) {
+      if (trigger.style.width !== "44px") trigger.style.width = "44px";
+      if (trigger.style.height !== "44px") trigger.style.height = "44px";
+      if (trigger.style.minHeight !== "44px") trigger.style.minHeight = "44px";
+    } else {
+      if (trigger.style.width) trigger.style.removeProperty("width");
+      if (trigger.style.height) trigger.style.removeProperty("height");
+      if (trigger.style.minHeight) trigger.style.removeProperty("min-height");
+    }
+    const width = trigger.offsetWidth || 216;
+    const height = trigger.offsetHeight || 55;
+    const halfWidth = width / 2;
     const left = Math.max(halfWidth + 9, Math.min(frame.clientWidth - halfWidth - 9, rawX));
-    const top = Math.max(86, Math.min(frame.clientHeight - 104, rawY));
-    const position = Math.round(left) + "px|" + Math.round(top) + "px";
+    let top = Math.max(86, Math.min(frame.clientHeight - 104, rawY));
+    let placedLeft = left;
+    if (compactScene) {
+      const cameraToggle = document.querySelector(".camera-collapse");
+      const topDock = document.querySelector(".world-tools");
+      const toggleRect = cameraToggle?.getBoundingClientRect();
+      const dockBottom = topDock?.getBoundingClientRect().bottom - frameRect.top || 0;
+      const visualTop = window.innerWidth <= 800 && toggleRect?.height
+        ? toggleRect.top - frameRect.top
+        : dockBottom + 6;
+      placedLeft = window.innerWidth <= 800 && toggleRect?.width
+        ? toggleRect.left - frameRect.left - halfWidth - 6
+        : frame.clientWidth - halfWidth - 9;
+      top = visualTop + height;
+    }
+    const position = Math.round(placedLeft) + "px|" + Math.round(top) + "px|" + width;
     if (position !== worldEventPosition) {
-      trigger.style.left = Math.round(left) + "px";
+      trigger.style.left = Math.round(placedLeft) + "px";
       trigger.style.top = Math.round(top) + "px";
       worldEventPosition = position;
     }

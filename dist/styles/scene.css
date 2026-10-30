@@ -125,10 +125,12 @@
 .recipe-discovery-log { display: grid; gap: 5px; margin-top: var(--space-2); padding: 10px 12px; border-left: 3px solid #d9c17d; border-radius: 6px; color: #b7c5b7; background: #dbc47b0c; font-size: var(--type-caption); }
 .recipe-discovery-log b { color: #f0d89a; }
 @media (max-width: 640px) {
-  .world-event-trigger { width: min(216px, 58%); min-height: 54px; gap: 8px; padding: 7px 9px; }
+  .world-event-trigger { width: min(216px, 58%); height: 44px; min-height: 44px; gap: 8px; padding: 5px 9px; }
   .outlet-event-trigger { width: min(190px, 48%); min-height: 50px; padding: 6px 8px; gap: 7px; }
   .outlet-event-icon { width: 32px; height: 32px; flex-basis: 32px; }
-  .world-event-mark { width: 34px; height: 34px; flex-basis: 34px; }
+  .world-event-mark { width: 32px; height: 32px; flex-basis: 32px; }
+  .world-event-copy > span { display: none; }
+  .revenue-plaque { bottom: 108px; }
   .world-event-dialog { width: calc(100vw - 20px); max-width: calc(100vw - 20px); max-height: calc(100dvh - 24px); border-radius: 15px; }
   .world-event-dialog-header { padding: 16px; gap: 10px; }
   .world-event-dialog-content { padding: 14px 16px max(16px, env(safe-area-inset-bottom)); }
@@ -201,13 +203,14 @@
   .world-tools { top: 8px; right: 8px; }
   .world-visibility-toggle, .camera-collapse, .world-tool-action { width: 44px; height: 44px; flex-basis: 44px; }
 }
+
 .world-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: ". primary" "manage stock"; width: min(420px, 58%); gap: 7px; }
 .world-actions [data-action="open-stall"] { grid-area: manage; }
 .world-actions [data-action="main-action"] { grid-area: primary; }
 .world-actions [data-action="open-main-stock"] { grid-area: stock; }
 
 /* Prior-night cashbook summary stays fixed to the scene viewport while the map rotates underneath. */
-.revenue-plaque { position: absolute; z-index: 3; left: 16px; bottom: 74px; display: grid; gap: 6px; width: min(286px, calc(100% - 32px)); padding: 11px 13px; border: 1px solid #e5c77c55; border-radius: 14px; color: #dbe3d5; background: linear-gradient(145deg, #152724f2, #172321ed); box-shadow: 0 8px 25px #08110f75, inset 0 1px #ffffff10; backdrop-filter: blur(10px); pointer-events: none; font-variant-numeric: tabular-nums; }
+.revenue-plaque { position: absolute; z-index: 3; left: 16px; bottom: 100px; display: grid; gap: 6px; width: min(286px, calc(100% - 32px)); padding: 11px 13px; border: 1px solid #e5c77c55; border-radius: 14px; color: #dbe3d5; background: linear-gradient(145deg, #152724f2, #172321ed); box-shadow: 0 8px 25px #08110f75, inset 0 1px #ffffff10; backdrop-filter: blur(10px); pointer-events: none; font-variant-numeric: tabular-nums; }
 .revenue-plaque[hidden] { display: none !important; }
 .revenue-plaque-heading { display: flex; align-items: center; gap: 7px; color: #e4d29d; font-size: var(--type-caption); font-weight: 800; letter-spacing: .04em; }
 .revenue-spark { color: var(--gold); font-size: 13px; }
@@ -235,3 +238,28 @@
   .revenue-total { font-size: 20px; }
   .revenue-breakdown b { font-size: 10px; }
 }
+
+/* Keep map hints, controls, and the previous-night cashbook in separate compact-scene zones. */
+@media (max-width: 900px) {
+  .world-actions { width: min(250px, 55%); }
+  .world-hint { max-width: min(150px, 40%); }
+  .revenue-plaque { bottom: 128px; }
+}
+@media (max-width: 480px) {
+  .world-actions { width: min(220px, 58%); }
+  .world-hint { max-width: min(160px, calc(100% - 218px)); }
+  .world-top-left .world-eyebrow { display: none; }
+  .revenue-plaque { gap: 3px; padding: 6px 8px; }
+  .revenue-plaque .cashbook-note { display: none; }
+}
+@media (min-width: 901px) and (max-width: 1060px) {
+  .world-actions { width: min(360px, 48%); }
+  .world-hint { max-width: min(220px, calc(100% - 400px)); }
+}
+@media (min-width: 901px) and (max-height: 800px) {
+  .revenue-plaque { bottom: 120px; }
+}
+.world-event-trigger[data-compact="true"] { width: 44px; height: 44px; min-height: 44px; justify-content: center; padding: 4px; }
+.world-event-trigger[data-compact="true"]:after,
+.world-event-trigger[data-compact="true"] .world-event-copy { display: none; }
+.world-event-trigger[data-compact="true"] .world-event-mark { width: 32px; height: 32px; flex-basis: 32px; }

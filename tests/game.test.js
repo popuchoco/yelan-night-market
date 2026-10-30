@@ -900,6 +900,14 @@ test("DOM helpers, modular engine and scene renderers remain in place", async ()
   assert.ok(worldFrameStart >= 0 && mainEnd > worldFrameStart && toastIndex > worldFrameStart && toastIndex < mainEnd);
   const css = await readStyles();
   const game = await readFile(new URL("../dist/game.js", import.meta.url), "utf8");
+  assert.match(game, /if \(trigger\.dataset\.compact !== compactValue\) trigger\.dataset\.compact = compactValue/);
+  assert.match(game, /toggleRect\.left - frameRect\.left - halfWidth - 6/);
+  assert.match(game, /trigger\.title = info\.title/);
+  assert.match(css, /\.world-event-trigger\[data-compact="true"\][^\n]*width:\s*44px/);
+  assert.match(css, /\.world-event-trigger\[data-compact="true"\] \.world-event-copy \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 900px\) \{\s*\.world-actions \{ width: min\(250px, 55%\); \}\s*\.world-hint \{ max-width: min\(150px, 40%\); \}/);
+  assert.match(css, /@media \(min-width: 901px\) and \(max-width: 1060px\)/);
+  assert.match(css, /@media \(min-width: 901px\) and \(max-height: 800px\)/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /\.revenue-plaque/);
   assert.match(css, /\.revenue-plaque\[hidden\]\s*\{\s*display:\s*none\s*!important/);
