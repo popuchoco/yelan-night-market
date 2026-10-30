@@ -3,6 +3,7 @@ import { DATA, getOutletProduct, getOutletSpecialty, outletAvailableStock, outle
 import { ACQUISITION_GROUPS, ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, acquisitionGroupCounts, campaignCycleDay, weeklyOptionCost } from "./campaign.js";
 import { CHART_OF_ACCOUNTS, formatBalance } from "./accounting.js";
 import { createReportRenderer } from "./ui/reports.js";
+import { getWeeklyFocusDefinition } from "./progression.js";
 import {
   STALL_TIERS, OUTLET_SAFETY_EQUIPMENT, getMonthlyInsurance, getNextInsuranceBillingDay,
   getOutletEmployeeCount, getOutletSafetyLevel, getOutletTier, getNextStallTier, getTierReadiness,
@@ -380,6 +381,41 @@ export function createUI(runtime) {
     return append(meter, label, track);
   }
 
+  function weeklyFocusCard({ recap = false } = {}) {
+    const focus = state.weeklyFocus;
+    if (recap) {
+      if (!focus?.resolved || !focus.result) {
+        const waiting = el("section", "weekly-focus weekly-focus-waiting");
+        append(waiting, el("span", "weekly-focus-kicker", "新的一週・經營焦點"),
+          el("p", "weekly-focus-copy", "選好本週經營方向後，會依你的選擇帶入一項輕量目標；沒有額外扣款或失敗懲罰。"));
+        return waiting;
+      }
+      const result = focus.result;
+      const card = el("section", "weekly-focus weekly-focus-recap" + (result.success ? " is-success" : ""));
+      const heading = el("div", "weekly-focus-heading");
+      append(heading, el("b", "", (result.success ? "完成" : "持續累積") + "｜" + result.title),
+        el("span", "weekly-focus-count", result.progress + " / " + result.target));
+      append(card, el("span", "weekly-focus-kicker", "經營焦點・第 " + result.startDay + "–" + result.resolvedDay + " 夜"),
+        heading,
+        el("p", "weekly-focus-copy", result.message));
+      return card;
+    }
+    if (!focus || focus.resolved) return null;
+    const definition = getWeeklyFocusDefinition(focus.id);
+    if (!definition) return null;
+    const progress = Math.max(0, Math.min(focus.target, Number(focus.progress) || 0));
+    const card = el("section", "weekly-focus", null, { "aria-label": "本週經營焦點" });
+    const heading = el("div", "weekly-focus-heading");
+    append(heading, el("b", "", definition.icon + "　本週焦點・" + definition.title),
+      el("span", "weekly-focus-count", progress + " / " + focus.target));
+    const bar = el("div", "weekly-focus-track", null, { role: "progressbar", "aria-label": definition.title,
+      "aria-valuemin": 0, "aria-valuemax": focus.target, "aria-valuenow": progress });
+    bar.append(el("span", "", null, { style: "transform:scaleX(" + (progress / focus.target) + ")" }));
+    append(card, heading, bar, el("p", "weekly-focus-copy", definition.description),
+      el("span", "weekly-focus-reward", "完成可得口碑 +2、熟客 +1；未完成不扣款、不扣口碑。"));
+    return card;
+  }
+
   function renderWeeklyDecision() {
     const decision = el("section", "weekly-decision");
     append(decision,
@@ -503,12 +539,15 @@ export function createUI(runtime) {
     const outlook = forecast(state);
     const parts = [campaignMeter()];
     if (state.phase === "decision") {
+      parts.push(weeklyFocusCard({ recap: true }));
       parts.push(eventCard(event));
       const announcement = marketAnnouncement();
       if (announcement) parts.push(announcement);
       parts.push(renderWeeklyDecision());
       return fragment(parts);
     }
+    const focusCard = weeklyFocusCard();
+    if (focusCard) parts.push(focusCard);
     if (state.day === 1) {
       const guide = el("aside", "guide-card");
       append(guide, el("b", "", "新手小抄"),
@@ -1092,6 +1131,7 @@ export function createUI(runtime) {
   }
   return {
     renderUI: renderUI,
+    renderOverview: renderOverview,
     renderOrderChoices: renderOrderChoices,
     getWorldEventInfo: getWorldEventInfo,
     getOutletWorldEvents: getOutletWorldEvents,

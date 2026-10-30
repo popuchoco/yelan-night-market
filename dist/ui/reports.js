@@ -91,6 +91,7 @@ export function createReportRenderer(runtime) {
         const names = narrative.recipesUnlocked.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean);
         if (names.length) story.append(el("p", "", "熟客秘笈／升級菜色免費解鎖：" + names.join("、")));
       }
+      if (narrative.weeklyFocus) story.append(el("p", "weekly-focus-note", narrative.weeklyFocus.message));
       if (narrative.guests?.length) story.append(el("p", "", "來客：" + narrative.guests.join("、")));
       parts.push(story);
     }
@@ -113,6 +114,7 @@ export function createReportRenderer(runtime) {
       subhead(report.periodEnd ? "期末調整工作底稿" : "每週工作底稿", report.periodEnd ? "第 " + report.period + " 期・第 " + report.endDay + " 夜" : "第 " + report.week + " 週・第 " + report.startDay + "–" + report.endDay + " 夜", true),
       select,
       ...(report.periodEnd ? [storyCard("孤兒保單期末調整", "本期將 " + (report.insuranceAdjustment?.count || 0) + " 筆離職保單，未到期保費共 " + money(report.insuranceAdjustment?.amount || 0) + " 調整為應收保險退費款；次期首夜自動收回並沖銷應收。") ] : []),
+      ...(report.weeklyFocus ? [storyCard("每週焦點・第 " + report.weeklyFocus.startDay + "–" + report.weeklyFocus.resolvedDay + " 夜・" + (report.weeklyFocus.success ? "完成" : "累積紀錄"), report.weeklyFocus.message)] : []),
       el("div", "statement-status " + (report.balanced ? "balanced" : "unbalanced"),
         report.balanced ? "借貸試算平衡" : "借貸差額待核對"),
       accountingTable(report.periodEnd ? "第 " + report.period + " 期期末調整試算表" : "第 " + report.week + " 週試算表", ["會計科目", "期初餘額", "借方發生", "貸方發生", "期末借方", "期末貸方"], rows),
@@ -287,6 +289,7 @@ export function createReportRenderer(runtime) {
         const names = entry.recipesUnlocked.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean);
         if (names.length) item.append(el("p", "", "免費解鎖：" + names.join("、")));
       }
+      if (entry.weeklyFocus) item.append(el("p", "weekly-focus-note", entry.weeklyFocus.message));
       if (entry.guests?.length) item.append(el("p", "", entry.guests.join("、")));
       parts.push(item);
     });

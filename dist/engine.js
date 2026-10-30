@@ -13,6 +13,7 @@ import {
   recordInsuranceClaimAccrual, collectInsuranceClaims, recordCashVariance, postJournal
 } from "./accounting.js";
 import { evaluateAchievements, normalizeAchievementState } from "./achievements.js";
+import { createWeeklyFocus, getLegacyWeeklyFocus, getWeeklyFocusDefinition, getWeeklyFocusIdForDecision, recordWeeklyFocusProgress, resolveWeeklyFocus } from "./progression.js";
 
 const capAt = (value, max) => Math.min(max, value);
 
@@ -43,6 +44,7 @@ function createInsuranceCoverageSnapshot(state) {
  * @param {{ random?: () => number }} [options]
  */
 export function createGameEngine(state, { random = Math.random } = {}) {
+  if (!state.weeklyFocus) state.weeklyFocus = getLegacyWeeklyFocus(state.day, state.decisions);
   const guests = () => getTonightGuests(state);
   const event = () => todayEvent(state);
   const pendingAchievementAwards = [];
@@ -253,6 +255,9 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     const promotionMessage = applyPromotionOutcome();
     if (isInsuranceBillingDay(state.day)) state.insuranceSnapshot = createInsuranceCoverageSnapshot(state);
     simulateOutletOperations();
+    if ((state.outlets || []).some((outlet) => outlet.id !== "main" && Number(outlet.lastResult?.day) === Number(state.day) && Number(outlet.lastResult?.units) > 0)) {
+      recordWeeklyFocusProgress(state.weeklyFocus, "branch-night");
+    }
     const fixed = fixedOperatingCost(state.ledger);
     state.coins -= fixed;
     state.coins += state.ledger.subsidies || 0;
@@ -349,6 +354,8 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     const recipeDiscovery = good ? recordGuestRecipeFeedback(guest) : null;
     state.results.push({ name: guest.name, icon: guest.icon, score, reaction: good ? (score >= 90 ? "剛剛好" : "老闆忙中代班") : "也不錯", mood: guest.mood, good, dish: dish.name,
       ...(recipeDiscovery ? { recipeDiscovery: recipeDiscovery.id } : {}) });
+    recordWeeklyFocusProgress(state.weeklyFocus, "served");
+    if (good) recordWeeklyFocusProgress(state.weeklyFocus, "good-service");
     state.customerIndex += 1;
     if (state.customerIndex >= guests().length) state.phase = "report";
     const eventText = eventBonus ? "燈節 Bonus +" + money(eventBonus) + "。 " : "";
@@ -824,10 +831,15 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     const targetName = id === "acquire" ? ACQUISITION_TYPES[targetType].name : null;
     const decisionName = targetName ? option.name + "・" + targetName : option.name;
     state.decisions.push({ day: state.day, id, name: decisionName, cost, ...(targetName ? { targetType } : {}) });
+    const focusId = getWeeklyFocusIdForDecision(id);
+    state.weeklyFocus = createWeeklyFocus(focusId, state.day);
     state.phase = "prep";
     resetDailyFeaturedDish();
-    if (!allianceBefore && hasBrandAlliance(state)) return response(true, "夜市品牌聯盟成立：每夜多一桌聯盟來客，聯合採購享進價 9 折。");
-    return response(true, id === "hold" ? "保留現金，照目前規模進入新的一週。" : decisionName + "已完成，往後每夜固定成本與客流效果同步更新。");
+    const focus = getWeeklyFocusDefinition(focusId);
+    const transition = !allianceBefore && hasBrandAlliance(state)
+      ? "夜市品牌聯盟成立：每夜多一桌聯盟來客，聯合採購享進價 9 折。"
+      : (id === "hold" ? "保留現金，照目前規模進入新的一週。" : decisionName + "已完成，往後每夜固定成本與客流效果同步更新。");
+    return response(true, transition + " 本週焦點：" + focus.title + "。" );
   }
 
   function nextNight() {
@@ -835,11 +847,20 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     const closingEvents = resolveClosingSurprises();
     const finishedDay = state.day;
     const net = ledgerNet(state.ledger);
+    if (state.weeklyFocus?.id === "hold" && Number(state.coins) > 0 && Number(state.loanTakenDay) < Number(state.weeklyFocus.startDay)) {
+      recordWeeklyFocusProgress(state.weeklyFocus, "solvent-night");
+    }
+    const weeklyFocusResult = finishedDay % 7 === 0
+      ? resolveWeeklyFocus(state.weeklyFocus, { closingDay: finishedDay, coins: state.coins, loanTakenDay: state.loanTakenDay }) : null;
+    if (weeklyFocusResult?.success) {
+      state.fame = capAt(state.fame + 2, 100);
+      state.regulars = capAt(state.regulars + 1, 24);
+    }
     const marketCard = todayMarketCard(state);
     const selectedMarketChoice = marketCard
       ? marketCard.choices.find((choice) => choice.id === marketCardChoice(state))
       : null;
-    state.journal.unshift({ day: state.day, event: event().name, title: todayStory(state).title,
+    const journalEntry = { day: state.day, event: event().name, title: todayStory(state).title,
       choice: state.reportChoice === "paperboat" ? "把紙船放回港灣" : "替熟客留了一張窗邊桌",
       marketCard: marketCard ? marketCard.name : null,
       marketChoice: selectedMarketChoice ? selectedMarketChoice.name : null,
@@ -851,7 +872,9 @@ export function createGameEngine(state, { random = Math.random } = {}) {
       promotionOutcome: state.marketCardOutcome?.summary || null,
       recipesUnlocked: (Array.isArray(state.recipeLog) ? state.recipeLog : [])
         .filter((entry) => Number(entry.day) === Number(state.day)).map((entry) => entry.recipeId),
-      net, guests: state.results.map((result) => result.name) });
+      net, guests: state.results.map((result) => result.name), goodGuests: state.results.filter((result) => result.good).length,
+      ...(weeklyFocusResult ? { weeklyFocus: weeklyFocusResult } : {}) };
+    state.journal.unshift(journalEntry);
     state.journal = state.journal.slice(0, 30);
     state.campaignNet = (Number(state.campaignNet) || 0) + net;
     closeDepreciation(state, finishedDay);
@@ -864,6 +887,7 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     }
     const weeklyClose = finishedDay % 7 === 0 || finishedDay % 30 === 0
       ? closeWeeklyWorksheet(state, finishedDay, { periodEnd: finishedDay % 30 === 0, insuranceAdjustment }) : null;
+    if (weeklyClose && weeklyFocusResult) weeklyClose.weeklyFocus = weeklyFocusResult;
     state.customerIndex = 0;
     state.revenue = 0;
     state.results = [];
@@ -891,8 +915,9 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     }
     resetDailyFeaturedDish();
     const closingMessage = closingEvents.length ? "打烊發現：" + closingEvents.map((item) => item.message).join(" ") + " " : "";
-    if (monthlyClose) return response(true, closingMessage + "第 " + monthlyClose.period + " 期已結帳，財務報表與本期故事走向「" + monthlyClose.outcome.title + "」已歸檔。夜市持續營業，第 " + state.day + " 夜開始。" + (weeklyClose?.balanced ? " 本週試算平衡。" : ""));
-    if (weeklyClose) return response(true, closingMessage + "第 " + weeklyClose.week + " 週工作底稿已歸檔，試算" + (weeklyClose.balanced ? "平衡" : "待核對") + "；新的一週開始前，請選擇經營方向。");
+    const focusMessage = weeklyFocusResult ? " " + weeklyFocusResult.message : "";
+    if (monthlyClose) return response(true, closingMessage + "第 " + monthlyClose.period + " 期已結帳，財務報表與本期故事走向「" + monthlyClose.outcome.title + "」已歸檔。夜市持續營業，第 " + state.day + " 夜開始。" + (weeklyClose?.balanced ? " 本週試算平衡。" : "") + focusMessage);
+    if (weeklyClose) return response(true, closingMessage + "第 " + weeklyClose.week + " 週工作底稿已歸檔，試算" + (weeklyClose.balanced ? "平衡" : "待核對") + "；新的一週開始前，請選擇經營方向。" + focusMessage);
     return response(true, closingMessage + (weeklyDecision
       ? "第 " + (state.day - 1) + " 夜結束。新的一週開始前，選擇擴大店家、招募人手、併購攤販，或暫時保留現金。"
       : "新的一晚開始了，港邊又亮起幾盞燈。"));

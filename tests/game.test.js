@@ -11,6 +11,7 @@ import { getStallVisualProfile, splitStallSupportPosts } from "../dist/scene/obj
 import { createRevenueRenderer, getRevenueBreakdown } from "../dist/scene/revenue.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS, evaluateAchievements, normalizeAchievementState } from "../dist/achievements.js";
+import { WEEKLY_FOCUSES, createWeeklyFocus, getLegacyWeeklyFocus, getWeeklyFocusIdForDecision, normalizeWeeklyFocus, recordWeeklyFocusProgress, resolveWeeklyFocus } from "../dist/progression.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   captureStateSnapshot, loadState, loadStateResult, normalizeState, restoreStateSnapshot,
@@ -703,6 +704,79 @@ test("night transitions keep the operating cycle valid", () => {
   assert.equal(state.journal[0].day, 3);
 });
 
+test("weekly focus maps strategic choices to bounded, save-safe objectives", () => {
+  assert.equal(getWeeklyFocusIdForDecision("expand"), "expand");
+  assert.equal(getWeeklyFocusIdForDecision("hire"), "hire");
+  assert.equal(getWeeklyFocusIdForDecision("acquire"), "acquire");
+  assert.equal(getWeeklyFocusIdForDecision("hold"), "hold");
+  assert.equal(getLegacyWeeklyFocus(8, []), null, "legacy saves wait for a decision at the new-week boundary");
+  assert.equal(getLegacyWeeklyFocus(10, [{ day: 8, id: "expand" }]).id, "expand");
+  assert.equal(normalizeWeeklyFocus({ id: "unknown", target: 999 }), null);
+  assert.equal(normalizeWeeklyFocus({ id: "hire", target: 999, progress: 999 }).target, WEEKLY_FOCUSES.hire.target);
+});
+
+test("weekly focus progress only counts matching activities and resolves without a failure penalty", () => {
+  const focus = createWeeklyFocus("hire", 8);
+  recordWeeklyFocusProgress(focus, "served");
+  assert.equal(focus.progress, 0);
+  recordWeeklyFocusProgress(focus, "good-service");
+  assert.equal(focus.progress, 1);
+  focus.progress = focus.target;
+  const result = resolveWeeklyFocus(focus, { closingDay: 14, coins: 900, loanTakenDay: 0 });
+  assert.equal(result.success, true);
+  assert.equal(result.resolvedDay, 14);
+  assert.match(result.message, /口碑 \+2/);
+
+  const missed = createWeeklyFocus("hold", 15);
+  missed.progress = missed.target;
+  const failed = resolveWeeklyFocus(missed, { closingDay: 21, coins: 900, loanTakenDay: 15 });
+  assert.equal(failed.success, false, "borrowing during the focus week blocks the no-new-loan goal");
+  assert.match(failed.message, /沒有額外扣款/);
+});
+
+test("weekly focus closes into the diary and worksheet, rewarding completion only", () => {
+  const state = serviceState(7);
+  state.phase = "report";
+  state.reportChoice = "paperboat";
+  state.weeklyFocus = createWeeklyFocus("opening", 1);
+  state.weeklyFocus.progress = state.weeklyFocus.target;
+  const beforeFame = state.fame;
+  const beforeRegulars = state.regulars;
+  const engine = createGameEngine(state);
+  assert.equal(engine.nextNight().ok, true);
+  assert.equal(state.weeklyFocus.result.success, true);
+  assert.equal(state.journal[0].weeklyFocus.success, true);
+  assert.equal(state.accounting.weeklyReports.at(-1).weeklyFocus.success, true);
+  assert.equal(state.fame, beforeFame + 2);
+  assert.equal(state.regulars, beforeRegulars + 1);
+  assert.match(state.journal[0].weeklyFocus.message, /口碑 \+2/);
+});
+
+test("engine backfills a missing legacy focus when the current week is already underway", () => {
+  const state = freshState();
+  state.day = 7;
+  delete state.weeklyFocus;
+  createGameEngine(state);
+  assert.equal(state.weeklyFocus.id, "opening");
+  assert.equal(state.weeklyFocus.startDay, 7);
+  assert.equal(state.weeklyFocus.target, 3);
+
+  const boundary = freshState();
+  boundary.day = 8;
+  boundary.phase = "decision";
+  delete boundary.weeklyFocus;
+  createGameEngine(boundary);
+  assert.equal(boundary.weeklyFocus, null, "a legacy save at a decision prompt waits for the chosen direction");
+});
+
+test("schema-five saves migrate into the current week's decision-matched focus", () => {
+  const migrated = normalizeState({ schemaVersion: 5, day: 10, decisions: [{ day: 8, id: "expand" }] });
+  assert.equal(migrated.schemaVersion, SAVE_SCHEMA_VERSION);
+  assert.deepEqual(migrated.weeklyFocus, {
+    id: "expand", startDay: 10, progress: 0, target: 18, resolved: false, success: false, result: null
+  });
+});
+
 test("a night cannot be archived before choosing its story branch", () => {
   const state = serviceState(3);
   state.phase = "report";
@@ -735,6 +809,8 @@ test("weekly decisions change guest capacity, recurring costs, and lead into the
   assert.equal(getTonightGuests(state).length, guestsBefore + 1);
   assert.equal(createLedger(state).rent + createLedger(state).expansionRent, rentBefore + 24);
   assert.equal(state.coins, fundsBefore - 460);
+  assert.equal(state.weeklyFocus.id, "expand");
+  assert.equal(state.weeklyFocus.progress, 0);
 });
 
 test("hiring improves tips while acquiring a stall adds rent, visitors, and reputation", () => {
@@ -1098,6 +1174,40 @@ test("DOM helpers and split scene renderers remain in place without HTML injecti
   assert.match(css, /\.world-event-trigger\[data-pending="true"\]/);
   assert.match(css, /\.outlet-event-trigger:focus-visible/);
   assert.match(css, /\.outlet-event-trigger[^\n]*min-height: 52px/);
+});
+
+test("weekly focus UI exposes compact progress and an accessible numeric status", () => {
+  const priorDocument = globalThis.document;
+  const makeNode = (tagName) => ({
+    tagName, children: [], dataset: {}, attributes: {},
+    append(...children) { this.children.push(...children); },
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+  });
+  globalThis.document = { createElement: makeNode, createDocumentFragment: () => makeNode("#fragment") };
+  try {
+    const state = freshState();
+    state.weeklyFocus.progress = 4;
+    const ui = createUI({ state, saveState() {} });
+    const overview = ui.renderOverview();
+    const find = (node, className) => {
+      if (node.className === className) return node;
+      for (const child of node.children || []) {
+        const match = find(child, className);
+        if (match) return match;
+      }
+      return null;
+    };
+    const card = find(overview, "weekly-focus");
+    const progress = find(card, "weekly-focus-track");
+    assert.ok(card);
+    assert.equal(progress.attributes.role, "progressbar");
+    assert.equal(progress.attributes["aria-valuemax"], "18");
+    assert.equal(progress.attributes["aria-valuenow"], "4");
+    assert.ok(find(card, "weekly-focus-copy"));
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+  }
 });
 
 test("extracted journal renderer builds DOM nodes for daily and monthly views", () => {

@@ -3,9 +3,10 @@ import { ACQUISITION_TYPES, CAMPAIGN_DAYS, acquisitionGroupCounts, campaignEntry
 import { createAccountingState, ensureAccounting } from "./accounting.js";
 import { getMonthlyInsurance, getOutletCapacity, getOutletTier, getTierDailyUtilities, getTierReadiness, isInsuranceBillingDay, monthlyInsuranceTotals } from "./safety.js";
 import { createAchievementState, normalizeAchievementState } from "./achievements.js";
+import { createWeeklyFocus, getLegacyWeeklyFocus, normalizeWeeklyFocus } from "./progression.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-export const SAVE_SCHEMA_VERSION = 5;
+export const SAVE_SCHEMA_VERSION = 6;
 
 function resolveStorage(storage) {
   if (storage !== undefined) return storage;
@@ -60,6 +61,7 @@ export function freshState() {
     marketCardChoice: null,
     marketCardOutcome: null,
     decisions: [],
+    weeklyFocus: createWeeklyFocus("opening", 1),
     campaignNet: 0,
     endingId: null
   };
@@ -185,6 +187,7 @@ export function normalizeState(data) {
     ? data.journal.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).slice(-8000) : [];
   if (!Number.isFinite(Number(fresh.campaignNet))) fresh.campaignNet = 0;
   fresh.day = Math.max(1, Math.floor(Number(fresh.day) || 1));
+  fresh.weeklyFocus = normalizeWeeklyFocus(data.weeklyFocus) || getLegacyWeeklyFocus(fresh.day, fresh.decisions);
   if (!fresh.unlockedRecipes.includes(DATA.dishes[fresh.selectedDish]?.id)) {
     fresh.selectedDish = Math.max(0, DATA.dishes.findIndex((dish) => fresh.unlockedRecipes.includes(dish.id)));
   }
