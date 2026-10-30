@@ -1,5 +1,5 @@
 import { DATA } from "./data.js";
-import { createObjectRenderer } from "./scene/objects.js";
+import { createObjectRenderer, getStallVisualProfile } from "./scene/objects.js";
 import { createEffectRenderer } from "./scene/effects.js";
 import { createRevenueRenderer } from "./scene/revenue.js";
 
@@ -14,6 +14,20 @@ export function applyCameraAction(camera, action) {
   if (action === "zoom-out") next.zoom = Math.max(config.minZoom, next.zoom / config.zoomStep);
   if (action === "camera-reset") return { yaw: config.defaultYaw, elevation: config.defaultElevation, zoom: 1, panX: 0, panY: 0 };
   return next;
+}
+
+/** Sort a ground-level object by its nearest-to-camera footprint edge, not its center. */
+export function getFootprintDepth(bounds, depthAt) {
+  const x = Number(bounds.x) || 0;
+  const z = Number(bounds.z) || 0;
+  const width = Math.max(0, Number(bounds.w) || 0);
+  const depth = Math.max(0, Number(bounds.d) || 0);
+  return Math.max(
+    depthAt(x, z),
+    depthAt(x + width, z),
+    depthAt(x + width, z + depth),
+    depthAt(x, z + depth)
+  );
 }
 
 export function createScene(runtime) {
@@ -232,7 +246,7 @@ export function createScene(runtime) {
       }
       function boundsHit(x,y,b) { return !!b&&x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom; }
       const objectRenderer = createObjectRenderer({
-        ctx: ctx, view: view, project: project, pathPolygon: pathPolygon, drawBox: drawBox,
+        ctx: ctx, view: view, project: project, cameraDepth: cameraDepth, pathPolygon: pathPolygon, drawBox: drawBox,
         drawRoundRect: drawRoundRect, drawBillboard: drawBillboard, state: state, DATA: DATA,
         onStallBounds: function(bounds, target) { stallHitBounds.push({ ...bounds, target: target || { type: "main" } }); },
         recordActorHit: function(hit) { actorHits.push(hit); }
@@ -255,9 +269,12 @@ export function createScene(runtime) {
         eventHitBounds=[];
         drawGround();
         var items=[];
-        marketStalls.forEach(function(stall){items.push({depth:cameraDepth(stall.x+stall.w/2,stall.z+stall.d/2),draw:function(){drawStall(stall,time);}});});
-        [{x:330,z:332,type:"table"},{x:690,z:347,type:"table"},{x:320,z:730,type:"bench"},{x:690,z:738,type:"bench"},{x:320,z:300,type:"plant"},{x:677,z:300,type:"plant"},{x:295,z:466,type:"crate"},{x:705,z:476,type:"crate"}].forEach(function(prop){
-          items.push({depth:cameraDepth(prop.x,prop.z),draw:function(){drawProp(prop.x,prop.z,prop.type,time);}});
+        marketStalls.forEach(function(stall){
+          const profile = getStallVisualProfile(stall, state);
+          items.push({depth:getFootprintDepth(profile,cameraDepth),draw:function(){drawStall(stall,time);}});
+        });
+        [{x:330,z:332,w:49,d:34,type:"table"},{x:690,z:347,w:49,d:34,type:"table"},{x:320,z:730,w:37,d:34,type:"bench"},{x:690,z:738,w:37,d:34,type:"bench"},{x:320,z:300,w:27,d:26,type:"plant"},{x:677,z:300,w:27,d:26,type:"plant"},{x:295,z:466,w:58,d:18,type:"crate"},{x:705,z:476,w:58,d:18,type:"crate"}].forEach(function(prop){
+          items.push({depth:getFootprintDepth(prop,cameraDepth),draw:function(){drawProp(prop.x,prop.z,prop.type,time);}});
         });
         ambientWalkers.forEach(function(walker,index){items.push({depth:cameraDepth(walker.x,walker.z),draw:function(){drawHuman(walker,time,"ambient",index);}});});
         if(state.phase==="service"||state.phase==="report") {

@@ -32,9 +32,22 @@ export function getStallVisualProfile(stall, state) {
   };
 }
 
+/** Split a stall's support posts into the two farther and two nearer to the active camera. */
+export function splitStallSupportPosts(stall, depthAt) {
+  const posts = [
+    { index: 0, x: stall.x + 5, z: stall.z + 3 },
+    { index: 1, x: stall.x + stall.w - 8, z: stall.z + 3 },
+    { index: 2, x: stall.x + 5, z: stall.z + stall.d - 21 },
+    { index: 3, x: stall.x + stall.w - 8, z: stall.z + stall.d - 21 }
+  ].sort(function(a, b) {
+    return depthAt(a.x + 3.5, a.z + 3.5) - depthAt(b.x + 3.5, b.z + 3.5);
+  });
+  return { rear: posts.slice(0, 2), front: posts.slice(2) };
+}
+
 export function createObjectRenderer(api) {
   const {
-    ctx, view, project, pathPolygon, drawBox, drawRoundRect, drawBillboard,
+    ctx, view, project, cameraDepth, pathPolygon, drawBox, drawRoundRect, drawBillboard,
     state, DATA, onStallBounds, recordActorHit
   } = api;
   const knownOutletIds = new Set((state.outlets || []).filter(function(outlet) { return outlet.id !== "main"; }).map(function(outlet) { return outlet.id; }));
@@ -44,6 +57,7 @@ export function createObjectRenderer(api) {
   function drawStall(stall, time) {
     const scale = view.scale;
     const renderStall = getStallVisualProfile(stall, state);
+    const supportPosts = splitStallSupportPosts(renderStall, cameraDepth);
     const acquiredOutlets = (state.outlets || []).filter(function(item) { return item.id !== "main"; });
     const availableStalls = DATA.stalls.filter(function(item) { return !item.main; });
     const claimedStalls = [];
@@ -87,6 +101,12 @@ export function createObjectRenderer(api) {
       project(renderStall.x - 18, 0, renderStall.z + renderStall.d + 20)
     ];
     pathPolygon(shadow, "#1017174d");
+    function drawSupportPost(post) {
+      drawBox(post.x, post.z, 7, 7, renderStall.h + 8, {
+        top: "#dfbd82", sideA: "#765a3b", sideB: "#503f31", stroke: "#30291f"
+      });
+    }
+    supportPosts.rear.forEach(drawSupportPost);
     drawBox(renderStall.x, renderStall.z, renderStall.w, renderStall.d, renderStall.h * 0.53, {
       top: "#73593e", sideA: "#5d4734", sideB: "#4d4033", stroke: "#312b2366"
     });
@@ -150,14 +170,7 @@ export function createObjectRenderer(api) {
       });
     }
 
-    // Posts, roof ribs, service window, and counter create readable stall volume.
-    for (let post = 0; post < 4; post++) {
-      const px = post % 2 ? renderStall.x + renderStall.w - 8 : renderStall.x + 5;
-      const pz = post < 2 ? renderStall.z + 3 : renderStall.z + renderStall.d - 21;
-      drawBox(px, pz, 7, 7, renderStall.h + 8, {
-        top: "#dfbd82", sideA: "#765a3b", sideB: "#503f31", stroke: "#30291f"
-      });
-    }
+    // Draw the two camera-near posts after the roof so supports never cut through its far edge.
     for (let rib = 1; rib < 4; rib++) {
       const start = project(renderStall.x + renderStall.w * rib / 4, renderStall.h + 9, renderStall.z - 5);
       const end = project(renderStall.x + renderStall.w * rib / 4, renderStall.h + 9, renderStall.z + renderStall.d + 5);
@@ -168,6 +181,7 @@ export function createObjectRenderer(api) {
       ctx.lineTo(end.x, end.y);
       ctx.stroke();
     }
+    supportPosts.front.forEach(drawSupportPost);
     const window = project(renderStall.x + renderStall.w * 0.45, renderStall.h * 0.63, renderStall.z + renderStall.d * 0.43);
     const windowWidth = 34 + renderStall.tierLevel * 14;
     drawRoundRect(window.x - windowWidth / 2 * scale, window.y - 12 * scale, windowWidth * scale, 21 * scale, 4 * scale, "#e8bd70", "#ffe3a477");

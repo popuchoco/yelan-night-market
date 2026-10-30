@@ -6,8 +6,8 @@ import { CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, ENDINGS, MARKET_CARDS, MARKET_CARD_SC
 import { closeDepreciation, CHART_OF_ACCOUNTS, getDailyCashbookSummary, postJournal } from "../dist/accounting.js";
 import { boot, createGameEngine } from "../dist/game.js";
 import { createUI } from "../dist/ui.js";
-import { applyCameraAction } from "../dist/scene.js";
-import { getStallVisualProfile } from "../dist/scene/objects.js";
+import { applyCameraAction, getFootprintDepth } from "../dist/scene.js";
+import { getStallVisualProfile, splitStallSupportPosts } from "../dist/scene/objects.js";
 import { createRevenueRenderer, getRevenueBreakdown } from "../dist/scene/revenue.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS, evaluateAchievements, normalizeAchievementState } from "../dist/achievements.js";
@@ -583,6 +583,20 @@ test("camera operations clamp tilt and zoom and support reset", () => {
   for (let i = 0; i < 20; i++) zoomed = applyCameraAction(zoomed, "zoom-in");
   assert.equal(zoomed.zoom, DATA.camera.maxZoom);
   assert.deepEqual(applyCameraAction(zoomed, "camera-reset"), initial);
+});
+
+test("scene depth sorting uses camera-facing footprint edges and reorders stall supports after orbit", () => {
+  const depthBySum = (x, z) => x + z;
+  assert.equal(getFootprintDepth({ x: 10, z: 20, w: 30, d: 40 }, depthBySum), 100);
+
+  const stall = { x: 100, z: 200, w: 120, d: 90 };
+  const northView = splitStallSupportPosts(stall, (x, z) => z);
+  assert.deepEqual(northView.rear.map((post) => post.index), [0, 1]);
+  assert.deepEqual(northView.front.map((post) => post.index), [2, 3]);
+
+  const eastView = splitStallSupportPosts(stall, (x) => x);
+  assert.deepEqual(eastView.rear.map((post) => post.index), [0, 2]);
+  assert.deepEqual(eastView.front.map((post) => post.index), [1, 3]);
 });
 
 test("scene revenue summary keeps sales, tips, activity, other income, and cash adjustments separate", () => {
