@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/game.test.js tests/accounting.test.js tests/achievements.test.js tests/progression.test.js tests/campaign-smoke.test.js"
+    "test": "node --test tests/game.test.js tests/accounting.test.js tests/achievements.test.js tests/progression.test.js tests/engagement-ui.test.js tests/market-world.test.js tests/campaign-smoke.test.js",
+    "smoke:stress": "node --test tests/campaign-stress.test.js"
   }
 }

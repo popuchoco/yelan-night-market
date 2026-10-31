@@ -6,7 +6,7 @@ import { createAchievementState, normalizeAchievementState } from "./achievement
 import { createWeeklyFocus, getLegacyWeeklyFocus, normalizeWeeklyFocus } from "./progression.js";
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
-export const SAVE_SCHEMA_VERSION = 6;
+export const SAVE_SCHEMA_VERSION = 7;
 
 function resolveStorage(storage) {
   if (storage !== undefined) return storage;
@@ -103,7 +103,7 @@ export function normalizeState(data) {
   fresh.equipment = Object.assign(fresh.equipment, data.equipment || {});
   fresh.expansions = Math.max(0, Math.min(9, Number(fresh.expansions) || 0));
   fresh.hiredCrew = Math.max(0, Math.min(6, Number(fresh.hiredCrew) || 0));
-  fresh.acquisitions = Math.max(0, Math.min(4, Number(fresh.acquisitions) || 0));
+  fresh.acquisitions = Math.max(0, Math.min(5, Number(fresh.acquisitions) || 0));
   const validAcquisitionTypes = new Set(Object.keys(DATA.outletProducts));
   fresh.acquisitionTypes = Array.isArray(data.acquisitionTypes)
     ? data.acquisitionTypes.filter((type) => validAcquisitionTypes.has(type)).slice(0, fresh.acquisitions)

@@ -1,5 +1,5 @@
 import { DATA, createOutletInventory, getOutletProduct, getOutletSpecialty, outletAvailableStock, outletRetailPrice } from "./data.js";
-import { ACQUISITION_TYPES, ENDINGS, WEEKLY_OPTIONS, isWeeklyDecisionDay, selectEnding, weeklyOptionCost } from "./campaign.js";
+import { ACQUISITION_TYPES, ENDINGS, WEEKLY_OPTIONS, isAcquisitionTypeAvailable, isWeeklyDecisionDay, selectEnding, weeklyOptionCost } from "./campaign.js";
 import {
   createLedger, fixedOperatingCost, getFoodCost, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   ledgerIncome, ledgerNet, freshState, loadState, marketCardChoice, money, saveState, staffCost,
@@ -429,7 +429,12 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     const cost = weeklyOptionCost(state, id);
     if (!option || cost === null) return response(false, "這項發展已達目前場景容量，請選其他方向。", false);
     if (cost > 0 && state.coins < cost) return response(false, "現金不足，請選擇暫不投資或其他負擔較低的方向。", false);
-    if (id === "acquire" && !Object.prototype.hasOwnProperty.call(ACQUISITION_TYPES, targetType)) return response(false, "請選擇要接手的攤位類型。", false);
+    if (id === "acquire" && !isAcquisitionTypeAvailable(state, targetType)) {
+      const message = Number(state.acquisitions) >= 4
+        ? "第五次接手限定船埠麵線，才能解鎖東堤小巷；其他業態目前無法使用最後一個接手名額。"
+        : "這項攤位尚未開放；完成現有四間鄰攤的接手後，才能拓展到東堤小巷。";
+      return response(false, message, false);
+    }
     const allianceBefore = hasBrandAlliance(state);
     state.coins -= cost;
     if (id === "expand") {
@@ -467,7 +472,8 @@ export function createGameEngine(state, { random = Math.random } = {}) {
     const transition = !allianceBefore && hasBrandAlliance(state)
       ? "夜市品牌聯盟成立：每夜多一桌聯盟來客，聯合採購享進價 9 折。"
       : (id === "hold" ? "保留現金，照目前規模進入新的一週。" : decisionName + "已完成，往後每夜固定成本與客流效果同步更新。");
-    return response(true, transition + " 本週焦點：" + focus.title + "。" );
+    const districtNotice = id === "acquire" && targetType === "noodle" ? " 東堤小巷已開放；相機已帶你看見新區域，可平移探索並點選船埠麵線管理。" : "";
+    return response(true, transition + districtNotice + " 本週焦點：" + focus.title + "。" );
   }
 
   function nextNight() {

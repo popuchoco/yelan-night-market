@@ -64,12 +64,13 @@ export const DATA = Object.freeze({
   },
   // Acquired storefronts use a dedicated SKU and retail price for their trade.
   // `food` and `leisure` remain as legacy save formats; new acquisitions use
-  // the four specific formats below.
+  // the specific formats below.
   outletProducts: {
     fish: { group: "food", selectable: true, storeName: "港口炸物", typeLabel: "現炸海味", productName: "現炸海味拼盤", icon: "🍤", stockId: "fish", unit: "份", cost: 76, price: 190, pricePerLevel: 12, tierOffers: [{ name: "現炸海味拼盤", bonus: 0 }, { name: "港灣雙拼套餐", bonus: 34 }, { name: "船長海味盛宴", bonus: 72 }], note: "漁獲進貨成本較高，固定攤販解鎖雙拼套餐，大排檔推出船長盛宴。" },
     fruit: { group: "food", selectable: true, storeName: "山海果物", typeLabel: "果物冰飲", productName: "海風水果冰", icon: "🍧", stockId: "fruit", unit: "杯", cost: 42, price: 135, pricePerLevel: 8, tierOffers: [{ name: "海風水果冰", bonus: 0 }, { name: "山海雙果雪花冰", bonus: 24 }, { name: "港灣鮮果冰宴", bonus: 52 }], note: "季節水果與冰飲，升級可解鎖雙果冰與鮮果冰宴。" },
     sweet: { group: "food", selectable: true, storeName: "花生糖舖", typeLabel: "手作甜食", productName: "手作花生糖盒", icon: "🥜", stockId: "sweet", unit: "盒", cost: 28, price: 98, pricePerLevel: 6, tierOffers: [{ name: "手作花生糖盒", bonus: 0 }, { name: "古早味花生糖禮盒", bonus: 22 }, { name: "巷口茶香甜點盤", bonus: 48 }], note: "低耗損伴手禮，升級可解鎖古早味禮盒與茶香甜點盤。" },
     toy: { group: "leisure", selectable: true, storeName: "彈珠小屋", typeLabel: "遊戲體驗", productName: "招牌彈珠一局", icon: "🎯", stockId: "toy", unit: "局", cost: 25, price: 90, pricePerLevel: 8, tierOffers: [{ name: "招牌彈珠一局", bonus: 0 }, { name: "親子闖關雙人券", bonus: 20 }, { name: "港灣夜遊集章套票", bonus: 45 }], note: "親子與熟客體驗攤，升級可解鎖雙人闖關與夜遊套票。" },
+    noodle: { group: "food", selectable: true, unlockAfterAcquisitions: 4, storeName: "船埠麵線", typeLabel: "港式麵線", productName: "蚵仔魚丸麵線", icon: "🍜", stockId: "noodle", unit: "碗", cost: 54, price: 172, pricePerLevel: 11, tierOffers: [{ name: "蚵仔魚丸麵線", bonus: 0 }, { name: "雙鮮綜合麵線", bonus: 30 }, { name: "港灣海味宴麵線", bonus: 64 }], note: "第 5 間接手攤位可開闢東堤小巷；以蚵仔、魚丸與柴魚高湯形成獨立商品、進貨成本與售價。" },
     food: { group: "food", selectable: false, storeName: "熟食同業", typeLabel: "熟食餐飲", productName: "港邊熱食", icon: "🍲", stockId: null, unit: "份", cost: 0, price: 150, pricePerLevel: 12, tierOffers: [{ name: "港邊熱食", bonus: 0 }, { name: "港邊雙人套餐", bonus: 28 }, { name: "漁港家常盛宴", bonus: 58 }], legacyMixed: true, note: "舊版存檔的綜合熟食分店。" },
     leisure: { group: "leisure", selectable: false, storeName: "遊戲同業", typeLabel: "遊戲體驗", productName: "體驗代幣", icon: "🎟", stockId: "leisure", unit: "張", cost: 32, price: 120, pricePerLevel: 10, tierOffers: [{ name: "體驗代幣", bonus: 0 }, { name: "雙人體驗券", bonus: 24 }, { name: "夜市闖關通行證", bonus: 50 }], note: "舊版存檔的遊戲體驗分店。" }
   },
@@ -92,7 +93,7 @@ export const DATA = Object.freeze({
       { progress: 0, minZoom: 0.72, panRatio: 0.025 },
       { progress: 1, minZoom: 0.66, panRatio: 0.05 },
       { progress: 3, minZoom: 0.62, panRatio: 0.075 },
-      { progress: 5, minZoom: 0.58, panRatio: 0.1 }
+      { progress: 5, minZoom: 0.52, panRatio: 0.18 }
     ]
   },
   sceneAmbience: {
@@ -152,7 +153,34 @@ export const DATA = Object.freeze({
     { id: "main", name: "夜嵐攤號", x: 386, z: 346, w: 235, d: 157, h: 145, roof: "#b95145", trim: "#f0cd82", main: true },
     { id: "toy", name: "彈珠小屋", x: 755, z: 262, w: 170, d: 112, h: 112, roof: "#618279", trim: "#c5d49f" },
     { id: "fruit", name: "山海果物", x: 107, z: 664, w: 174, d: 113, h: 108, roof: "#8a9b5d", trim: "#e9cd80" },
-    { id: "fish", name: "港口炸物", x: 746, z: 659, w: 177, d: 118, h: 115, roof: "#d18650", trim: "#f4d28b" }
+    { id: "fish", name: "港口炸物", x: 746, z: 659, w: 177, d: 118, h: 115, roof: "#d18650", trim: "#f4d28b" },
+    { id: "noodle", name: "船埠麵線", x: 1232, z: 505, w: 176, d: 116, h: 112, roof: "#947b58", trim: "#ecd29a", blockId: "east-pier" }
+  ],
+  // Additional market areas are finite, data-defined chunks. A block becomes
+  // visible only when its unlock condition is satisfied by live outlet data.
+  marketBlocks: [
+    { id: "harbor-core", name: "港邊主巷", stallIds: ["sweet", "main", "toy", "fruit", "fish"] },
+    {
+      id: "east-pier", name: "東堤小巷", unlockOutletType: "noodle", stallIds: ["noodle"],
+      bounds: { x: 1000, z: 330, w: 590, d: 520 }, tileSize: 118, groundColor: "#766e55",
+      connector: { points: [{ x: 930, z: 480 }, { x: 1120, z: 480 }, { x: 1120, z: 610 }, { x: 930, z: 610 }], color: "#8b7e60" },
+      water: { x: 1000, z: 246, w: 590, d: 82, color: "#2e6267" },
+      boardwalk: { x: 1030, z: 320, w: 510, d: 30, color: "#a08b65" },
+      props: [
+        { x: 1080, z: 430, w: 52, d: 34, type: "crate" },
+        { x: 1452, z: 626, w: 37, d: 34, type: "crate" },
+        { x: 1125, z: 690, w: 58, d: 18, type: "bench" },
+        { x: 1488, z: 424, w: 27, d: 26, type: "plant" }
+      ],
+      queueRoutes: [
+        [{ x: 930, z: 548 }, { x: 1050, z: 548 }, { x: 1165, z: 600 }, { x: 1200, z: 658 }, { x: 1150, z: 690 }, { x: 1035, z: 615 }, { x: 930, z: 548 }],
+        [{ x: 955, z: 572 }, { x: 1070, z: 572 }, { x: 1195, z: 620 }, { x: 1235, z: 678 }, { x: 1185, z: 710 }, { x: 1055, z: 636 }, { x: 955, z: 572 }]
+      ],
+      staffRoute: [{ x: 900, z: 540 }, { x: 1010, z: 548 }, { x: 1125, z: 576 }, { x: 1205, z: 638 }, { x: 1240, z: 682 }, { x: 1195, z: 712 }, { x: 1090, z: 650 }, { x: 990, z: 610 }, { x: 900, z: 540 }],
+      ambientRoutes: [
+        [{ x: 900, z: 540 }, { x: 1050, z: 548 }, { x: 1180, z: 700 }, { x: 1400, z: 700 }, { x: 1510, z: 565 }, { x: 1340, z: 420 }, { x: 1110, z: 420 }, { x: 900, z: 540 }]
+      ]
+    }
   ],
   dishes: [
     { id: "pepper-soup", name: "白胡椒雞湯", icon: "♨", price: 120, cost: 42, ingredient: "chicken", need: ["warm", "comfort"], line: "雞腿・白胡椒・暖心慢燉" },
@@ -228,6 +256,20 @@ export const DATA = Object.freeze({
     { title: "一張明信片繞了半座島。", icon: "📮", text: "老周把它交給等了很久的人，郵戳上的海風仍然新鮮。" }
   ]
 });
+
+export function isMarketBlockUnlocked(block, state) {
+  if (!block?.unlockOutletType) return true;
+  return (Array.isArray(state?.outlets) ? state.outlets : []).some((outlet) => outlet?.type === block.unlockOutletType);
+}
+
+export function getUnlockedMarketBlocks(state) {
+  return DATA.marketBlocks.filter((block) => isMarketBlockUnlocked(block, state));
+}
+
+export function getMarketStalls(state) {
+  const visibleStallIds = new Set(getUnlockedMarketBlocks(state).flatMap((block) => block.stallIds || []));
+  return DATA.stalls.filter((stall) => visibleStallIds.has(stall.id));
+}
 
 export function getOutletProduct(type) {
   return DATA.outletProducts[type] || DATA.outletProducts.food;

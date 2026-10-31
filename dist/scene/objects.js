@@ -48,7 +48,7 @@ export function splitStallSupportPosts(stall, depthAt) {
 export function createObjectRenderer(api) {
   const {
     ctx, view, project, cameraDepth, pathPolygon, drawBox, drawRoundRect, drawBillboard,
-    state, DATA, onStallBounds, recordActorHit
+    state, DATA, getMarketStalls, onStallBounds, recordActorHit
   } = api;
   const knownOutletIds = new Set((state.outlets || []).filter(function(outlet) { return outlet.id !== "main"; }).map(function(outlet) { return outlet.id; }));
   const takeoverStartedAt = new Map();
@@ -59,7 +59,7 @@ export function createObjectRenderer(api) {
     const renderStall = getStallVisualProfile(stall, state);
     const supportPosts = splitStallSupportPosts(renderStall, cameraDepth);
     const acquiredOutlets = (state.outlets || []).filter(function(item) { return item.id !== "main"; });
-    const availableStalls = DATA.stalls.filter(function(item) { return !item.main; });
+    const availableStalls = (getMarketStalls ? getMarketStalls(state) : DATA.stalls).filter(function(item) { return !item.main; });
     const claimedStalls = [];
     const acquiredStalls = acquiredOutlets.map(function(outlet) {
       let index = availableStalls.findIndex(function(item, candidate) {

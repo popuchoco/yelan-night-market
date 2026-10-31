@@ -129,10 +129,18 @@ export function createEngagementRenderer({
     const coveredCount = expectedPolicies.filter((item) => policyCovered(item.outlet, item.policy)).length;
     const gaps = expectedPolicies.filter((item) => !policyCovered(item.outlet, item.policy)).map((item) => item.label);
     const premium = monthlyInsuranceTotals(state).total;
-    const section = el("section", "risk-chain-card", null, { "aria-label": "營運風險與保險追蹤" });
-    append(section,
-      el("span", "risk-chain-kicker", "本週風險線索"),
-      el("h3", "", "事故、保障與理賠會跨夜延續"));
+    const section = el("details", "risk-chain-card", null, { "aria-label": "營運風險與保險追蹤" });
+    const summary = el("summary", "risk-chain-summary");
+    const overview = pendingClaims.length
+      ? "近 7 夜 " + recentIncidents.length + " 件事故・待收 " + money(claimTotal)
+      : "近 7 夜 " + recentIncidents.length + " 件事故・無待收理賠";
+    append(summary,
+      el("span", "risk-chain-kicker", "本週風險追蹤"),
+      el("b", "risk-chain-summary-line", overview),
+      el("span", "risk-chain-hint", "展開查看保障與保費"));
+    section.append(summary);
+    const details = el("div", "risk-chain-details");
+    append(details, el("h3", "", "事故、保障與理賠會跨夜延續"));
     const metrics = el("div", "risk-chain-metrics");
     const incidentMetric = el("div", "risk-chain-metric", null, { "aria-label": "近七夜事故" });
     const claimsMetric = el("div", "risk-chain-metric", null, { "aria-label": "待收理賠" });
@@ -147,16 +155,17 @@ export function createEngagementRenderer({
     append(claimsMetric, el("span", "", "理賠追蹤"), el("b", "", claimText));
     append(premiumMetric, el("span", "", "下期保費估算"), el("b", "", money(premium) + " / 期"));
     append(metrics, incidentMetric, claimsMetric, premiumMetric);
-    section.append(metrics);
+    details.append(metrics);
     let coverageText;
     if (!expectedPolicies.length) coverageText = "目前沒有雇主或第三人責任保費項目；流動／固定攤位未由雇主加保的員工仍須自行安排保障。";
     else if (!snapshotReady) coverageText = "本期保障快照尚未建立；首夜開門時會依當時攤型、人力與保單確認。";
     else if (gaps.length) coverageText = "本期已生效 " + coveredCount + " / " + expectedPolicies.length + " 項適用保障；尚未生效：「" + gaps.join("、") + "」。保單異動於下期首夜重新確認。";
     else coverageText = "本期已生效 " + coveredCount + " / " + expectedPolicies.length + " 項適用保障；保費不會消除事故、清消停業或口碑影響。";
-    section.append(el("p", "risk-chain-coverage", coverageText));
-    section.append(el("p", "risk-chain-note", recentIncidents.length
+    details.append(el("p", "risk-chain-coverage", coverageText));
+    details.append(el("p", "risk-chain-note", recentIncidents.length
       ? "手記會留下處置，理賠款則在核認後延後入帳；口碑、熟客與食安恢復仍按各自規則變化。"
       : "安全設備降低部分事故機率，保單協助分攤合格處置費；兩者都不能讓風險歸零。"));
+    section.append(details);
     return section;
   }
 
@@ -165,7 +174,7 @@ export function createEngagementRenderer({
     const addedRecurring = Math.max(0, Number(option.recurring) || 0);
     const projectedFixed = Math.max(0, currentFixedCost) + addedRecurring;
     const projectedRunway = projectedFixed > 0 ? Math.floor(projectedCash / projectedFixed) : null;
-    const preview = el("p", "decision-preview" + (projectedRunway !== null && projectedRunway <= 5 ? " is-tight" : ""));
+    const preview = el("div", "decision-preview" + (projectedRunway !== null && projectedRunway <= 5 ? " is-tight" : ""));
     if (capped) preview.textContent = "目前場景已達容量，無法再投入。";
     else if (insufficient) preview.textContent = "現金不足，這項投資目前無法執行。";
     else {
@@ -177,6 +186,7 @@ export function createEngagementRenderer({
           : "不增加每夜固定支出"),
         ...(addedRecurring ? [el("span", "", "至少需新增同額每夜貢獻才能打平固定成本；尚未扣食材與事件費。") ] : []),
         ...(projectedRunway === null ? [] : [el("span", "", "扣除一次性投入後，現金按固定承諾估算可支應約 " + projectedRunway + " 夜")]),
+        el("span", "decision-preview-caveat", "估算非保證：只計固定支出，未含備料、事件／事故與分店營運變動。"),
         ...(option.id === "acquire" ? [el("span", "", "分店開門後另加每日能源費；店長薪資與升級／保險依實際安排計入。") ] : []),
         ...(focus ? [el("span", "", "本週焦點預覽：" + focus.title + "・0 / " + focus.target)] : []));
     }

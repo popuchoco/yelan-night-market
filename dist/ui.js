@@ -1,6 +1,6 @@
 // avoid-ai-design-ignore-file: I2, SD4d - food, character, and event marks are in-world content; middle dots separate compact order and ledger facts.
 import { DATA, getOutletProduct, getOutletSpecialty, outletAvailableStock, outletRetailPrice } from "./data.js";
-import { ACQUISITION_GROUPS, ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, acquisitionGroupCounts, campaignCycleDay, weeklyOptionCost } from "./campaign.js";
+import { ACQUISITION_GROUPS, ACQUISITION_TYPES, CAMPAIGN_CALENDAR, CAMPAIGN_DAYS, WEEKLY_DECISION_DAYS, WEEKLY_OPTIONS, acquisitionGroupCounts, campaignCycleDay, isAcquisitionTypeAvailable, weeklyOptionCost } from "./campaign.js";
 import { CHART_OF_ACCOUNTS, formatBalance } from "./accounting.js";
 import { createReportRenderer } from "./ui/reports.js";
 import { createPreparationRenderer } from "./ui/preparation.js";
@@ -444,7 +444,7 @@ export function createUI(runtime) {
       el("span", "", "目前每夜固定承諾"), el("b", "", money(currentFixedCost)));
     const runway = currentFixedCost > 0 ? Math.floor(Number(state.coins) / currentFixedCost) : null;
     if (runway !== null) append(summary, el("span", "", "現金固定承諾續航"), el("b", runway <= 5 ? "decision-runway-tight" : "", runway + " 夜"));
-    if (runway !== null) summary.append(el("span", "decision-runway-note", "含月保費按 30 夜攤提；未含補貨、天候／稽查事件、事故處置與一次性支出。"));
+    if (runway !== null) summary.append(el("span", "decision-runway-note", "估算非保證：只計固定支出，未含備料、事件／事故與分店營運變動。"));
     decision.append(summary);
     const riskRecap = engagementRenderer.riskChainRecap();
     if (riskRecap) decision.append(riskRecap);
@@ -537,7 +537,7 @@ export function createUI(runtime) {
       card.append(engagementRenderer.investmentPreview(option, cost, capped, insufficient, currentFixedCost));
       if (option.id === "acquire" && !capped) {
         const targets = el("div", "acquisition-targets");
-        Object.values(ACQUISITION_TYPES).filter(function(target) { return target.selectable; }).forEach(function(target) {
+        Object.values(ACQUISITION_TYPES).filter(function(target) { return target.selectable && isAcquisitionTypeAvailable(state, target.id); }).forEach(function(target) {
           const action = button("", "choose-weekly", { id: option.id, targetType: target.id }, insufficient,
             "decision-action acquisition-action");
           append(action,
@@ -546,6 +546,11 @@ export function createUI(runtime) {
           action.title = target.note;
           targets.append(action);
         });
+        if (Number(state.acquisitions) >= 4) {
+          card.append(helper("第 5 次接手限定船埠麵線（一次性 NT$ 1,480、每夜租金 NT$ 38），確保能解鎖東堤小巷；新攤位可點擊管理，商品、備料與自動營運沿用分店系統。", "helper-copy"));
+        } else {
+          card.append(helper("完成現有 4 間鄰攤的接手後，可選擇船埠麵線拓展到東堤小巷；目前仍可先經營其他業態。", "helper-copy"));
+        }
         card.append(targets);
       } else {
         const action = button(capped ? "場景容量已滿" : (insufficient ? "現金不足" : (cost ? "投資 " + money(cost) : "維持現狀・繼續")),

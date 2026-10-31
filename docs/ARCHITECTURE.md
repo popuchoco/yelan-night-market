@@ -44,6 +44,7 @@ dist/index.html + dist/styles.css（樣式進入點）
 | 模組 | 主要責任 | 不應承擔的責任 |
 | --- | --- | --- |
 | `dist/data.js` | 菜單、原料、顧客、事件、攤位座標、價格、成本、相機進度曲線與遠景環境配置 | 操作 DOM、存檔、結算分錄 |
+| `DATA.marketBlocks`（`dist/data.js`） | 有界、資料驅動的夜市區塊範圍、解鎖業態、場景裝飾與行人／隊伍／店員路線；`getMarketStalls()` 從已解鎖區塊篩選攤位 | 寫入獨立區塊存檔、渲染 Canvas 或建立營運結果 |
 | `dist/campaign.js` | 30 夜敘事週期、跨週節點、市集公告卡與宣傳合作排程、週決策選項、結局判定 | 場景繪圖、localStorage 存取 |
 | `dist/audio.js` | 延遲建立 Web Audio、可選港邊音景、互動提示音及靜音清理 | 遊戲狀態、畫面繪製、存檔讀寫 |
 | `dist/progression.js` | 每週焦點目標定義、週決策對應、狀態遷移、每日活動計數與無懲罰週結算 | 寫入會計分錄、直接操作 DOM／Canvas |
@@ -86,9 +87,9 @@ dist/index.html + dist/styles.css（樣式進入點）
 
 ## 4. 場景架構
 
-場景使用 Canvas 2D 程式化繪製與斜視投影。相機執行期狀態包含 yaw、elevation、zoom、panX、panY；zoom-out 下限與平移上限由 `getCameraProfile()` 按擴店次數及已接手分店數派生，最多四級，不寫入存檔。桌機可用一般拖曳旋轉、Shift／右鍵拖曳或 WASD 平移、滾輪縮放；手機有 44px 方向按鈕，另有旋轉／俯仰／縮放／重置控制。固定場景資料目前包含一個主店與四個鄰攤，遊客、店員與環境行人於場景座標中移動。
+場景使用 Canvas 2D 程式化繪製與斜視投影。相機執行期狀態包含 yaw、elevation、zoom、panX、panY；zoom-out 下限與平移上限由 `getCameraProfile()` 按擴店次數及已接手分店數派生，最多四級，不寫入存檔。桌機可用一般拖曳旋轉、Shift／右鍵拖曳或 WASD 平移、滾輪縮放；手機有 44px 方向按鈕，另有旋轉／俯仰／縮放／重置控制。場景資料由 `DATA.marketBlocks` 定義有限區塊：港邊主巷含主店與四個鄰攤；取得「船埠麵線」店面後，東堤小巷的第六個攤位、裝飾與路線才加入渲染。遊客、分店來客、店員與環境行人均在世界座標中移動。
 
-攤位視覺資料以既有營運 state 推導，而非另存座標：主店依攤型與擴店次數改變幾何、桌椅、燈籠與煙霧；被接手的鄰攤提升可見度並顯示所屬狀態。擴店會在主店周邊增加領地界線；遠景由 `DATA.sceneAmbience` 提供有限岸線、港區剪影與固定燈點，避免縮遠露出空白畫布。相機平移同時作用於 `project()`，場景繪製、角色、攤位／事件命中區及事件 anchor 因而使用相同轉換。這仍是固定世界範圍內的有限探索，不代表地圖已能無限生成或出現新的可經營區塊。
+攤位視覺資料以既有營運 state 推導，而非另存座標：主店依攤型與擴店次數改變幾何、桌椅、燈籠與煙霧；被接手的鄰攤提升可見度並顯示所屬狀態。第五次併購選擇船埠麵線後解鎖東堤小巷；其攤位商品、租金及獨立庫存沿用現有 outlet 與營運邏輯，地面、道具、隊伍／店員路線與環境人流為區塊資料，不新增世界 state。`getMarketStaffWaypoints()` 與 `getOutletCrowdRoutes()` 由解鎖區塊及營業中的 outlet 派生路徑；未營業的分店不生成排隊訪客。擴店會在主店周邊增加領地界線；遠景由 `DATA.sceneAmbience` 提供有限岸線、港區剪影與固定燈點，避免縮遠露出空白畫布。相機平移同時作用於 `project()`，場景繪製、角色、攤位／事件命中區及事件 anchor 因而使用相同轉換。這是有限、資料驅動的可營運區塊，不代表地圖能無限生成。
 
 `scene/revenue.js` 只讀取當夜 ledger，將商品銷售、小費、活動／手記收入分列於固定 DOM 營收牌，並把主店交易、分店自動銷售與其他帳務項目錨定至相關攤位短暫顯示。營收牌只在接客前的準備階段顯示；玩家可手動關閉至下一夜，營業開始後自動隱藏。補助、理賠應收、盤盈與收銀短溢／退款不混入商品銷售；動畫為執行期暫態，不寫回 state 或存檔。計數器更新遵循場景暫停及 `prefers-reduced-motion`。
 
@@ -96,7 +97,7 @@ dist/index.html + dist/styles.css（樣式進入點）
 
 ## 5. 驗證與交付
 
-- 測試依責任分於 `tests/game.test.js`、`tests/accounting.test.js`、`tests/achievements.test.js`、`tests/progression.test.js`；執行 `npm test` 會跑完 `tests/`。
+- 測試依責任分於 `tests/game.test.js`、`tests/accounting.test.js`、`tests/achievements.test.js`、`tests/progression.test.js`、`tests/engagement-ui.test.js` 與 `tests/market-world.test.js`；執行 `npm test` 會跑 CI 常規套件；較重的宣傳／事件壓力線由 `npm run smoke:stress` 選擇性執行。
 - 推送與 Pull Request 的自動檢查由 `.github/workflows/test.yml` 執行相同測試。
 - 靜態發布入口由 `.openai/hosting.json` 的 `static.directory` 指向 `dist`。
 - 調整 UI／場景時需在桌面與窄版尺寸檢查；調整遊戲規則時需增補可重現的測試。
@@ -104,7 +105,7 @@ dist/index.html + dist/styles.css（樣式進入點）
 ## 6. 已知限制
 
 - state 是 mutable；沒有多人同步、伺服器存檔、undo 時間軸或事件溯源。
-- 主要場景範圍與可經營攤位固定；相機平移和遠景只擴大可視範圍，不等同於新增可營運區塊。相機範圍／遠景尚待桌機與手機實玩驗收。
+- 場景是有限資料區塊，不會無限生成；目前已新增一個可經營東堤區塊，但再擴區須另行提供商品、營運、成本與事件閉環。真實手機觸控、跨瀏覽器與 frame-time 量測尚待發佈前 QA。
 - 長期紀錄有上限，限制定義於 `state.js` 的正規化／帳務結算流程。
 - 報表是教育性簡化模擬，並非正式財報、稅務申報或法規遵循工具。
 - `engine.js` 與 `ui.js` 仍是主要組裝入口，尚未拆成所有更小的操作模組；後續應按穩定責任邊界漸進抽離，避免一次大規模改寫。

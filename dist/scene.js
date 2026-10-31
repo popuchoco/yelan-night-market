@@ -1,4 +1,4 @@
-import { DATA } from "./data.js";
+import { DATA, getMarketStalls, getUnlockedMarketBlocks } from "./data.js";
 import { createObjectRenderer, getStallVisualProfile } from "./scene/objects.js";
 import { createEffectRenderer } from "./scene/effects.js";
 import { createRevenueRenderer } from "./scene/revenue.js";
@@ -73,6 +73,43 @@ export function getFootprintDepth(bounds, depthAt) {
   );
 }
 
+export function isProjectedBoundsVisible(bounds, project, viewport, margin = 64) {
+  const x = Number(bounds?.x) || 0;
+  const z = Number(bounds?.z) || 0;
+  const width = Math.max(0, Number(bounds?.w) || 0);
+  const depth = Math.max(0, Number(bounds?.d) || 0);
+  const height = Math.max(0, Number(bounds?.h) || 0);
+  const points = [
+    project(x, 0, z), project(x + width, 0, z), project(x + width, 0, z + depth), project(x, 0, z + depth),
+    project(x, height, z), project(x + width, height, z), project(x + width, height, z + depth), project(x, height, z + depth)
+  ];
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const widthPx = Number(viewport?.width || viewport?.w || 0);
+  const heightPx = Number(viewport?.height || viewport?.h || 0);
+  return Math.max(...xs) >= -margin && Math.min(...xs) <= widthPx + margin &&
+    Math.max(...ys) >= -margin && Math.min(...ys) <= heightPx + margin;
+}
+
+export function getMarketStaffWaypoints(state) {
+  const activeTypes = new Set((Array.isArray(state?.outlets) ? state.outlets : [])
+    .filter((outlet) => outlet && outlet.id !== "main" && outlet.active)
+    .map((outlet) => outlet.type));
+  return DATA.motion.staffRoute.concat(getUnlockedMarketBlocks(state)
+    .filter((block) => (block.stallIds || []).some((stallId) => activeTypes.has(stallId)))
+    .flatMap((block) => block.staffRoute || []));
+}
+
+export function getOutletCrowdRoutes(state) {
+  const blocks = getUnlockedMarketBlocks(state);
+  return (Array.isArray(state?.outlets) ? state.outlets : [])
+    .filter((outlet) => outlet && outlet.id !== "main" && outlet.active)
+    .flatMap((outlet) => {
+      const block = blocks.find((candidate) => (candidate.stallIds || []).includes(outlet.type));
+      return (block?.queueRoutes || []).map((route, index) => ({ outletId: outlet.id, route, index }));
+    });
+}
+
 export function createScene(runtime) {
   const { state, todayEvent, getTonightGuests } = runtime;
   const { dishes } = DATA;
@@ -80,16 +117,19 @@ export function createScene(runtime) {
   var canvas = document.getElementById("worldCanvas");
   var ctx = canvas.getContext("2d");
   var view = { w: 0, h: 0, scale: 1, dpr: 1 };
-  var marketStalls = DATA.stalls;
+  var marketStalls = getMarketStalls(state);
   var mainStall = marketStalls.find(function(stall) { return stall.main; });
   var stallHitBounds = [];
   var actorHits = [];
   var eventHitBounds = [];
+  var seenMarketBlocks = new Set(["harbor-core"]);
   var rainSeed = [];
   var smokeSeed = [];
   var ambientWalkers = createAmbientWalkers();
+  var knownAmbientRoutes = new Set(ambientWalkers.map(function(walker) { return walker.route; }));
   var staffWalkers = [{ x: DATA.motion.staffStart.x, z: DATA.motion.staffStart.z, target: 0, speed: DATA.motion.staffSpeed, phase: 0 }];
   var guestActors = [];
+  var branchVisitors = new Map();
   var pointer = null;
   var lastToast = "";
   var sceneToastUntil = 0;
@@ -114,8 +154,47 @@ export function createScene(runtime) {
 
       function createAmbientWalkers() {
         var palettes = DATA.motion.ambientColors;
-        var routes = DATA.motion.ambientRoutes;
-        return routes.map(function (route,index) { return { x:route[0].x, z:route[0].z, route:route, step:1, speed:DATA.motion.ambientSpeed+(index%3)*DATA.motion.ambientSpeedStep, outfit:palettes[index], phase:index*.9, scale:.78+(index%2)*.12 }; });
+        var routes = DATA.motion.ambientRoutes.concat(getUnlockedMarketBlocks(state).flatMap(function(block) { return block.ambientRoutes || []; }));
+        return routes.map(function (route,index) { return { x:route[0].x, z:route[0].z, route:route, step:1, speed:DATA.motion.ambientSpeed+(index%3)*DATA.motion.ambientSpeedStep, outfit:palettes[index%palettes.length], phase:index*.9, scale:.78+(index%2)*.12 }; });
+      }
+      function syncMarketWorld() {
+        marketStalls = getMarketStalls(state);
+        mainStall = marketStalls.find(function(stall) { return stall.main; }) || DATA.stalls.find(function(stall) { return stall.main; });
+        getUnlockedMarketBlocks(state).forEach(function(block) {
+          if (seenMarketBlocks.has(block.id) || !view.w || !view.h || block.id === "harbor-core") return;
+          seenMarketBlocks.add(block.id);
+          const profile = getCameraProfile(state, view);
+          camera = clampCamera({ ...camera, zoom: profile.minZoom }, profile);
+          resizeCanvas();
+          const bounds = block.bounds;
+          const center = project(bounds.x + bounds.w / 2, 0, bounds.z + bounds.d / 2);
+          camera = clampCamera({ ...camera, panX: view.w * 0.5 - center.x, panY: view.h * 0.5 - center.y }, profile);
+          setCameraLabel();
+          setToast(block.name + "已開放・可平移探索並點選新攤位");
+        });
+        var palettes = DATA.motion.ambientColors;
+        getUnlockedMarketBlocks(state).flatMap(function(block) { return block.ambientRoutes || []; }).forEach(function(route) {
+          if (knownAmbientRoutes.has(route)) return;
+          knownAmbientRoutes.add(route);
+          var index = ambientWalkers.length;
+          ambientWalkers.push({ x:route[0].x, z:route[0].z, route:route, step:1,
+            speed:DATA.motion.ambientSpeed+(index%3)*DATA.motion.ambientSpeedStep,
+            outfit:palettes[index%palettes.length], phase:index*.9, scale:.82 });
+        });
+        syncOutletVisitors();
+      }
+      function syncOutletVisitors() {
+        const routeAssignments = new Map();
+        getOutletCrowdRoutes(state).forEach(function(details) {
+          routeAssignments.set(details.outletId + ":" + details.index, details);
+        });
+        branchVisitors.forEach(function(visitor, key) { if (!routeAssignments.has(key)) branchVisitors.delete(key); });
+        routeAssignments.forEach(function(details, key) {
+          if (branchVisitors.has(key)) return;
+          const route = details.route;
+          branchVisitors.set(key, { x:route[0].x, z:route[0].z, route, step:1, speed:DATA.motion.guestSpeed * 0.58,
+            phase:branchVisitors.size * 0.85 + details.index, scale:0.76, outfit:details.index ? "#8e9a7a" : "#d0a578" });
+        });
       }
       function moveToward(actor, target, distance) {
         var dx = target.x - actor.x, dz = target.z - actor.z;
@@ -148,8 +227,12 @@ export function createScene(runtime) {
           var target = walker.route[walker.step];
           if (moveToward(walker,target,walker.speed*dt)) walker.step = (walker.step+1)%walker.route.length;
         });
+        branchVisitors.forEach(function(visitor) {
+          var target = visitor.route[visitor.step];
+          if (moveToward(visitor, target, visitor.speed * dt)) visitor.step = (visitor.step + 1) % visitor.route.length;
+        });
         syncStaffWalkers();
-        var staffPoints = DATA.motion.staffRoute;
+        var staffPoints = getMarketStaffWaypoints(state);
         staffWalkers.forEach(function(walker) {
           if (!walker.path) walker.path = [];
           if (!walker.path.length) walker.path = [staffPoints[walker.target]];
@@ -271,6 +354,37 @@ export function createScene(runtime) {
           g.addColorStop(0,"#efc77c31"); g.addColorStop(1,"#efc77c00");
           ctx.fillStyle=g; ctx.fillRect(glow.x-r,glow.y-r,r*2,r*2);
         });
+        drawAdditionalMarketBlocks();
+      }
+      function drawAdditionalMarketBlocks() {
+        getUnlockedMarketBlocks(state).filter(function(block) { return block.id !== "harbor-core"; }).forEach(function(block) {
+          const bounds = block.bounds;
+          worldPoly([
+            { x:bounds.x, z:bounds.z }, { x:bounds.x+bounds.w, z:bounds.z },
+            { x:bounds.x+bounds.w, z:bounds.z+bounds.d }, { x:bounds.x, z:bounds.z+bounds.d }
+          ], 0, block.groundColor || "#766e55", "#d1b87b55", 1);
+          const tile = Math.max(48, Number(block.tileSize) || 118);
+          for (let x = bounds.x; x < bounds.x + bounds.w; x += tile) {
+            for (let z = bounds.z; z < bounds.z + bounds.d; z += tile) {
+              const width = Math.min(tile, bounds.x + bounds.w - x);
+              const depth = Math.min(tile, bounds.z + bounds.d - z);
+              const alternate = (Math.floor((x - bounds.x) / tile) + Math.floor((z - bounds.z) / tile)) % 2 === 0;
+              worldPoly([{x,z},{x:x+width,z},{x:x+width,z:z+depth},{x,z:z+depth}], 0,
+                alternate ? "#85775b" : "#7a7056", "#e7d3a744", .65);
+            }
+          }
+          if (block.connector?.points) worldPoly(block.connector.points, .4, block.connector.color || "#8b7e60", "#ead8a066", 1);
+          if (block.water) {
+            const water = block.water;
+            worldPoly([{x:water.x,z:water.z},{x:water.x+water.w,z:water.z},{x:water.x+water.w,z:water.z+water.d},{x:water.x,z:water.z+water.d}],
+              -2, water.color || "#2e6267", "#79a39a66", 2);
+          }
+          if (block.boardwalk) {
+            const boardwalk = block.boardwalk;
+            worldPoly([{x:boardwalk.x,z:boardwalk.z},{x:boardwalk.x+boardwalk.w,z:boardwalk.z},{x:boardwalk.x+boardwalk.w,z:boardwalk.z+boardwalk.d},{x:boardwalk.x,z:boardwalk.z+boardwalk.d}],
+              2, boardwalk.color || "#a08b65", "#f0d9a050", 1);
+          }
+        });
       }
       function drawTerritoryBoundary() {
         var expansions = Math.max(0, Math.floor(Number(state.expansions) || 0));
@@ -333,7 +447,7 @@ export function createScene(runtime) {
       function boundsHit(x,y,b) { return !!b&&x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom; }
       const objectRenderer = createObjectRenderer({
         ctx: ctx, view: view, project: project, cameraDepth: cameraDepth, pathPolygon: pathPolygon, drawBox: drawBox,
-        drawRoundRect: drawRoundRect, drawBillboard: drawBillboard, state: state, DATA: DATA,
+        drawRoundRect: drawRoundRect, drawBillboard: drawBillboard, state: state, DATA: DATA, getMarketStalls: getMarketStalls,
         onStallBounds: function(bounds, target) { stallHitBounds.push({ ...bounds, target: target || { type: "main" } }); },
         recordActorHit: function(hit) { actorHits.push(hit); }
       });
@@ -348,6 +462,7 @@ export function createScene(runtime) {
       const revenueRenderer = createRevenueRenderer({ state: state, ctx: ctx, view: view, drawRoundRect: drawRoundRect, eventAnchor: eventAnchor });
       function drawScene(time) {
         if(!view.w||!view.h) resizeCanvas();
+        syncMarketWorld();
         ctx.setTransform(view.dpr,0,0,view.dpr,0,0);
         ctx.clearRect(0,0,view.w,view.h);
         actorHits=[];
@@ -358,12 +473,20 @@ export function createScene(runtime) {
         var items=[];
         marketStalls.forEach(function(stall){
           const profile = getStallVisualProfile(stall, state);
+          if (!isProjectedBoundsVisible(profile, project, view, 96)) return;
           items.push({depth:getFootprintDepth(profile,cameraDepth),draw:function(){drawStall(stall,time);}});
         });
         [{x:330,z:332,w:49,d:34,type:"table"},{x:690,z:347,w:49,d:34,type:"table"},{x:320,z:730,w:37,d:34,type:"bench"},{x:690,z:738,w:37,d:34,type:"bench"},{x:320,z:300,w:27,d:26,type:"plant"},{x:677,z:300,w:27,d:26,type:"plant"},{x:295,z:466,w:58,d:18,type:"crate"},{x:705,z:476,w:58,d:18,type:"crate"}].forEach(function(prop){
           items.push({depth:getFootprintDepth(prop,cameraDepth),draw:function(){drawProp(prop.x,prop.z,prop.type,time);}});
         });
+        getUnlockedMarketBlocks(state).forEach(function(block) {
+          (block.props || []).forEach(function(prop) {
+            if (!isProjectedBoundsVisible(prop, project, view, 72)) return;
+            items.push({depth:getFootprintDepth(prop,cameraDepth),draw:function(){drawProp(prop.x,prop.z,prop.type,time);}});
+          });
+        });
         ambientWalkers.forEach(function(walker,index){items.push({depth:cameraDepth(walker.x,walker.z),draw:function(){drawHuman(walker,time,"ambient",index);}});});
+        branchVisitors.forEach(function(visitor,index){items.push({depth:cameraDepth(visitor.x,visitor.z),draw:function(){drawHuman(visitor,time,"ambient",index);}});});
         if(state.phase==="service"||state.phase==="report") {
           guestActors.forEach(function(actor,index){items.push({depth:cameraDepth(actor.x,actor.z),draw:function(){drawHuman(actor,time,"guest",index);}});});
         }
@@ -546,6 +669,7 @@ export function createScene(runtime) {
   }
 
   function update(dt) {
+    syncMarketWorld();
     if (!paused && !motionReduced) {
       animationTime += dt * 1000;
       updateActors(dt);
