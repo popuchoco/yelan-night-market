@@ -1,6 +1,8 @@
+// avoid-ai-design-ignore-file: I2 - play/pause glyph is a deliberate scene-control symbol, not content iconography.
 import { captureStateSnapshot, clearSavedProgress, getTonightGuests, loadStateResult, restoreStateSnapshot, saveState, saveStateResult, todayEvent, todayStory } from "./state.js";
 import { createScene } from "./scene.js";
 import { createUI } from "./ui.js";
+import { canShowPreviousNightCashbook } from "./ui/engagement.js";
 import { createGameEngine } from "./engine.js";
 import { getDailyCashbookSummary } from "./accounting.js";
 import { ACHIEVEMENTS, evaluateAchievements } from "./achievements.js";
@@ -49,9 +51,9 @@ export function boot() {
   function syncCashbookHud() {
     if (!revenueHud.plaque) return;
     if (revenueDismissedDay !== null && revenueDismissedDay !== state.day) revenueDismissedDay = null;
-    revenueHud.plaque.hidden = state.phase !== "prep" || revenueDismissedDay === state.day;
-    revenueHud.plaque.dataset.phase = state.phase;
     const summary = getDailyCashbookSummary(state, Number(state.day) - 1);
+    revenueHud.plaque.hidden = !canShowPreviousNightCashbook(state, summary, revenueDismissedDay);
+    revenueHud.plaque.dataset.phase = state.phase;
     revenueHud.night.textContent = summary.day > 0 ? "第 " + summary.day + " 夜" : "尚無前夜";
     const values = summary.available ? [
       [revenueHud.total, formatSignedNTD(summary.net)],
@@ -107,7 +109,18 @@ export function boot() {
       if (target) target.focus();
     }
   }
-  function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); syncOutletEventTriggers(); syncAchievementTrigger(); }
+  function syncCameraExplorationLock() {
+    const frame = document.querySelector(".world-frame");
+    const locked = Number(state.day) <= 7;
+    if (frame) frame.classList.toggle("opening-week-camera-locked", locked);
+    const desktopHint = document.querySelector(".scene-hint-desktop");
+    const mobileHint = document.querySelector(".scene-hint-mobile");
+    const desktopCopy = locked ? "拖曳旋轉・滾輪放大・Enter 開攤" : "拖曳旋轉・Shift／右鍵拖曳或 WASD 平移・滾輪縮放・Enter 開攤";
+    const mobileCopy = locked ? "拖曳旋轉・右上角放大／轉向・Enter 開攤" : "拖曳旋轉・右上角調整視角・Enter 開攤";
+    if (desktopHint && desktopHint.textContent !== desktopCopy) desktopHint.textContent = desktopCopy;
+    if (mobileHint && mobileHint.textContent !== mobileCopy) mobileHint.textContent = mobileCopy;
+  }
+  function renderUI() { ui.renderUI(); syncMotionControl(); syncWorldEventTrigger(); syncOutletEventTriggers(); syncAchievementTrigger(); syncCameraExplorationLock(); }
   const reportDialog = document.getElementById("reportDialog");
   const reportDialogContent = document.getElementById("reportDialogContent");
   const worldEventDialog = document.getElementById("worldEventDialog");

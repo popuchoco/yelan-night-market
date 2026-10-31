@@ -4,6 +4,12 @@ import { hasCurrentCoverage, getMonthlyInsurance, monthlyInsuranceTotals } from 
 import { knownRecurringOperatingCost } from "../state.js";
 import { getOnboardingTier, getTonightHint, getWeeklyFocusDefinition, getWeeklyFocusIdForDecision } from "../progression.js";
 
+export function canShowPreviousNightCashbook(state, summary, dismissedDay = null) {
+  const day = Math.max(1, Math.floor(Number(state?.day) || 1));
+  return state?.phase === "prep" && summary?.available === true &&
+    Number(summary.day) === day - 1 && dismissedDay !== day;
+}
+
 /** Small, read-only feedback surfaces that connect night, week, and period loops. */
 export function createEngagementRenderer({
   state, CAMPAIGN_DAYS, campaignCycleDay,
@@ -75,7 +81,7 @@ export function createEngagementRenderer({
       card.append(focus);
     }
     if (getOnboardingTier(state.day) === "business-only") {
-      card.append(el("span", "tonight-priority-onboarding", "第一週先熟悉備料、出餐與打烊；進階資料仍可從上方分頁隨時查看。"));
+      card.append(el("span", "tonight-priority-onboarding", "第一週先熟悉備料、出餐與打烊；第 8 夜起逐步開放場景探索，進階資料仍可隨時查看。"));
     }
     return card;
   }

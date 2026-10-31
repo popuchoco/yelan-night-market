@@ -11,15 +11,19 @@ export function getCameraProfile(state, viewport = {}) {
   const acquiredOutlets = Array.isArray(state?.outlets)
     ? state.outlets.filter((outlet) => outlet && outlet.id !== "main").length
     : Math.max(0, Math.floor(Number(state?.acquisitions) || 0));
-  const progress = expansions + acquiredOutlets;
+  // Keep the opening week visually local even if an imported or test save
+  // already contains growth. The wider scene becomes available from night 8.
+  const hasKnownDay = state?.day !== undefined && state?.day !== null && Number.isFinite(Number(state.day));
+  const inOpeningWeek = hasKnownDay && Number(state.day) <= 7;
+  const progress = inOpeningWeek ? 0 : expansions + acquiredOutlets;
   const level = [...config.progressLevels].reverse().find((item) => progress >= item.progress) || config.progressLevels[0];
   return {
     progress,
     level: config.progressLevels.indexOf(level),
-    minZoom: level.progress === 0 ? config.minZoom : level.minZoom,
+    minZoom: inOpeningWeek ? 1 : (level.progress === 0 ? config.minZoom : level.minZoom),
     maxZoom: config.maxZoom,
-    panX: Math.round(width * level.panRatio),
-    panY: Math.round(height * level.panRatio),
+    panX: inOpeningWeek ? 0 : Math.round(width * level.panRatio),
+    panY: inOpeningWeek ? 0 : Math.round(height * level.panRatio),
     panStepX: Math.max(12, Math.round(width * config.panStepRatio)),
     panStepY: Math.max(12, Math.round(height * config.panStepRatio))
   };

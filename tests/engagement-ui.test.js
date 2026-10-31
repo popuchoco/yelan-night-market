@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createUI } from "../dist/ui.js";
+import { canShowPreviousNightCashbook } from "../dist/ui/engagement.js";
 import { freshState } from "../dist/state.js";
 
 function withMockDocument(run) {
@@ -30,6 +31,16 @@ function find(node, className) {
 function allText(node) {
   return [node?.textContent || "", ...(node?.children || []).map(allText)].join(" ");
 }
+
+test("prior-night cashbook only appears in preparation when an actual previous-night summary exists", () => {
+  const summary = { day: 1, available: true };
+  assert.equal(canShowPreviousNightCashbook({ day: 1, phase: "prep" }, { day: 0, available: false }), false,
+    "the first night has no prior cashbook and should not reserve map space");
+  assert.equal(canShowPreviousNightCashbook({ day: 2, phase: "prep" }, summary), true);
+  assert.equal(canShowPreviousNightCashbook({ day: 2, phase: "service" }, summary), false);
+  assert.equal(canShowPreviousNightCashbook({ day: 2, phase: "prep" }, summary, 2), false,
+    "a dismissed cashbook stays closed for this night");
+});
 
 test("nightly priority exposes the current focus with an accessible numeric progress status", () => withMockDocument(() => {
   const state = freshState();

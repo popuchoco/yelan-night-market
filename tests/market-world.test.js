@@ -79,3 +79,33 @@ test("M11 unlocks a data-defined, operable east-pier market block through a fift
   assert.ok(getUnlockedMarketBlocks(migrated).some((block) => block.id === "east-pier"));
   assert.equal(migrated.marketBlocks, undefined, "world layout is derived from acquired outlets, not persisted as duplicate map state");
 });
+
+test("schema v6 saves retain legacy storefronts while the new district remains derived and opening-week camera stays local", () => {
+  const previous = freshState();
+  previous.schemaVersion = 6;
+  previous.day = 7;
+  previous.acquisitions = 4;
+  previous.acquisitionTypes = ["fish", "fruit", "sweet", "toy"];
+  previous.outlets.push(...previous.acquisitionTypes.map((type, index) => ({
+    id: "legacy-" + (index + 1), type, name: ACQUISITION_TYPES[type].name,
+    active: false, stock: {}, stockCost: {}
+  })));
+
+  const migrated = normalizeState(previous);
+  assert.equal(migrated.schemaVersion, SAVE_SCHEMA_VERSION);
+  assert.equal(migrated.acquisitions, 4);
+  assert.deepEqual(migrated.outlets.slice(1).map((outlet) => outlet.type), previous.acquisitionTypes);
+  assert.deepEqual(getUnlockedMarketBlocks(migrated).map((block) => block.id), ["harbor-core"]);
+  assert.equal(Object.hasOwn(migrated, "marketBlocks"), false);
+  assert.equal(Object.hasOwn(migrated, "camera"), false);
+
+  migrated.expansions = 3;
+  const openingCamera = getCameraProfile(migrated, { width: 390, height: 844 });
+  assert.equal(openingCamera.level, 0, "the opening seven nights keep the camera range at its local starting level");
+  assert.equal(openingCamera.minZoom, 1, "the opening view cannot zoom out to reveal the larger world");
+  assert.equal(openingCamera.panX, 0);
+  assert.equal(openingCamera.panY, 0);
+  migrated.day = 8;
+  assert.ok(getCameraProfile(migrated, { width: 390, height: 844 }).level > 0,
+    "earned growth becomes visible once the opening week is complete");
+});

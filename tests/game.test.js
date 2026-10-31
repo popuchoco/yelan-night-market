@@ -419,6 +419,7 @@ test("camera operations clamp tilt and zoom and support reset", () => {
 
 test("camera exploration range follows owned growth and pan remains bounded", () => {
   const state = freshState();
+  state.day = 8;
   const viewport = { width: 1000, height: 600 };
   const starter = getCameraProfile(state, viewport);
   assert.equal(starter.level, 0);
@@ -451,6 +452,7 @@ test("camera exploration range follows owned growth and pan remains bounded", ()
 
 test("camera exploration profile also expands from acquired outlets without persisted camera data", () => {
   const state = freshState();
+  state.day = 8;
   const viewport = { width: 400, height: 700 };
   const initial = getCameraProfile(state, viewport);
   state.outlets.push({ id: "branch-fish", type: "fish", name: "港口炸物" });
@@ -936,7 +938,10 @@ test("DOM helpers, modular engine and scene renderers remain in place", async ()
   assert.match(css, /\.revenue-close[^\n]*width:\s*44px/);
   assert.match(game, /getDailyCashbookSummary\(state, Number\(state\.day\) - 1\)/);
   assert.match(game, /function syncCashbookHud\(/);
-  assert.match(game, /state\.phase !== "prep" \|\| revenueDismissedDay === state\.day/);
+  assert.match(game, /canShowPreviousNightCashbook\(state, summary, revenueDismissedDay\)/);
+  assert.match(game, /function syncCameraExplorationLock\(/);
+  assert.match(game, /frame\.classList\.toggle\("opening-week-camera-locked", locked\)/);
+  assert.match(game, /desktopCopy = locked \? "拖曳旋轉・滾輪放大・Enter 開攤"/);
   assert.match(game, /scene\.showRevenueNotice/);
   assert.match(css, /\.world-frame\.camera-collapsed \.camera-tools\s*\{\s*display:\s*none/);
   assert.match(css, /grid-template-areas: "orbit-left tilt-up tilt-down orbit-right"/);

@@ -1,3 +1,4 @@
+/* avoid-ai-design-ignore-file: K3, K4 - layered scene controls and recipe-memory callout are intentional in-world visual cues. */
 /* World-first incident access: the notice is projected above the affected stall. */
 .world-event-trigger {
   position: absolute;
@@ -162,6 +163,8 @@
 .camera-tools { position: static; z-index: auto; flex: 0 0 auto; width: max-content; min-width: 0; }
 .camera-tools .icon-button { flex: 0 0 44px; }
 .world-frame.camera-collapsed .camera-tools { display: none; }
+.world-frame.opening-week-camera-locked .camera-tools [data-action="zoom-out"],
+.world-frame.opening-week-camera-locked .camera-tools [data-action^="pan-"] { display: none !important; }
 .scene-hint-mobile { display: none; }
 .world-frame.world-ui-hidden .world-top-left,
 .world-frame.world-ui-hidden .world-event-trigger,
@@ -198,6 +201,7 @@
   .camera-tools [data-action="pan-left"] { grid-area: pan-left; }
   .camera-tools [data-action="pan-down"] { grid-area: pan-down; }
   .camera-tools [data-action="pan-right"] { grid-area: pan-right; }
+  .world-frame.opening-week-camera-locked .camera-tools { grid-template-rows: repeat(2, 44px); grid-template-areas: "orbit-left tilt-up tilt-down orbit-right" ". zoom-in camera-reset ."; }
 }
 @media (max-width: 480px) {
   .world-tools { top: 8px; right: 8px; }
@@ -247,7 +251,7 @@
 }
 @media (max-width: 480px) {
   .world-actions { width: min(220px, 58%); }
-  .world-hint { max-width: min(160px, calc(100% - 218px)); }
+  .world-hint { max-width: min(160px, calc(40% - 16px)); }
   .world-top-left .world-eyebrow { display: none; }
   .revenue-plaque { gap: 3px; padding: 6px 8px; }
   .revenue-plaque .cashbook-note { display: none; }
