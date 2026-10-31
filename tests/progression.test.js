@@ -60,6 +60,18 @@ test("nightly hints derive one focus action and the first-week onboarding tier w
   assert.match(getTonightHint({ day: 10, phase: "prep", weeklyFocus: branch }).headline, /分店再營業 2 夜/);
 });
 
+test("first-week preparation combines tonight's event with actionable low-stock context", () => {
+  const hint = getTonightHint({ day: 3, phase: "prep", weeklyFocus: createWeeklyFocus("opening", 1),
+    stock: { chicken: 0, seafood: 4, tea: 1 } }, { event: { id: "complaint" } });
+  assert.match(hint.headline, /推進本週焦點/);
+  assert.match(hint.contextLine, /尖峰等候容易引發客訴/);
+  assert.match(hint.contextLine, /雞腿與白胡椒缺貨/);
+  assert.match(hint.contextLine, /桂花烏龍與水梨剩 1 份/);
+
+  const laterNight = getTonightHint({ day: 8, phase: "prep", stock: { chicken: 0 } }, { event: { id: "supplier" } });
+  assert.equal(laterNight.contextLine, "", "the event-and-stock coaching stays scoped to the opening week");
+});
+
 test("weekly focus progress only counts matching activities and resolves without a failure penalty", () => {
   const focus = createWeeklyFocus("hire", 8);
   recordWeeklyFocusProgress(focus, "served");

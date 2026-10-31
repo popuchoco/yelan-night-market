@@ -13,7 +13,7 @@ export function canShowPreviousNightCashbook(state, summary, dismissedDay = null
 /** Small, read-only feedback surfaces that connect night, week, and period loops. */
 export function createEngagementRenderer({
   state, CAMPAIGN_DAYS, campaignCycleDay,
-  getStory, money, moneyNet, button, el, append, helper
+  getStory, getEvent, money, moneyNet, button, el, append, helper
 }) {
   function previousNightRecap() {
     if (state.phase !== "prep" && state.phase !== "decision") return null;
@@ -60,7 +60,7 @@ export function createEngagementRenderer({
 
   function tonightPriority() {
     if (state.phase === "decision") return null;
-    const hint = getTonightHint(state);
+    const hint = getTonightHint(state, { event: getEvent?.() });
     const card = el("section", "tonight-priority", null, {
       "aria-label": "今晚一件事",
       "data-onboarding-tier": hint.onboardingTier
@@ -69,6 +69,9 @@ export function createEngagementRenderer({
       el("span", "tonight-priority-kicker", hint.onboardingTier === "business-only" ? "今晚一件事・先熟悉小店" : "今晚一件事"),
       el("h3", "tonight-priority-title", hint.headline),
       el("p", "tonight-priority-action", hint.action));
+    if (hint.contextLine) {
+      card.append(el("p", "tonight-priority-context", hint.contextLine, { "aria-label": "今晚事件與備料提醒" }));
+    }
     if (hint.target > 0) {
       const focus = el("div", "tonight-priority-focus");
       const copy = el("span", "tonight-priority-focus-copy", hint.focusLine);

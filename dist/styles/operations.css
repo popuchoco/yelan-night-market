@@ -31,6 +31,7 @@
 .tonight-priority-kicker { color: #e8ce8d; font-size: var(--type-caption); font-weight: 850; letter-spacing: .04em; }
 .tonight-priority-title { margin: 0; color: #f2ead4; font-size: var(--type-lead); line-height: 1.35; }
 .tonight-priority-action, .tonight-priority-onboarding { margin: 0; color: #cbd5c8; font-size: var(--type-body); line-height: 1.5; }
+.tonight-priority-context { margin: 0; padding-top: var(--space-2); border-top: 1px solid #ffffff16; color: #d9c997; font-size: var(--type-caption); line-height: 1.45; }
 .tonight-priority-onboarding { color: #b8c9b7; font-size: var(--type-caption); }
 .tonight-priority-focus { display: grid; gap: 6px; padding-top: var(--space-1); border-top: 1px solid #ffffff16; }
 .tonight-priority-focus-copy { color: #e9dba9; font-size: var(--type-caption); font-weight: 750; line-height: 1.45; }

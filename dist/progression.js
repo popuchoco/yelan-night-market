@@ -1,3 +1,5 @@
+import { DATA } from "./data.js";
+
 // Weekly focus connects the existing investment choices with daily operations.
 // It is optional pressure: missing a focus never deducts cash or reputation.
 export const WEEKLY_FOCUSES = Object.freeze({
@@ -42,8 +44,34 @@ function focusUnit(id) {
   return id === "acquire" || id === "hold" ? "夜" : "桌";
 }
 
-/** Read-only nightly guidance derived from the current focus and existing phase. */
-export function getTonightHint(state) {
+const FIRST_WEEK_EVENT_CUES = Object.freeze({
+  festival: "燈節會多一桌旅人並帶來活動 Bonus；先確認備料是否足夠。",
+  complaint: "尖峰等候容易引發客訴；先確認備料與人手，營業中可從事件入口處理。",
+  rain: "雨夜能源支出較高；先確認帆布棚與爐火設備。",
+  supplier: "今晚食材進價上漲；先盤點庫存，只補真正缺少的品項。",
+  "street-music": "巷口演奏會提高每桌小費；備料到位即可，不必為活動額外支出。",
+  "market-sale": "今晚有聯合採購折扣；先確認缺料再補，避免囤貨。",
+  inspection: "今晚有設備巡查；開門前檢查爐台、排煙與安全設備。",
+  blackout: "臨時接電會增加費用；開門前確認照明與爐台設備。"
+});
+
+function firstWeekStockCue(stock) {
+  if (!stock || typeof stock !== "object") return "";
+  const low = DATA.ingredients.filter((ingredient) => {
+    const quantity = Number(stock[ingredient.id]);
+    return Number.isFinite(quantity) && quantity <= 1;
+  });
+  if (!low.length) return "";
+  const items = low.slice(0, 2).map((ingredient) => {
+    const quantity = Math.max(0, Math.floor(Number(stock[ingredient.id]) || 0));
+    return ingredient.name + (quantity === 0 ? "缺貨" : "剩 " + quantity + " 份");
+  });
+  const extra = low.length > 2 ? "，另有 " + (low.length - 2) + " 項偏低" : "";
+  return "備料提醒：" + items.join("、") + extra + "。";
+}
+
+/** Read-only nightly guidance derived from the current focus, event and stock. */
+export function getTonightHint(state, { event = null } = {}) {
   const day = Math.max(1, Math.floor(Number(state?.day) || 1));
   const phase = state?.phase || "prep";
   const onboardingTier = getOnboardingTier(day);
@@ -55,6 +83,7 @@ export function getTonightHint(state) {
   const unit = definition ? focusUnit(definition.id) : "";
   let headline = "先熟悉今晚的營運節奏";
   let action = "確認備料與班表，再掛燈迎客。";
+  let contextLine = "";
 
   const focusAction = !definition || remaining === 0 ? "" : (
     definition.id === "opening" || definition.id === "expand" ? "再接待 " + remaining + " 桌"
@@ -76,6 +105,11 @@ export function getTonightHint(state) {
     action = onboardingTier === "business-only"
       ? "先確認備料與班表，再掛燈迎客。進階帳務和保險仍可隨時查看。"
       : "確認備料與班表，準備掛燈迎客。";
+    if (onboardingTier === "business-only") {
+      const eventCue = FIRST_WEEK_EVENT_CUES[event?.id] || "";
+      const stockCue = firstWeekStockCue(state?.stock);
+      contextLine = [eventCue, stockCue].filter(Boolean).join(" ");
+    }
   }
 
   let focusLine = definition ? "本週焦點・" + definition.title + "・" + progress + " / " + target + " " + unit : "尚未設定本週焦點";
@@ -84,7 +118,7 @@ export function getTonightHint(state) {
 
   return { day, phase, onboardingTier, focusId: definition?.id || null,
     focusTitle: definition?.title || "本週經營焦點", progress, target, remaining, unit,
-    headline, action, focusLine };
+    headline, action, contextLine, focusLine };
 }
 
 export function getWeeklyFocusIdForDecision(decisionId) {

@@ -68,6 +68,7 @@ export function createUI(runtime) {
   const engagementRenderer = createEngagementRenderer({
     state, CAMPAIGN_DAYS, campaignCycleDay,
     getStory: todayStory,
+    getEvent: todayEvent,
     money, moneyNet, button, el, append, helper
   });
 

@@ -74,6 +74,21 @@ test("preparation overview highlights one nightly action and progressively folds
   assert.ok(find(details, "ledger-card"), "full accounting detail remains available inside the disclosure");
 }));
 
+test("opening-week priority card merges event and stock guidance into one compact context row", () => withMockDocument(() => {
+  const state = freshState();
+  state.day = 3;
+  state.phase = "prep";
+  state.stock.chicken = 0;
+  const overview = createUI({ state, saveState() {} }).renderOverview();
+  const priority = find(overview, "tonight-priority");
+  const context = find(priority, "tonight-priority-context");
+  assert.ok(context);
+  assert.equal(context.attributes["aria-label"], "今晚事件與備料提醒");
+  assert.match(context.textContent, /客訴/);
+  assert.match(context.textContent, /雞腿與白胡椒缺貨/);
+  assert.equal(find(overview, "event-card") !== null, true, "the full event description remains available below the guidance card");
+}));
+
 test("service overview keeps customer service visible while folding detailed bookkeeping in onboarding", () => withMockDocument(() => {
   const state = freshState();
   state.phase = "service";

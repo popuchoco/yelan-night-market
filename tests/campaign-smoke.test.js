@@ -16,7 +16,7 @@ function seededRandom(seed) {
   };
 }
 
-function simulateStrategy(strategy, seed) {
+function simulateStrategy(strategy, seed, nightTarget = NIGHTS) {
   const state = freshState();
   const engine = createGameEngine(state, { random: seededRandom(seed) });
   const cashAtClose = [];
@@ -24,7 +24,7 @@ function simulateStrategy(strategy, seed) {
   let safetyClaims = 0;
   let completedNights = 0;
 
-  for (let step = 0; completedNights < NIGHTS && step < 2000; step += 1) {
+  for (let step = 0; completedNights < nightTarget && step < 2000; step += 1) {
     if (state.phase === "decision") {
       if (state.managerEvent) {
         const choice = state.managerEvent.type === "equipment" ? "defer"
@@ -123,8 +123,20 @@ function simulateStrategy(strategy, seed) {
     completedNights += 1;
   }
 
-  return { state, completedNights, minimumCash: Math.min(...cashAtClose), branchSales, safetyClaims };
+  return { state, engine, completedNights, minimumCash: Math.min(...cashAtClose), branchSales, safetyClaims };
 }
+
+test("fresh-save opening-week route reaches the first weekly decision after seven playable nights", () => {
+  const { state, engine, completedNights } = simulateStrategy("hold", 17, 7);
+  assert.equal(completedNights, 7);
+  assert.equal(state.day, 8);
+  assert.equal(state.phase, "decision");
+  assert.equal(state.journal.length, 7, "all seven nights should be archived in the diary");
+  assert.equal(state.weeklyFocus.result?.resolvedDay, 7);
+  assert.equal(engine.chooseWeeklyDecision("hold").ok, true, "the first weekly choice remains reachable");
+  assert.equal(state.phase, "prep");
+  assert.equal(state.day, 8);
+});
 
 test("60-night seeded hold, growth, and insured manager-branch routes stay operable and reconcile", () => {
   for (const strategy of ["hold", "growth", "managed-branch"]) {
