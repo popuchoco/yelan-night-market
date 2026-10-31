@@ -6,7 +6,7 @@ import { freshState } from "../dist/state.js";
 function withMockDocument(run) {
   const priorDocument = globalThis.document;
   const makeNode = (tagName) => ({
-    tagName, children: [], dataset: {}, attributes: {}, style: {},
+    tagName, children: [], dataset: {}, attributes: {}, style: {}, disabled: false,
     append(...children) { this.children.push(...children); },
     setAttribute(name, value) { this.attributes[name] = String(value); }
   });
@@ -31,18 +31,47 @@ function allText(node) {
   return [node?.textContent || "", ...(node?.children || []).map(allText)].join(" ");
 }
 
-test("weekly focus UI exposes compact progress and an accessible numeric status", () => withMockDocument(() => {
+test("nightly priority exposes the current focus with an accessible numeric progress status", () => withMockDocument(() => {
   const state = freshState();
   state.weeklyFocus.progress = 9;
   const overview = createUI({ state, saveState() {} }).renderOverview();
-  const card = find(overview, "weekly-focus");
-  const progress = find(card, "weekly-focus-track");
+  const card = find(overview, "tonight-priority");
+  const progress = find(card, "tonight-priority-track");
   assert.ok(card);
   assert.equal(progress.attributes.role, "progressbar");
   assert.equal(progress.attributes["aria-valuemax"], "18");
   assert.equal(progress.attributes["aria-valuenow"], "9");
-  assert.ok(find(card, "weekly-focus-copy"));
-  assert.match(find(card, "weekly-focus-status").textContent, /已過半/);
+  assert.match(find(card, "tonight-priority-focus-copy").textContent, /還差 9 桌/);
+}));
+
+test("preparation overview highlights one nightly action and progressively folds first-week accounting detail", () => withMockDocument(() => {
+  const state = freshState();
+  state.day = 1;
+  state.phase = "prep";
+  const overview = createUI({ state, saveState() {} }).renderOverview();
+  const priority = find(overview, "tonight-priority");
+  const details = find(overview, "onboarding-detail");
+  assert.ok(priority);
+  assert.equal(priority.attributes["aria-label"], "今晚一件事");
+  assert.ok(find(priority, "tonight-priority-title"));
+  assert.ok(find(priority, "tonight-priority-onboarding"));
+  assert.equal(find(overview, "weekly-focus"), null, "the old second focus card is replaced by the single priority card");
+  assert.ok(details);
+  assert.equal(details.tagName, "details");
+  assert.equal(details.attributes.open, undefined);
+  assert.match(allText(find(details, "onboarding-detail-summary")), /預估淨額/);
+  assert.ok(find(details, "ledger-card"), "full accounting detail remains available inside the disclosure");
+}));
+
+test("service overview keeps customer service visible while folding detailed bookkeeping in onboarding", () => withMockDocument(() => {
+  const state = freshState();
+  state.phase = "service";
+  state.ledger = { sales: 125, tips: 10, bonus: 0, food: 35 };
+  const overview = createUI({ state, saveState() {} }).renderOverview();
+  assert.ok(find(overview, "tonight-priority"));
+  assert.ok(find(overview, "guest-list"));
+  assert.match(allText(find(overview, "onboarding-detail-summary")), /收入/);
+  assert.match(allText(find(overview, "onboarding-detail-summary")), /食材耗用/);
 }));
 
 test("overview shows the prior-night cashbook and food-safety recovery countdown", () => withMockDocument(() => {
@@ -132,4 +161,21 @@ test("near-complete weekly focus recap says how little remained without a failur
   const copy = find(recap, "weekly-focus-copy");
   assert.match(copy.textContent, /只差 2 桌/);
   assert.match(copy.textContent, /沒有扣款/);
+  assert.match(allText(recap), /差一點點/);
+}));
+
+test("stockout dishes remain selectable for feedback but are clearly unavailable, while recalls stay disabled", () => withMockDocument(() => {
+  const state = freshState();
+  Object.keys(state.stock).forEach((key) => { state.stock[key] = 0; });
+  const ui = createUI({ state, saveState() {} });
+  const choices = ui.renderOrderChoices({ difficult: false, need: "seafood" });
+  const stockout = [];
+  const walk = (node) => {
+    if (node.dataset?.action === "stockout-dish") stockout.push(node);
+    (node.children || []).forEach(walk);
+  };
+  walk(choices);
+  assert.ok(stockout.length > 0);
+  assert.equal(stockout[0].disabled, false);
+  assert.ok(stockout[0].className.includes("stockout"));
 }));

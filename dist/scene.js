@@ -695,6 +695,7 @@ export function createScene(runtime) {
     setCameraLabel: setCameraLabel, hitTest: hitTest, eventAnchor: eventAnchor, showToast: setToast, togglePause: togglePause,
     getRevenueDisplay: revenueRenderer.getDisplay, drainRevenueAnnouncements: revenueRenderer.drainAnnouncements,
     showRevenueNotice: function(amount, label, outletId) { revenueRenderer.showNotice(amount, label, outletId, animationTime, paused || motionReduced); },
+    showServiceFeedback: function(label, tone, outletId) { revenueRenderer.showFeedback(label, tone, outletId, animationTime, paused || motionReduced); },
     get paused() { return paused; }, get motionReduced() { return motionReduced; },
     get motionSuppressed() { return paused || motionReduced; } };
 }

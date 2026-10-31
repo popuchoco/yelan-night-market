@@ -12,7 +12,7 @@ import { getStallVisualProfile, splitStallSupportPosts } from "../dist/scene/obj
 import { createRevenueRenderer, getRevenueBreakdown } from "../dist/scene/revenue.js";
 import { INSURANCE_RATES, isInsuranceBillingDay } from "../dist/safety.js";
 import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS, evaluateAchievements, normalizeAchievementState } from "../dist/achievements.js";
-import { WEEKLY_FOCUSES, createWeeklyFocus, getLegacyWeeklyFocus, getWeeklyFocusIdForDecision, normalizeWeeklyFocus, recordWeeklyFocusProgress, resolveWeeklyFocus } from "../dist/progression.js";
+import { WEEKLY_FOCUSES, createWeeklyFocus, getLegacyWeeklyFocus, getOnboardingTier, getTonightHint, getWeeklyFocusIdForDecision, normalizeWeeklyFocus, recordWeeklyFocusProgress, resolveWeeklyFocus } from "../dist/progression.js";
 import {
   createLedger, fixedOperatingCost, forecast, freshState, getPurchasePrice, getTonightGuests, hasBrandAlliance,
   captureStateSnapshot, loadState, loadStateResult, normalizeState, restoreStateSnapshot,
@@ -39,6 +39,27 @@ test("weekly focus maps strategic choices to bounded, save-safe objectives", () 
   assert.equal(normalizeWeeklyFocus({ id: "hire", target: 999, progress: 999 }).target, WEEKLY_FOCUSES.hire.target);
 });
 
+test("nightly hints derive one focus action and the first-week onboarding tier without new state", () => {
+  const opening = getTonightHint({ day: 1, phase: "prep", weeklyFocus: createWeeklyFocus("opening", 1) });
+  assert.equal(opening.onboardingTier, "business-only");
+  assert.match(opening.action, /先確認備料與班表/);
+  assert.equal(getOnboardingTier(7), "business-only");
+  assert.equal(getOnboardingTier(8), "full");
+
+  const focus = createWeeklyFocus("expand", 8);
+  focus.progress = 22;
+  const service = getTonightHint({ day: 12, phase: "service", weeklyFocus: focus });
+  assert.equal(service.remaining, 2);
+  assert.equal(service.onboardingTier, "full");
+  assert.match(service.focusLine, /還差 2 桌/);
+  assert.match(service.headline, /再接待 2 桌/);
+  assert.match(service.action, /有庫存的推薦餐點/);
+
+  const branch = createWeeklyFocus("acquire", 8);
+  branch.progress = 1;
+  assert.match(getTonightHint({ day: 10, phase: "prep", weeklyFocus: branch }).headline, /分店再營業 2 夜/);
+});
+
 test("weekly focus progress only counts matching activities and resolves without a failure penalty", () => {
   const focus = createWeeklyFocus("hire", 8);
   recordWeeklyFocusProgress(focus, "served");
@@ -56,6 +77,17 @@ test("weekly focus progress only counts matching activities and resolves without
   const failed = resolveWeeklyFocus(missed, { closingDay: 21, coins: 900, loanTakenDay: 15 });
   assert.equal(failed.success, false, "borrowing during the focus week blocks the no-new-loan goal");
   assert.match(failed.message, /沒有額外扣款/);
+
+  const near = createWeeklyFocus("opening", 1);
+  near.progress = near.target - 2;
+  const nearResult = resolveWeeklyFocus(near, { closingDay: 7, coins: 900 });
+  assert.equal(nearResult.status, "near");
+  assert.equal(nearResult.remaining, 2);
+  assert.match(nearResult.summary, /只差 2 桌/);
+  const migrated = normalizeWeeklyFocus({ id: "opening", startDay: 1, resolved: true,
+    result: { success: false, progress: 16, target: 18, resolvedDay: 7 } });
+  assert.equal(migrated.result.status, "near");
+  assert.match(migrated.result.summary, /只差 2 桌/);
 });
 
 test("weekly focus closes into the diary and worksheet, rewarding completion only", () => {

@@ -536,6 +536,28 @@ test("scene revenue tracker animates branch receipts and resets when a new night
   ]);
 });
 
+test("non-financial scene feedback is tone-coded, accessible, and never invents a zero-dollar transaction", () => {
+  const state = freshState();
+  const labels = [];
+  const panels = [];
+  const ctx = {
+    save() {}, restore() {}, beginPath() {}, arc() {}, fill() {},
+    fillText(text) { labels.push(String(text)); }
+  };
+  const renderer = createRevenueRenderer({ state, ctx, view: { w: 720, h: 480 },
+    drawRoundRect(...args) { panels.push(args); }, eventAnchor: () => ({ x: 360, y: 220 }) });
+  renderer.showFeedback("備料售完・改選其他餐點", "neutral", "main", 1000);
+  renderer.showFeedback("合胃口連擊 ×2", "positive", "main", 1100);
+  renderer.draw(1200);
+  assert.ok(labels.includes("備料售完・改選其他餐點"));
+  assert.ok(labels.includes("合胃口連擊 ×2"));
+  assert.ok(labels.every((label) => !label.includes("NT$ 0")));
+  assert.ok(panels.some(([, , , , , fill]) => fill === "#26322ff2"), "stockout uses a neutral grey-green panel");
+  assert.deepEqual(renderer.drainAnnouncements(), ["備料售完・改選其他餐點。", "合胃口連擊 ×2。"]);
+  renderer.showFeedback("靜態回饋", "neutral", "main", 1300, true);
+  assert.deepEqual(renderer.drainAnnouncements(), ["靜態回饋。"], "reduced motion retains the text announcement");
+});
+
 test("main stall visual profile reflects tier and expansion growth without saving scene coordinates", () => {
   const mainStall = DATA.stalls.find((stall) => stall.main);
   const state = freshState();

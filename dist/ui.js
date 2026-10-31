@@ -5,7 +5,7 @@ import { CHART_OF_ACCOUNTS, formatBalance } from "./accounting.js";
 import { createReportRenderer } from "./ui/reports.js";
 import { createPreparationRenderer } from "./ui/preparation.js";
 import { createEngagementRenderer } from "./ui/engagement.js";
-import { getWeeklyFocusDefinition } from "./progression.js";
+import { getOnboardingTier, getWeeklyFocusDefinition } from "./progression.js";
 import {
   STALL_TIERS, OUTLET_SAFETY_EQUIPMENT, getMonthlyInsurance, getNextInsuranceBillingDay,
   getOutletEmployeeCount, getOutletSafetyLevel, getOutletTier, getNextStallTier, getTierReadiness,
@@ -399,16 +399,17 @@ export function createUI(runtime) {
         return waiting;
       }
       const result = focus.result;
-      const card = el("section", "weekly-focus weekly-focus-recap" + (result.success ? " is-success" : ""));
-      const heading = el("div", "weekly-focus-heading");
       const remaining = Math.max(0, Number(result.target) - Number(result.progress));
-      const unit = focus.id === "acquire" || focus.id === "hold" ? "夜" : "桌";
+      const status = result.status || (result.success ? "complete" : (remaining > 0 && remaining <= 2 ? "near" : "missed"));
+      const card = el("section", "weekly-focus weekly-focus-recap" + (status === "complete" ? " is-success" : (status === "near" ? " is-near" : " is-missed")));
+      const heading = el("div", "weekly-focus-heading");
       const recapMessage = !result.success && remaining > 0 && remaining <= 2
-        ? "只差 " + remaining + " " + unit + " 就達標；這週沒有扣款，下週可再試。 " + result.message
-        : result.message;
-      append(heading, el("b", "", (result.success ? "完成" : "持續累積") + "｜" + result.title),
+        ? (result.summary || "只差 " + remaining + " " + (result.unit || (focus.id === "acquire" || focus.id === "hold" ? "夜" : "桌")) + "；本週沒有扣款，下週可再試。")
+        : (result.summary || result.message);
+      const resultLabel = status === "complete" ? "本週達標" : (status === "near" ? "差一點點" : "本週回顧");
+      append(heading, el("b", "", resultLabel + "｜" + result.title),
         el("span", "weekly-focus-count", result.progress + " / " + result.target));
-      append(card, el("span", "weekly-focus-kicker", "經營焦點・第 " + result.startDay + "–" + result.resolvedDay + " 夜"),
+      append(card, el("span", "weekly-focus-kicker", "七夜經營小結・第 " + result.startDay + "–" + result.resolvedDay + " 夜"),
         heading,
         el("p", "weekly-focus-copy", recapMessage));
       return card;
@@ -583,20 +584,14 @@ export function createUI(runtime) {
       parts.push(renderWeeklyDecision());
       return fragment(parts);
     }
+    const priority = engagementRenderer.tonightPriority();
+    if (priority) parts.push(priority);
     const periodRecap = engagementRenderer.periodOpeningRecap();
     if (periodRecap) parts.push(periodRecap);
     const nightRecap = engagementRenderer.previousNightRecap();
     if (nightRecap) parts.push(nightRecap);
     const recovery = engagementRenderer.recoveryNotice();
     if (recovery) parts.push(recovery);
-    const focusCard = weeklyFocusCard();
-    if (focusCard) parts.push(focusCard);
-    if (state.day === 1) {
-      const guide = el("aside", "guide-card");
-      append(guide, el("b", "", "新手小抄"),
-        el("span", "", "先到「攤位」補食材、調班表；開門後點擊發光客人接單。每七夜做一次營運選擇、每三十夜查看財報；夜市不會在第一期結束，世界會持續往前。"));
-      parts.push(guide);
-    }
     const alliance = allianceStatus(false);
     if (alliance) parts.push(alliance);
     if (state.loanPrincipal > 0 && state.phase === "prep") {
@@ -610,7 +605,7 @@ export function createUI(runtime) {
       String(outlook.guests.length).padStart(2, "0") + " 桌客流"));
 
     if (state.phase === "prep") {
-      parts.push(ledger([
+      const prepRows = [
         { label: "租金（含拓展 / 併購）", value: "−" + money(outlook.ledger.rent + outlook.ledger.expansionRent + outlook.ledger.acquisitionRent) },
         { label: "排班薪資", value: "−" + money(outlook.ledger.labor) },
         ...(outlook.ledger.managerPayroll ? [{ label: "分店店長薪資", value: "−" + money(outlook.ledger.managerPayroll) }] : []),
@@ -627,7 +622,17 @@ export function createUI(runtime) {
         ...(outlook.outletSales ? [{ label: "分店自動營收 / Bonus", value: "+" + money(outlook.outletSales), tone: "income" }] : []),
         { label: "預估食材耗用", value: "−" + money(outlook.food), tone: "outflow" },
         { label: "預估小費 / 活動 Bonus", value: "+" + money(outlook.tips + outlook.bonus), tone: "income" }
-      ], { label: "預估營業淨額", value: moneyNet(outlook.net), negative: outlook.net < 0 }));
+      ];
+      const prepLedger = ledger(prepRows, { label: "預估營業淨額", value: moneyNet(outlook.net), negative: outlook.net < 0 });
+      if (getOnboardingTier(state.day) === "business-only") {
+        const details = el("details", "onboarding-detail");
+        const summary = el("summary", "onboarding-detail-summary");
+        append(summary, el("span", "onboarding-detail-label", "開門前收支估算"),
+          el("b", "", "預估淨額 " + moneyNet(outlook.net)),
+          el("small", "", "租金、人事、能源、備料與分店營運都已納入・展開查看明細"));
+        append(details, summary, prepLedger);
+        parts.push(details);
+      } else parts.push(prepLedger);
       parts.push(helper("租金、人事與能源在開門時扣款；保險於每期第 1 夜（第 1、31、61 夜⋯）結帳。分店依備料預估自動營收，實際耗用按加權平均成本入帳。"));
       parts.push(subhead("開門前快速檢查", "一切準備好了嗎？"));
 
@@ -657,7 +662,7 @@ export function createUI(runtime) {
     } else if (state.phase === "service") {
       const guests = getTonightGuests();
       const active = guests[state.customerIndex];
-      parts.push(ledger([
+      const serviceRows = [
         { label: "餐點營收", value: "+" + money(state.ledger.sales), tone: "income" },
         { label: "小費 / 活動", value: "+" + money(state.ledger.tips + state.ledger.bonus), tone: "income" },
         ...(state.ledger.subsidies ? [{ label: "公告卡補助", value: "+" + money(state.ledger.subsidies), tone: "income" }] : []),
@@ -668,7 +673,17 @@ export function createUI(runtime) {
         ...(state.ledger.insuranceClaimRevenue ? [{ label: "保險理賠（應收）", value: "+" + money(state.ledger.insuranceClaimRevenue), tone: "income" }] : []),
         ...(state.ledger.insuranceClaimReceipts ? [{ label: "前期理賠收款", value: "+" + money(state.ledger.insuranceClaimReceipts), tone: "income" }] : []),
         { label: "固定與安全支出已扣", value: "−" + money(fixedOperatingCost(state.ledger)) }
-      ]));
+      ];
+      const serviceLedger = ledger(serviceRows);
+      if (getOnboardingTier(state.day) === "business-only") {
+        const details = el("details", "onboarding-detail onboarding-service-ledger");
+        const summary = el("summary", "onboarding-detail-summary");
+        append(summary, el("span", "onboarding-detail-label", "今晚收支"),
+          el("b", "", "收入 " + money(ledgerIncome(state.ledger)) + "・食材耗用 " + money(state.ledger.food)),
+          el("small", "", "展開查看完整收支與保險明細"));
+        append(details, summary, serviceLedger);
+        parts.push(details);
+      } else parts.push(serviceLedger);
       parts.push(subhead("正在排隊的客人", "點場景裡發光的人接單"));
       const queue = el("div", "guest-list");
       guests.forEach(function(guest, index) {
@@ -923,14 +938,16 @@ export function createUI(runtime) {
       const dish = entry.dish;
       const recommended = dish.need.indexOf(guest.need) !== -1;
       const recalled = state.recalledDishIds.includes(dish.id);
-      const available = Number(state.stock[dish.ingredient]) > 0 && !recalled;
-      const choice = button("", "serve-dish", { id: dish.id }, !available,
-        "dish-choice" + (recommended ? " recommended" : "") + (recalled ? " recalled" : ""));
+      const inStock = Number(state.stock[dish.ingredient]) > 0;
+      const available = inStock && !recalled;
+      const choice = button("", inStock || recalled ? "serve-dish" : "stockout-dish", { id: dish.id }, recalled,
+        "dish-choice" + (recommended ? " recommended" : "") + (recalled ? " recalled" : "") + (!inStock && !recalled ? " stockout" : ""));
       const copy = el("span", "dish-choice-copy");
       append(copy,
         el("span", "dish-choice-name", dish.name + (recommended ? " ｜ 投其所好" : "")),
         el("span", "dish-choice-note", recalled ? "今晚食安事件下架・暫停供應" :
-          dish.line + " ｜ 庫存 " + (state.stock[dish.ingredient] || 0) + " ｜ 食材 " + money(getFoodCost(dish))));
+          (!inStock ? "備料已售完・點一下查看場景提示" :
+            dish.line + " ｜ 庫存 " + (state.stock[dish.ingredient] || 0) + " ｜ 食材 " + money(getFoodCost(dish)))));
       append(choice, el("span", "dish-choice-icon", dish.icon), copy,
         el("span", "dish-choice-price", money(dish.price)));
       grid.append(choice);

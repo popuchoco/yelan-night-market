@@ -34,6 +34,59 @@ export function getWeeklyFocusDefinition(id) {
   return WEEKLY_FOCUSES[id] || null;
 }
 
+export function getOnboardingTier(day) {
+  return Math.max(1, Math.floor(Number(day) || 1)) <= 7 ? "business-only" : "full";
+}
+
+function focusUnit(id) {
+  return id === "acquire" || id === "hold" ? "夜" : "桌";
+}
+
+/** Read-only nightly guidance derived from the current focus and existing phase. */
+export function getTonightHint(state) {
+  const day = Math.max(1, Math.floor(Number(state?.day) || 1));
+  const phase = state?.phase || "prep";
+  const onboardingTier = getOnboardingTier(day);
+  const focus = state?.weeklyFocus;
+  const definition = focus && !focus.resolved ? WEEKLY_FOCUSES[focus.id] : null;
+  const progress = definition ? Math.max(0, Math.min(Number(focus.target) || definition.target, Number(focus.progress) || 0)) : 0;
+  const target = definition ? Math.max(1, Number(focus.target) || definition.target) : 0;
+  const remaining = definition ? Math.max(0, target - progress) : null;
+  const unit = definition ? focusUnit(definition.id) : "";
+  let headline = "先熟悉今晚的營運節奏";
+  let action = "確認備料與班表，再掛燈迎客。";
+
+  const focusAction = !definition || remaining === 0 ? "" : (
+    definition.id === "opening" || definition.id === "expand" ? "再接待 " + remaining + " 桌"
+      : definition.id === "hire" ? "再讓 " + remaining + " 桌客人滿意"
+        : definition.id === "acquire" ? "讓分店再營業 " + remaining + " 夜"
+          : "再維持現金為正 " + remaining + " 夜，且不新增週轉金");
+
+  if (phase === "service") {
+    headline = focusAction && ["opening", "expand", "hire"].includes(definition?.id)
+      ? focusAction + "，推進本週焦點"
+      : "先招呼眼前客人，讓今晚營運順順走";
+    action = "優先選有庫存的推薦餐點；售完時改選其他料理。";
+  } else if (phase === "report") {
+    headline = "替今晚留下心意，再準備迎接明晚";
+    action = "選一段手記，回看這一夜留下的營運結果。";
+  } else if (phase === "prep") {
+    if (focusAction) headline = focusAction + "，推進本週焦點";
+    else if (definition && remaining === 0) headline = "本週焦點已達標，今晚穩定營運即可";
+    action = onboardingTier === "business-only"
+      ? "先確認備料與班表，再掛燈迎客。進階帳務和保險仍可隨時查看。"
+      : "確認備料與班表，準備掛燈迎客。";
+  }
+
+  let focusLine = definition ? "本週焦點・" + definition.title + "・" + progress + " / " + target + " " + unit : "尚未設定本週焦點";
+  if (definition && remaining > 0) focusLine += "・還差 " + remaining + " " + unit;
+  else if (definition) focusLine += "・已達標";
+
+  return { day, phase, onboardingTier, focusId: definition?.id || null,
+    focusTitle: definition?.title || "本週經營焦點", progress, target, remaining, unit,
+    headline, action, focusLine };
+}
+
 export function getWeeklyFocusIdForDecision(decisionId) {
   return FOCUS_BY_DECISION[decisionId] || "hold";
 }
@@ -52,16 +105,30 @@ export function normalizeWeeklyFocus(value) {
   const target = Math.max(1, Math.min(definition.target, Math.floor(Number(value.target) || definition.target)));
   const resolved = !!value.resolved;
   const result = value.result && typeof value.result === "object" && !Array.isArray(value.result)
-    ? {
+    ? (() => {
+        const resultProgress = Math.max(0, Math.min(target, Math.floor(Number(value.result.progress) || 0)));
+        const remaining = Math.max(0, target - resultProgress);
+        const status = value.result.success ? "complete" : (remaining > 0 && remaining <= 2 ? "near" : "missed");
+        const unit = focusUnit(definition.id);
+        const summary = String(value.result.summary || (status === "complete"
+          ? "本週焦點達成，口碑與熟客有所成長。"
+          : status === "near" ? "只差 " + remaining + " " + unit + "；本週沒有懲罰，下週可再試。"
+            : "本週完成 " + resultProgress + " / " + target + "，沒有額外扣款。"));
+        return {
         id: definition.id,
         title: definition.title,
         success: !!value.result.success,
-        progress: Math.max(0, Math.min(target, Math.floor(Number(value.result.progress) || 0))),
+        progress: resultProgress,
         target,
+        remaining,
+        unit,
+        status,
+        summary: summary.slice(0, 220),
         startDay: Math.max(1, Math.floor(Number(value.result.startDay) || Number(value.startDay) || 1)),
         message: String(value.result.message || "").slice(0, 220),
         resolvedDay: Math.max(0, Math.floor(Number(value.result.resolvedDay) || 0))
-      }
+      };
+      })()
     : null;
   return {
     id: definition.id,
@@ -92,8 +159,16 @@ export function resolveWeeklyFocus(focus, { closingDay, coins, loanTakenDay = 0 
   const message = success
     ? "本週焦點「" + definition.title + "」完成，街坊記住了你的用心（" + reward + "）。"
     : "本週焦點「" + definition.title + "」完成 " + focus.progress + " / " + focus.target + "；沒有額外扣款，下週再接著努力。";
+  const progress = Math.max(0, Math.floor(Number(focus.progress) || 0));
+  const remaining = Math.max(0, focus.target - progress);
+  const status = success ? "complete" : (remaining > 0 && remaining <= 2 ? "near" : "missed");
+  const unit = focusUnit(definition.id);
+  const summary = success
+    ? "本週焦點達成，口碑 +2、熟客 +1。"
+    : status === "near" ? "只差 " + remaining + " " + unit + "；本週沒有懲罰，下週可再試。"
+      : "本週完成 " + progress + " / " + focus.target + "，沒有額外扣款。";
   const result = { id: definition.id, title: definition.title, success,
-    progress: Math.max(0, Math.floor(Number(focus.progress) || 0)), target: focus.target,
+    progress, target: focus.target, remaining, unit, status, summary,
     startDay: focus.startDay, message, resolvedDay: day };
   focus.resolved = true;
   focus.success = success;

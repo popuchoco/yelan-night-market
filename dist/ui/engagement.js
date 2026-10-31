@@ -2,7 +2,7 @@ import { ACHIEVEMENTS } from "../achievements.js";
 import { getDailyCashbookSummary } from "../accounting.js";
 import { hasCurrentCoverage, getMonthlyInsurance, monthlyInsuranceTotals } from "../safety.js";
 import { knownRecurringOperatingCost } from "../state.js";
-import { getWeeklyFocusDefinition, getWeeklyFocusIdForDecision } from "../progression.js";
+import { getOnboardingTier, getTonightHint, getWeeklyFocusDefinition, getWeeklyFocusIdForDecision } from "../progression.js";
 
 /** Small, read-only feedback surfaces that connect night, week, and period loops. */
 export function createEngagementRenderer({
@@ -48,6 +48,34 @@ export function createEngagementRenderer({
       const focus = cashbook.focus;
       card.append(el("p", "night-recap-focus", "週焦點・" + focus.title + "　" + focus.progress + " / " + focus.target +
         (focus.resolved ? (focus.success ? "・已完成" : "・本週未達成，沒有懲罰") : "・持續累積")));
+    }
+    return card;
+  }
+
+  function tonightPriority() {
+    if (state.phase === "decision") return null;
+    const hint = getTonightHint(state);
+    const card = el("section", "tonight-priority", null, {
+      "aria-label": "今晚一件事",
+      "data-onboarding-tier": hint.onboardingTier
+    });
+    append(card,
+      el("span", "tonight-priority-kicker", hint.onboardingTier === "business-only" ? "今晚一件事・先熟悉小店" : "今晚一件事"),
+      el("h3", "tonight-priority-title", hint.headline),
+      el("p", "tonight-priority-action", hint.action));
+    if (hint.target > 0) {
+      const focus = el("div", "tonight-priority-focus");
+      const copy = el("span", "tonight-priority-focus-copy", hint.focusLine);
+      const track = el("div", "tonight-priority-track", null, {
+        role: "progressbar", "aria-label": hint.focusTitle,
+        "aria-valuemin": 0, "aria-valuemax": hint.target, "aria-valuenow": hint.progress
+      });
+      track.append(el("span", "", null, { style: "transform:scaleX(" + Math.max(0, Math.min(1, hint.progress / hint.target)) + ")" }));
+      append(focus, copy, track);
+      card.append(focus);
+    }
+    if (getOnboardingTier(state.day) === "business-only") {
+      card.append(el("span", "tonight-priority-onboarding", "第一週先熟悉備料、出餐與打烊；進階資料仍可從上方分頁隨時查看。"));
     }
     return card;
   }
@@ -194,6 +222,7 @@ export function createEngagementRenderer({
   }
 
   return {
+    tonightPriority,
     previousNightRecap,
     recoveryNotice,
     periodOpeningRecap,

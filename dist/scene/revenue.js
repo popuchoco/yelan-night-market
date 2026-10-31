@@ -72,6 +72,16 @@ export function createRevenueRenderer(api) {
     if (pulses.length > 10) pulses.shift();
   }
 
+  function pushFeedback(label, tone = "neutral", outletId = "main", time = lastTime, motionSuppressed = false) {
+    const text = String(label || "").trim().slice(0, 72);
+    if (!text) return;
+    announce(text + "。");
+    if (motionSuppressed) return;
+    pulses.push({ amount: null, label: text, tone: tone === "positive" ? "positive" : "neutral",
+      kind: "feedback", outletId: outletId || "main", startedAt: time });
+    if (pulses.length > 10) pulses.shift();
+  }
+
   function resetNight() {
     day = Number(state.day);
     ledgerRef = state.ledger;
@@ -174,21 +184,30 @@ export function createRevenueRenderer(api) {
       ctx.shadowColor = "#080e0d99";
       ctx.shadowBlur = 13;
       ctx.shadowOffsetY = 4;
-      drawRoundRect(x - width / 2, y - height / 2, width, height, 12, "#142622f2", pulse.amount < 0 ? "#e98c68aa" : "#edc77c99");
+      const isFeedback = pulse.kind === "feedback";
+      const isNeutral = isFeedback && pulse.tone === "neutral";
+      drawRoundRect(x - width / 2, y - height / 2, width, height, 12,
+        isNeutral ? "#26322ff2" : "#142622f2",
+        isNeutral ? "#aab8ad99" : (pulse.amount < 0 ? "#e98c68aa" : "#edc77c99"));
       ctx.shadowColor = "transparent";
-      ctx.fillStyle = pulse.amount < 0 ? "#e98c68" : "#edc77c";
+      ctx.fillStyle = isNeutral ? "#b8c5bb" : (pulse.amount < 0 ? "#e98c68" : "#edc77c");
       ctx.beginPath();
       ctx.arc(x - width / 2 + 16, y, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = pulse.amount < 0 ? "#f2aa8a" : "#f6dda0";
+      ctx.fillStyle = isNeutral ? "#d0d9d0" : (pulse.amount < 0 ? "#f2aa8a" : "#f6dda0");
       ctx.font = "800 13px system-ui, sans-serif";
-      const prefix = pulse.amount < 0 ? "−" : "+";
-      ctx.fillText(prefix + "NT$ " + Math.abs(pulse.amount).toLocaleString("zh-TW"), x - width / 2 + 29, y - 6, width - 39);
-      ctx.fillStyle = "#c1cdbd";
-      ctx.font = "600 9px system-ui, sans-serif";
-      ctx.fillText(pulse.label, x - width / 2 + 29, y + 10, width - 39);
+      if (isFeedback) {
+        ctx.textAlign = "center";
+        ctx.fillText(pulse.label, x, y, width - 20);
+      } else {
+        const prefix = pulse.amount < 0 ? "−" : "+";
+        ctx.fillText(prefix + "NT$ " + Math.abs(pulse.amount).toLocaleString("zh-TW"), x - width / 2 + 29, y - 6, width - 39);
+        ctx.fillStyle = "#c1cdbd";
+        ctx.font = "600 9px system-ui, sans-serif";
+        ctx.fillText(pulse.label, x - width / 2 + 29, y + 10, width - 39);
+      }
       ctx.restore();
     }
   }
@@ -206,5 +225,10 @@ export function createRevenueRenderer(api) {
     pushPulse(value, label, outletId, time, motionSuppressed);
   }
 
-  return { update, draw, getDisplay, drainAnnouncements, showNotice, reset: resetNight };
+  function showFeedback(label, tone = "neutral", outletId = "main", time = lastTime, motionSuppressed = false) {
+    if (Number(state.day) !== day) resetNight();
+    pushFeedback(label, tone, outletId, time, motionSuppressed);
+  }
+
+  return { update, draw, getDisplay, drainAnnouncements, showNotice, showFeedback, reset: resetNight };
 }

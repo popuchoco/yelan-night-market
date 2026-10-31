@@ -520,6 +520,8 @@ export function boot() {
     const guest = guests[index];
     if (!guest) return;
     orderReturnFocus = document.activeElement;
+    const orderFeedback = document.getElementById("orderFeedback");
+    if (orderFeedback) { orderFeedback.hidden = true; orderFeedback.textContent = ""; }
     document.getElementById("orderKicker").textContent = guest.difficult ? "CUSTOMER COMPLAINT" : "CUSTOMER AT THE COUNTER";
     document.getElementById("orderTitle").textContent = guest.icon + "　" + guest.name;
     document.getElementById("orderMeta").textContent = guest.role + " · " + guest.needLabel;
@@ -550,6 +552,9 @@ export function boot() {
     const comboTone = !complaint && result.ok && goodServiceStreak >= 2
       ? "combo-" + Math.min(6, goodServiceStreak) : "success";
     showResult(result, true, comboTone);
+    if (result.ok && !complaint && goodServiceStreak >= 2) {
+      scene.showServiceFeedback("合胃口連擊 ×" + goodServiceStreak, "positive", "main");
+    }
     if (result.ok) {
       const fallback = state.phase === "service"
         ? document.querySelector('[data-action="call-next"]')
@@ -693,6 +698,12 @@ export function boot() {
     if (action === "open-doors") openDoors();
     if (action === "call-next") openOrder(state.customerIndex);
     if (action === "serve-dish") runOrderAction(engine.serveDish(button.dataset.id));
+    if (action === "stockout-dish") {
+      const message = "這份備料今晚已售完，改選其他餐點即可。";
+      const feedback = document.getElementById("orderFeedback");
+      if (feedback) { feedback.textContent = message; feedback.hidden = false; }
+      scene.showServiceFeedback("備料售完・改選其他餐點", "neutral", "main");
+    }
     if (action === "resolve-complaint") runOrderAction(engine.resolveComplaint(button.dataset.choice), true);
     if (action === "close-order") closeOrder();
     if (action === "select-dish") showResult(engine.selectDish(button.dataset.index));
